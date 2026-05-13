@@ -15,7 +15,9 @@ const S = {
   nfcReader:    null,
   npPin:        [],
   npAutoTimer:  null,
-  authSource:   'manual', // 'manual' | 'card'
+  authSource:   'manual',
+  companyId:    null,
+  companyName:  null,
 };
 
 // ── Navigation ───────────────────────────────────────
@@ -23,6 +25,61 @@ function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const el = document.getElementById(`page-${id}`);
   if (el) { el.classList.add('active'); window.scrollTo(0, 0); }
+}
+
+// ── Company Selector ─────────────────────────────────
+function setCompany(co) {
+  S.companyId   = co.id;
+  S.companyName = co.name;
+  localStorage.setItem('wc_company', JSON.stringify(co));
+  updateHomeCompanyUI();
+}
+
+function updateHomeCompanyUI() {
+  const badge   = document.getElementById('home-company-badge');
+  const nameEl  = document.getElementById('home-company-name');
+  const noCard  = document.getElementById('no-company-card');
+  const methods = document.getElementById('clock-methods');
+  if (S.companyId) {
+    badge.classList.remove('hidden');
+    nameEl.textContent = S.companyName;
+    noCard.classList.add('hidden');
+    methods.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+    noCard.classList.remove('hidden');
+    methods.classList.add('hidden');
+  }
+}
+
+async function openCompanySelect() {
+  showPage('company-select');
+  const sel = document.getElementById('company-select-dd');
+  sel.innerHTML = '<option value="">Loading…</option>';
+  const { data } = await db.from('companies').select('*').eq('is_active', true).order('name');
+  if (!data?.length) { sel.innerHTML = '<option value="">No companies found</option>'; return; }
+  sel.innerHTML = '<option value="">Select a company…</option>' +
+    data.map(c => `<option value="${c.id}" data-name="${c.name}" data-code="${c.code}">${c.name}</option>`).join('');
+  if (S.companyId) sel.value = S.companyId;
+}
+
+function confirmCompanySelect() {
+  const sel = document.getElementById('company-select-dd');
+  const opt = sel.options[sel.selectedIndex];
+  if (!sel.value) { showErr('company-select-err', 'Please select a company.'); return; }
+  setCompany({ id: sel.value, name: opt.text, code: opt.dataset.code });
+  showPage('home');
+}
+
+async function initCompany() {
+  const params = new URLSearchParams(window.location.search);
+  const code   = params.get('c') || params.get('company');
+  if (code) {
+    const { data } = await db.from('companies').select('*').eq('code', code.toUpperCase()).eq('is_active', true).maybeSingle();
+    if (data) { setCompany(data); return; }
+  }
+  const saved = localStorage.getItem('wc_company');
+  if (saved) { try { setCompany(JSON.parse(saved)); } catch {} }
 }
 
 // ── Utilities ────────────────────────────────────────
@@ -179,6 +236,38 @@ async function handleCardRead(empId) {
 }
 
 // ════════════════════════════════════════════════════
+//  HOME-SCREEN BIOMETRIC (discoverable credentials)
+// ════════════════════════════════════════════════════
+async function homeScreenBiometric() {
+  if (!window.PublicKeyCredential) { toast('Biometric not supported on this browser'); return; }
+  try {
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const cred = await navigator.credentials.get({
+      publicKey: {
+        challenge,
+        allowCredentials: [], // empty = device picks any registered credential
+        userVerification: 'required',
+        timeout: 60000,
+      },
+    });
+    if (!cred) return;
+    const workerId = new TextDecoder().decode(cred.response.userHandle);
+    if (!workerId) { toast('❌ Biometric not linked. Use Employee ID instead.'); return; }
+    toast('Authenticated — loading your account…');
+    S.authSource  = 'biometric';
+    S.authMethod  = 'biometric';
+    let q = db.from('workers').select('*, workplace:workplaces(*)').eq('id', workerId).eq('is_active', true);
+    if (S.companyId) q = q.eq('company_id', S.companyId);
+    const { data, error } = await q.maybeSingle();
+    if (error || !data) { toast('❌ Account not found. Use Employee ID instead.'); return; }
+    S.worker = data;
+    enterClockScreen();
+  } catch (err) {
+    if (err.name !== 'NotAllowedError') toast('Biometric error: ' + err.message);
+  }
+}
+
+// ════════════════════════════════════════════════════
 //  WORKER LOOKUP
 // ════════════════════════════════════════════════════
 async function findWorker(overrideId) {
@@ -190,12 +279,10 @@ async function findWorker(overrideId) {
   if (!id) { showErr('err-empid', 'Please enter your Employee ID.'); return; }
 
   try {
-    const { data, error } = await db
-      .from('workers')
-      .select('*, workplace:workplaces(*)')
-      .eq('employee_id', id)
-      .eq('is_active', true)
-      .maybeSingle();
+    let q = db.from('workers').select('*, workplace:workplaces(*)')
+      .eq('employee_id', id).eq('is_active', true);
+    if (S.companyId) q = q.eq('company_id', S.companyId);
+    const { data, error } = await q.maybeSingle();
 
     if (error || !data) {
       if (S.authSource === 'card') {
@@ -552,7 +639,7 @@ async function workerRegisterBiometric() {
       rp:   { name: 'WorkClock', id: window.location.hostname || 'localhost' },
       user: { id: new TextEncoder().encode(w.id), name: w.employee_id, displayName: w.name },
       pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
-      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'required', requireResidentKey: true },
       timeout: 60000,
     }});
     if (!cred) return;
@@ -595,7 +682,7 @@ async function adminLogin() {
 
   try {
     const { data, error } = await db.from('admin_users')
-      .select('*').eq('username', user).eq('password_hash', pass).eq('is_active', true).maybeSingle();
+      .select('*, co:companies(name,code)').eq('username', user).eq('password_hash', pass).eq('is_active', true).maybeSingle();
     if (error) { showErr('err-admin', 'Database error: ' + error.message); return; }
     if (!data)  { showErr('err-admin', 'Invalid username or password.'); return; }
     S.admin = data;
@@ -603,8 +690,14 @@ async function adminLogin() {
     document.getElementById('inp-apass').value = '';
     if (data.role === 'developer') {
       showPage('developer');
-      loadAdminAccounts();
+      loadDevCompanies();
     } else {
+      // Scope all operations to this admin's company
+      document.getElementById('admin-company-label').textContent = data.co?.name || '';
+      // Show/hide super_admin-only tabs
+      const isSA = data.role === 'super_admin';
+      document.getElementById('tab-btn-admins').classList.toggle('hidden', !isSA);
+      document.getElementById('tab-btn-setup').classList.toggle('hidden', !isSA);
       showPage('admin');
       loadDashboard();
     }
@@ -686,7 +779,8 @@ function switchTab(name, btn) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); btn.classList.add('active');
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   document.getElementById(`tab-${name}`).classList.add('active');
-  if (name === 'workers')    loadWorkers();
+  if (name === 'workers')         loadWorkers();
+  if (name === 'company-admins')  loadCompanyAdmins();
   if (name === 'attendance') {
     const today = new Date().toISOString().slice(0, 10);
     const eightMonthsAgo = new Date(); eightMonthsAgo.setMonth(eightMonthsAgo.getMonth() - 8);
@@ -694,7 +788,7 @@ function switchTab(name, btn) {
     document.getElementById('att-to').value   = today;
     loadWorkerOptions();
   }
-  if (name === 'setup')      loadWorkplaceSetting();
+  if (name === 'setup')           loadWorkplaceSetting();
 }
 
 // ── Dashboard ────────────────────────────────────────
@@ -702,12 +796,18 @@ async function loadDashboard() {
   const today = new Date(); today.setHours(0,0,0,0);
   const tmrw  = new Date(today); tmrw.setDate(tmrw.getDate()+1);
 
-  const [{ count: total }, { data: recs }] = await Promise.all([
-    db.from('workers').select('id', { count:'exact', head:true }).eq('is_active', true),
-    db.from('attendance').select('*, w:workers(name,employee_id)')
-      .gte('clock_in_time', today.toISOString()).lt('clock_in_time', tmrw.toISOString())
-      .order('clock_in_time', { ascending: false }),
+  const cid = S.admin?.company_id;
+  const [{ count: total }, { data: wkrs }] = await Promise.all([
+    db.from('workers').select('id', { count:'exact', head:true }).eq('is_active', true).eq('company_id', cid),
+    db.from('workers').select('id').eq('company_id', cid),
   ]);
+  const workerIds = wkrs?.map(w => w.id) || [];
+  const { data: recs } = workerIds.length
+    ? await db.from('attendance').select('*, w:workers(name,employee_id)')
+        .in('worker_id', workerIds)
+        .gte('clock_in_time', today.toISOString()).lt('clock_in_time', tmrw.toISOString())
+        .order('clock_in_time', { ascending: false })
+    : { data: [] };
 
   const present = recs?.length ?? 0;
   const stillin = recs?.filter(r => r.status === 'active').length ?? 0;
@@ -733,7 +833,7 @@ async function loadDashboard() {
 async function loadWorkers() {
   const el = document.getElementById('workers-list');
   el.innerHTML = '<div class="empty">Loading…</div>';
-  const { data, error } = await db.from('workers').select('*').order('name');
+  const { data, error } = await db.from('workers').select('*').eq('company_id', S.admin?.company_id).order('name');
   if (error || !data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
   if (!data.length)   { el.innerHTML = '<div class="empty">No workers yet — add one above</div>'; return; }
 
@@ -771,10 +871,11 @@ async function addWorker() {
   if (!empId || !name || !pin) { showMsg('nw-msg', 'Employee ID, Name and PIN are required.', 'err'); return; }
   if (pin.length < 4)          { showMsg('nw-msg', 'PIN must be at least 4 digits.', 'err');           return; }
 
-  const { data: wps } = await db.from('workplaces').select('id').limit(1);
+  const cid = S.admin?.company_id;
+  const { data: wps } = await db.from('workplaces').select('id').eq('company_id', cid).limit(1);
   const { error } = await db.from('workers').insert({
     employee_id: empId, name, job_title: jobTitle||null, phone: phone||null, email: email||null, pin,
-    workplace_id: wps?.[0]?.id ?? null, is_active: true,
+    workplace_id: wps?.[0]?.id ?? null, company_id: cid, is_active: true,
   });
 
   if (error) {
@@ -800,7 +901,7 @@ async function adminRegisterBio(workerId, workerName) {
       rp:   { name: 'WorkClock', id: window.location.hostname || 'localhost' },
       user: { id: new TextEncoder().encode(workerId), name: workerName, displayName: workerName },
       pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
-      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'required', requireResidentKey: true },
       timeout: 60000,
     }});
     if (!cred) return;
@@ -851,16 +952,19 @@ async function downloadCSV() {
   const end   = new Date(to);   end.setHours(23, 59, 59, 999);
 
   try {
-    let q = db
-      .from('attendance')
+    const { data: cWorkers } = await db.from('workers').select('id').eq('company_id', S.admin?.company_id);
+    const cIds = cWorkers?.map(w => w.id) || [];
+    const allowed = worker ? [worker] : cIds;
+    if (!allowed.length) { showMsg('csv-msg', 'No workers found for this company.', 'err'); return; }
+
+    let q = db.from('attendance')
       .select('*, w:workers(name, employee_id, job_title)')
+      .in('worker_id', allowed)
       .gte('clock_in_time', start.toISOString())
       .lte('clock_in_time', end.toISOString())
       .order('clock_in_time');
 
-    if (worker) q = q.eq('worker_id', worker);
     if (method) q = q.eq('auth_method', method);
-
     const { data, error } = await q;
 
     if (error) throw error;
@@ -905,7 +1009,7 @@ async function downloadCSV() {
 async function loadWorkerOptions() {
   const sel = document.getElementById('att-worker');
   try {
-    const { data } = await db.from('workers').select('id, name, employee_id, job_title').order('name');
+    const { data } = await db.from('workers').select('id, name, employee_id, job_title').eq('company_id', S.admin?.company_id).order('name');
     if (!data) return;
     sel.innerHTML = '<option value="">All Workers</option>' +
       data.map(w => `<option value="${w.id}">${w.name}${w.job_title ? ' · '+w.job_title : ''} (${w.employee_id})</option>`).join('');
@@ -929,15 +1033,19 @@ async function loadAttendanceReport() {
   const end   = new Date(to);   end.setHours(23, 59, 59, 999);
 
   try {
+    const { data: cWorkers } = await db.from('workers').select('id').eq('company_id', S.admin?.company_id);
+    const cIds = cWorkers?.map(w => w.id) || [];
+    const allowed = worker ? [worker] : cIds;
+    if (!allowed.length) { el.innerHTML = '<div class="empty">No workers found</div>'; return; }
+
     let q = db.from('attendance')
       .select('*, w:workers(name, employee_id, job_title)')
+      .in('worker_id', allowed)
       .gte('clock_in_time', start.toISOString())
       .lte('clock_in_time', end.toISOString())
       .order('clock_in_time', { ascending: false });
 
-    if (worker) q = q.eq('worker_id', worker);
     if (method) q = q.eq('auth_method', method);
-
     const { data, error } = await q;
 
     if (error) { el.innerHTML = '<div class="empty">Failed to load records</div>'; return; }
@@ -972,7 +1080,7 @@ async function loadAttendanceReport() {
 
 // ── Workplace Setup ──────────────────────────────────
 async function loadWorkplaceSetting() {
-  const { data } = await db.from('workplaces').select('*').limit(1);
+  const { data } = await db.from('workplaces').select('*').eq('company_id', S.admin?.company_id).limit(1);
   if (data?.[0]) {
     const w = data[0];
     document.getElementById('wp-name').value   = w.name ?? '';
@@ -992,8 +1100,9 @@ async function saveWorkplace() {
 
   if (!name || isNaN(lat) || isNaN(lng)) { showMsg('wp-msg', 'Name, Latitude and Longitude are required.', 'err'); return; }
 
-  const { data: ex } = await db.from('workplaces').select('id').limit(1);
-  const payload = { name, address: addr, latitude: lat, longitude: lng, radius_meters: radius, updated_at: new Date() };
+  const cid = S.admin?.company_id;
+  const { data: ex } = await db.from('workplaces').select('id').eq('company_id', cid).limit(1);
+  const payload = { name, address: addr, latitude: lat, longitude: lng, radius_meters: radius, company_id: cid, updated_at: new Date() };
   const { error } = ex?.length
     ? await db.from('workplaces').update(payload).eq('id', ex[0].id)
     : await db.from('workplaces').insert(payload);
@@ -1001,9 +1110,8 @@ async function saveWorkplace() {
   if (error) { showMsg('wp-msg', 'Save failed: ' + error.message, 'err'); return; }
   showMsg('wp-msg', '✅ Workplace saved!', 'ok');
 
-  // Link workers without a workplace
-  const { data: wp } = await db.from('workplaces').select('id').limit(1);
-  if (wp?.[0]?.id) await db.from('workers').update({ workplace_id: wp[0].id }).is('workplace_id', null);
+  const { data: wp } = await db.from('workplaces').select('id').eq('company_id', cid).limit(1);
+  if (wp?.[0]?.id) await db.from('workers').update({ workplace_id: wp[0].id }).eq('company_id', cid).is('workplace_id', null);
 }
 
 function captureAdminLocation() {
@@ -1047,72 +1155,121 @@ async function changeAdminPw() {
 function devLogout() { S.admin = null; showPage('home'); }
 
 function switchDevTab(name, btn) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#page-developer .tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
-  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('#page-developer .tab-pane').forEach(p => p.classList.remove('active'));
   document.getElementById(`tab-${name}`).classList.add('active');
-  if (name === 'dev-admins') loadAdminAccounts();
-  if (name === 'dev-info')   loadDevInfo();
+  if (name === 'dev-companies')   loadDevCompanies();
+  if (name === 'dev-superadmins') loadDevSuperAdmins();
+  if (name === 'dev-info')        loadDevInfo();
 }
 
-async function loadAdminAccounts() {
-  const el = document.getElementById('admins-list');
+// ── Companies ────────────────────────────────────────
+async function loadDevCompanies() {
+  const el = document.getElementById('companies-list');
   el.innerHTML = '<div class="empty">Loading…</div>';
-  const { data, error } = await db.from('admin_users')
-    .select('*').neq('role', 'developer').order('username');
+  const { data, error } = await db.from('companies').select('*').order('name');
   if (error || !data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
-  if (!data.length)   { el.innerHTML = '<div class="empty">No admin accounts yet — create one above</div>'; return; }
-
-  el.innerHTML = '<div class="workers-list">' + data.map(a => `
+  if (!data.length)   { el.innerHTML = '<div class="empty">No companies yet — create one above</div>'; return; }
+  el.innerHTML = '<div class="workers-list">' + data.map(c => `
     <div class="wr-row">
       <div class="wr-info">
-        <div class="avatar sm">${(a.full_name||a.username).split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>
+        <div class="avatar sm" style="background:var(--purple)">${c.code.slice(0,2)}</div>
         <div>
-          <div class="wr-name">${a.full_name || a.username}</div>
-          <div class="wr-meta">@${a.username}${a.email?' · '+a.email:''}${!a.is_active?' · <em>Inactive</em>':''}</div>
+          <div class="wr-name">${c.name}</div>
+          <div class="wr-meta">Code: ${c.code}${!c.is_active?' · <em>Inactive</em>':''}</div>
         </div>
       </div>
       <div class="wr-btns">
-        <button class="icon-btn" title="Reset Password" onclick="devResetAdminPw('${a.id}','${a.username}')">🔑</button>
-        <button class="icon-btn" title="${a.is_active?'Deactivate':'Reactivate'}" onclick="devToggleAdmin('${a.id}',${a.is_active})">${a.is_active?'🚫':'✅'}</button>
+        <button class="icon-btn" title="${c.is_active?'Deactivate':'Reactivate'}" onclick="devToggleCompany('${c.id}',${c.is_active})">${c.is_active?'🚫':'✅'}</button>
       </div>
     </div>`).join('') + '</div>';
 }
 
-function toggleAddAdmin() {
-  const p = document.getElementById('add-admin-panel');
+function toggleAddCompany() {
+  const p = document.getElementById('add-company-panel');
   p.classList.toggle('hidden');
-  if (!p.classList.contains('hidden')) document.getElementById('na-name').focus();
+  if (!p.classList.contains('hidden')) document.getElementById('nc-name').focus();
 }
 
-async function addAdminAccount() {
-  const name  = (document.getElementById('na-name').value  || '').trim();
-  const user  = (document.getElementById('na-user').value  || '').trim().toLowerCase();
-  const pass  = (document.getElementById('na-pass').value  || '').trim();
-  const email = (document.getElementById('na-email').value || '').trim();
+async function addCompany() {
+  const name = (document.getElementById('nc-name').value || '').trim();
+  const code = (document.getElementById('nc-code').value || '').trim().toUpperCase().replace(/\s+/g,'');
+  if (!name || !code) { showMsg('nc-msg', 'Name and Code are required.', 'err'); return; }
+  if (!/^[A-Z0-9_]+$/.test(code)) { showMsg('nc-msg', 'Code may only contain letters, numbers and underscores.', 'err'); return; }
+  const { error } = await db.from('companies').insert({ name, code, is_active: true });
+  if (error) { showMsg('nc-msg', error.code === '23505' ? 'Company code already exists.' : error.message, 'err'); return; }
+  showMsg('nc-msg', `✅ Company "${name}" created! Code: ${code}`, 'ok');
+  ['nc-name','nc-code'].forEach(id => document.getElementById(id).value = '');
+  setTimeout(() => { toggleAddCompany(); loadDevCompanies(); }, 1400);
+}
 
-  if (!name || !user || !pass) { showMsg('na-msg', 'Full Name, Username and Password are required.', 'err'); return; }
-  if (pass.length < 6)         { showMsg('na-msg', 'Password must be at least 6 characters.', 'err'); return; }
-  if (!/^[a-z0-9_]+$/.test(user)) { showMsg('na-msg', 'Username may only contain letters, numbers and underscores.', 'err'); return; }
+async function devToggleCompany(id, cur) {
+  const { error } = await db.from('companies').update({ is_active: !cur }).eq('id', id);
+  if (!error) { toast(cur ? 'Company deactivated' : 'Company reactivated'); loadDevCompanies(); }
+}
 
+// ── Super Admins ─────────────────────────────────────
+async function loadDevSuperAdmins() {
+  const el = document.getElementById('superadmins-list');
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  const { data, error } = await db.from('admin_users')
+    .select('*, co:companies(name,code)').eq('role','super_admin').order('username');
+  if (error || !data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
+  if (!data.length)   { el.innerHTML = '<div class="empty">No super admins yet</div>'; return; }
+  el.innerHTML = '<div class="workers-list">' + data.map(a => `
+    <div class="wr-row">
+      <div class="wr-info">
+        <div class="avatar sm" style="background:var(--green)">${(a.full_name||a.username).slice(0,2).toUpperCase()}</div>
+        <div>
+          <div class="wr-name">${a.full_name || a.username} <small style="color:var(--purple)">@${a.username}</small></div>
+          <div class="wr-meta">🏢 ${a.co?.name||'Unknown company'}${!a.is_active?' · <em>Inactive</em>':''}</div>
+        </div>
+      </div>
+      <div class="wr-btns">
+        <button class="icon-btn" title="Reset Password" onclick="devResetAdminPw('${a.id}','${a.username}')">🔑</button>
+        <button class="icon-btn" title="${a.is_active?'Deactivate':'Reactivate'}" onclick="devToggleSA('${a.id}',${a.is_active})">${a.is_active?'🚫':'✅'}</button>
+      </div>
+    </div>`).join('') + '</div>';
+}
+
+function toggleAddSuperAdmin() {
+  const p = document.getElementById('add-superadmin-panel');
+  p.classList.toggle('hidden');
+  if (!p.classList.contains('hidden')) {
+    // Populate company dropdown
+    db.from('companies').select('id,name').eq('is_active',true).order('name').then(({ data }) => {
+      const sel = document.getElementById('nsa-company');
+      sel.innerHTML = '<option value="">Select Company…</option>' +
+        (data||[]).map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+    });
+    document.getElementById('nsa-name').focus();
+  }
+}
+
+async function addSuperAdmin() {
+  const cid   = document.getElementById('nsa-company').value;
+  const name  = (document.getElementById('nsa-name').value || '').trim();
+  const user  = (document.getElementById('nsa-user').value || '').trim().toLowerCase();
+  const pass  = (document.getElementById('nsa-pass').value || '').trim();
+  const email = (document.getElementById('nsa-email').value|| '').trim();
+  if (!cid)  { showMsg('nsa-msg','Please select a company.','err'); return; }
+  if (!name||!user||!pass) { showMsg('nsa-msg','Name, username and password are required.','err'); return; }
+  if (pass.length < 6)     { showMsg('nsa-msg','Password must be at least 6 characters.','err'); return; }
+  if (!/^[a-z0-9_]+$/.test(user)) { showMsg('nsa-msg','Username may only contain letters, numbers and underscores.','err'); return; }
   const { error } = await db.from('admin_users').insert({
     username: user, password_hash: pass, full_name: name,
-    email: email || null, role: 'admin', is_active: true,
+    email: email||null, role: 'super_admin', company_id: cid, is_active: true,
   });
-
-  if (error) {
-    showMsg('na-msg', error.code === '23505' ? 'Username already exists.' : error.message, 'err');
-    return;
-  }
-  showMsg('na-msg', `✅ Admin account "@${user}" created!`, 'ok');
-  ['na-name','na-user','na-pass','na-email'].forEach(id => document.getElementById(id).value = '');
-  setTimeout(() => { toggleAddAdmin(); loadAdminAccounts(); }, 1400);
+  if (error) { showMsg('nsa-msg', error.code==='23505'?'Username already exists.':error.message, 'err'); return; }
+  showMsg('nsa-msg', `✅ Super Admin "@${user}" created!`, 'ok');
+  ['nsa-name','nsa-user','nsa-pass','nsa-email'].forEach(id => document.getElementById(id).value='');
+  setTimeout(() => { toggleAddSuperAdmin(); loadDevSuperAdmins(); }, 1400);
 }
 
-async function devToggleAdmin(id, cur) {
+async function devToggleSA(id, cur) {
   const { error } = await db.from('admin_users').update({ is_active: !cur }).eq('id', id);
-  if (!error) { toast(cur ? 'Admin deactivated' : 'Admin reactivated'); loadAdminAccounts(); }
-  else toast('Error: ' + error.message);
+  if (!error) { toast(cur ? 'Super Admin deactivated' : 'Super Admin reactivated'); loadDevSuperAdmins(); }
 }
 
 async function devResetAdminPw(id, username) {
@@ -1129,16 +1286,68 @@ async function loadDevInfo() {
   if (!S.admin) return;
   el.innerHTML = `
     <div class="info-row"><span class="info-lbl">Username</span><span>@${S.admin.username}</span></div>
-    <div class="info-row"><span class="info-lbl">Name</span><span>${S.admin.full_name || '—'}</span></div>
+    <div class="info-row"><span class="info-lbl">Name</span><span>${S.admin.full_name||'—'}</span></div>
     <div class="info-row"><span class="info-lbl">Role</span><span style="color:var(--purple);font-weight:700">Developer</span></div>`;
 }
 
 async function changeDevPw() {
   const pw = document.getElementById('dev-new-pw').value;
-  if (!pw || pw.length < 6) { showMsg('dev-pw-msg', 'Password must be at least 6 characters.', 'err'); return; }
+  if (!pw || pw.length < 6) { showMsg('dev-pw-msg','Password must be at least 6 characters.','err'); return; }
   const { error } = await db.from('admin_users').update({ password_hash: pw }).eq('id', S.admin.id);
-  if (error) showMsg('dev-pw-msg', 'Failed: ' + error.message, 'err');
-  else { showMsg('dev-pw-msg', '✅ Password updated!', 'ok'); document.getElementById('dev-new-pw').value = ''; }
+  if (error) showMsg('dev-pw-msg','Failed: '+error.message,'err');
+  else { showMsg('dev-pw-msg','✅ Password updated!','ok'); document.getElementById('dev-new-pw').value=''; }
+}
+
+// ── Super Admin: manage company admins ───────────────
+function toggleAddCompanyAdmin() {
+  const p = document.getElementById('add-company-admin-panel');
+  p.classList.toggle('hidden');
+  if (!p.classList.contains('hidden')) document.getElementById('ca-name').focus();
+}
+
+async function loadCompanyAdmins() {
+  const el = document.getElementById('company-admins-list');
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  const { data, error } = await db.from('admin_users')
+    .select('*').eq('company_id', S.admin?.company_id).eq('role','admin').order('username');
+  if (error || !data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
+  if (!data.length)   { el.innerHTML = '<div class="empty">No admins yet — create one above</div>'; return; }
+  el.innerHTML = '<div class="workers-list">' + data.map(a => `
+    <div class="wr-row">
+      <div class="wr-info">
+        <div class="avatar sm">${(a.full_name||a.username).slice(0,2).toUpperCase()}</div>
+        <div>
+          <div class="wr-name">${a.full_name||a.username}</div>
+          <div class="wr-meta">@${a.username}${a.email?' · '+a.email:''}${!a.is_active?' · <em>Inactive</em>':''}</div>
+        </div>
+      </div>
+      <div class="wr-btns">
+        <button class="icon-btn" title="Reset Password" onclick="devResetAdminPw('${a.id}','${a.username}')">🔑</button>
+        <button class="icon-btn" onclick="caToggle('${a.id}',${a.is_active})">${a.is_active?'🚫':'✅'}</button>
+      </div>
+    </div>`).join('') + '</div>';
+}
+
+async function addCompanyAdmin() {
+  const name  = (document.getElementById('ca-name').value || '').trim();
+  const user  = (document.getElementById('ca-user').value || '').trim().toLowerCase();
+  const pass  = (document.getElementById('ca-pass').value || '').trim();
+  const email = (document.getElementById('ca-email').value|| '').trim();
+  if (!name||!user||!pass) { showMsg('ca-msg','Name, username and password are required.','err'); return; }
+  if (pass.length < 6)     { showMsg('ca-msg','Password must be at least 6 characters.','err'); return; }
+  const { error } = await db.from('admin_users').insert({
+    username: user, password_hash: pass, full_name: name,
+    email: email||null, role: 'admin', company_id: S.admin?.company_id, is_active: true,
+  });
+  if (error) { showMsg('ca-msg', error.code==='23505'?'Username already exists.':error.message,'err'); return; }
+  showMsg('ca-msg',`✅ Admin "@${user}" created!`,'ok');
+  ['ca-name','ca-user','ca-pass','ca-email'].forEach(id => document.getElementById(id).value='');
+  setTimeout(() => { toggleAddCompanyAdmin(); loadCompanyAdmins(); }, 1400);
+}
+
+async function caToggle(id, cur) {
+  const { error } = await db.from('admin_users').update({ is_active: !cur }).eq('id', id);
+  if (!error) { toast(cur?'Admin deactivated':'Admin reactivated'); loadCompanyAdmins(); }
 }
 
 // ── PWA Install ──────────────────────────────────────
@@ -1183,7 +1392,8 @@ function checkIOSInstall() {
 }
 
 // ── Bootstrap ────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   checkIOSInstall();
+  await initCompany();
   setTimeout(() => showPage('home'), 1500);
 });

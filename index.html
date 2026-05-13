@@ -26,6 +26,32 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════
+     COMPANY SELECT
+════════════════════════════════════════════════ -->
+<div id="page-company-select" class="page">
+  <header class="topbar">
+    <button class="back" onclick="showPage('home')">&#8592;</button>
+    <span>Select Company</span>
+    <span style="width:40px"></span>
+  </header>
+  <div class="content">
+    <div class="card center">
+      <div class="card-ico">🏢</div>
+      <h2>Your Company</h2>
+      <p class="sub" style="margin-bottom:14px">Choose your employer to clock in</p>
+      <div class="field">
+        <label>Company</label>
+        <select id="company-select-dd" class="input">
+          <option value="">Loading…</option>
+        </select>
+      </div>
+      <button class="btn btn-primary btn-full" onclick="confirmCompanySelect()">Continue →</button>
+      <div id="company-select-err" class="err hidden"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
      HOME — choose clock-in method
 ════════════════════════════════════════════════ -->
 <div id="page-home" class="page">
@@ -33,37 +59,59 @@
     <div class="home-brand">
       <span class="home-ico">⏱</span>
       <h1>WorkClock</h1>
-      <p>Choose how to clock in</p>
-    </div>
-
-    <div class="method-grid">
-      <!-- QR Scan -->
-      <button class="method-tile" onclick="openScanner()">
-        <span class="tile-ico">📸</span>
-        <strong>Scan QR Card</strong>
-        <span>Point camera at your card</span>
-      </button>
-      <!-- NFC -->
-      <button class="method-tile" id="nfc-tile" onclick="openNFC()">
-        <span class="tile-ico">📲</span>
-        <strong>Tap NFC Card</strong>
-        <span>Hold card to phone</span>
+      <!-- Company badge — shown once company is selected -->
+      <button id="home-company-badge" class="home-company-badge hidden" onclick="showPage('company-select')">
+        🏢 <span id="home-company-name">Company</span> <span class="badge-change">Change ›</span>
       </button>
     </div>
 
-    <!-- Manual entry -->
-    <button class="method-wide" onclick="showPage('manual')">
-      <span class="tile-ico">👤</span>
-      <span class="method-wide-text">
-        <strong>Enter Employee ID</strong>
-        <span>Type your ID manually</span>
-      </span>
-      <span class="chevron">›</span>
-    </button>
+    <!-- No company selected: prompt to select -->
+    <div id="no-company-card" class="card home-select-card">
+      <div style="font-size:2.4rem;margin-bottom:10px">🏢</div>
+      <h3>Select Your Company</h3>
+      <p class="sub" style="margin:6px 0 16px">Choose your employer to get started</p>
+      <button class="btn btn-primary btn-full" onclick="openCompanySelect()">Select Company →</button>
+    </div>
+
+    <!-- Clock-in methods — shown once company is selected -->
+    <div id="clock-methods" class="hidden">
+
+      <!-- PRIMARY: Biometric -->
+      <button class="method-bio-primary" id="bio-home-btn" onclick="homeScreenBiometric()">
+        <span class="bio-home-ico">🔏</span>
+        <span class="bio-home-text">
+          <strong>Fingerprint / Face ID</strong>
+          <span>Tap to authenticate instantly</span>
+        </span>
+      </button>
+
+      <div class="other-methods-lbl">— or use another method —</div>
+
+      <div class="method-grid">
+        <button class="method-tile" onclick="openScanner()">
+          <span class="tile-ico">📸</span>
+          <strong>Scan QR</strong>
+          <span>Camera scan</span>
+        </button>
+        <button class="method-tile" id="nfc-tile" onclick="openNFC()">
+          <span class="tile-ico">📲</span>
+          <strong>NFC Card</strong>
+          <span>Tap to phone</span>
+        </button>
+      </div>
+
+      <button class="method-wide" onclick="showPage('manual')">
+        <span class="tile-ico">👤</span>
+        <span class="method-wide-text">
+          <strong>Enter Employee ID</strong>
+          <span>Type your ID manually</span>
+        </span>
+        <span class="chevron">›</span>
+      </button>
+    </div>
 
     <button class="admin-link" onclick="showPage('admin-login')">🔧 Admin Panel</button>
 
-    <!-- Install app banner (shown only when browser supports it) -->
     <div id="install-banner" class="install-banner hidden">
       <div class="install-banner-text">
         <strong>📲 Install WorkClock</strong>
@@ -71,8 +119,6 @@
       </div>
       <button class="btn-install" id="install-btn" onclick="installApp()">Install</button>
     </div>
-
-    <!-- iOS install instructions -->
     <div id="ios-install-banner" class="install-banner hidden">
       <div class="install-banner-text">
         <strong>📲 Install WorkClock</strong>
@@ -373,14 +419,18 @@
 ════════════════════════════════════════════════ -->
 <div id="page-admin" class="page">
   <header class="topbar topbar-dark">
-    <span>⏱ WorkClock Admin</span>
+    <div>
+      <div style="font-weight:700">⏱ WorkClock Admin</div>
+      <div id="admin-company-label" style="font-size:.75rem;opacity:.75"></div>
+    </div>
     <button class="btn-logout-w" onclick="adminLogout()">Logout</button>
   </header>
-  <nav class="tabs">
+  <nav class="tabs" id="admin-tabs">
     <button class="tab active" onclick="switchTab('dash',this)">Dashboard</button>
     <button class="tab" onclick="switchTab('workers',this)">Workers</button>
     <button class="tab" onclick="switchTab('attendance',this)">Attendance</button>
-    <button class="tab" onclick="switchTab('setup',this)">Setup</button>
+    <button class="tab tab-sa hidden" id="tab-btn-admins" onclick="switchTab('company-admins',this)">Admins</button>
+    <button class="tab tab-sa hidden" id="tab-btn-setup" onclick="switchTab('setup',this)">Setup</button>
   </nav>
   <div class="content">
 
@@ -464,6 +514,27 @@
 
     </div>
 
+    <!-- Company Admins (super_admin only) -->
+    <div id="tab-company-admins" class="tab-pane">
+      <div class="tab-bar">
+        <span class="sec-lbl">Company Admins</span>
+        <button class="btn btn-primary btn-sm" onclick="toggleAddCompanyAdmin()">+ New Admin</button>
+      </div>
+      <div id="add-company-admin-panel" class="card hidden">
+        <h4 style="margin-bottom:14px">New Admin Account</h4>
+        <div class="field"><label>Full Name *</label><input id="ca-name" type="text" class="input" placeholder="Full Name"></div>
+        <div class="field"><label>Username *</label><input id="ca-user" type="text" class="input" placeholder="e.g. jane_admin" autocapitalize="none"></div>
+        <div class="field"><label>Password *</label><input id="ca-pass" type="password" class="input" placeholder="Min 6 characters"></div>
+        <div class="field"><label>Email</label><input id="ca-email" type="email" class="input" placeholder="Email address"></div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="addCompanyAdmin()">Create Admin</button>
+          <button class="btn btn-outline" onclick="toggleAddCompanyAdmin()">Cancel</button>
+        </div>
+        <div id="ca-msg" class="msg hidden"></div>
+      </div>
+      <div id="company-admins-list"><div class="empty">Loading…</div></div>
+    </div>
+
     <!-- Setup -->
     <div id="tab-setup" class="tab-pane">
       <div class="card">
@@ -506,32 +577,53 @@
     <button class="btn-logout-w" onclick="devLogout()">Logout</button>
   </header>
   <nav class="tabs">
-    <button class="tab active" onclick="switchDevTab('dev-admins',this)">Admin Accounts</button>
-    <button class="tab" onclick="switchDevTab('dev-info',this)">System Info</button>
+    <button class="tab active" onclick="switchDevTab('dev-companies',this)">Companies</button>
+    <button class="tab" onclick="switchDevTab('dev-superadmins',this)">Super Admins</button>
+    <button class="tab" onclick="switchDevTab('dev-info',this)">System</button>
   </nav>
   <div class="content">
 
-    <!-- Admin Accounts -->
-    <div id="tab-dev-admins" class="tab-pane active">
+    <!-- Companies -->
+    <div id="tab-dev-companies" class="tab-pane active">
       <div class="tab-bar">
-        <span class="sec-lbl">Admin Accounts</span>
-        <button class="btn btn-primary btn-sm" onclick="toggleAddAdmin()">+ New Admin</button>
+        <span class="sec-lbl">Companies</span>
+        <button class="btn btn-primary btn-sm" onclick="toggleAddCompany()">+ New Company</button>
       </div>
-
-      <div id="add-admin-panel" class="card hidden">
-        <h4 style="margin-bottom:14px">New Admin Account</h4>
-        <div class="field"><label>Full Name *</label><input id="na-name" type="text" class="input" placeholder="Full Name"></div>
-        <div class="field"><label>Username *</label><input id="na-user" type="text" class="input" placeholder="e.g. jane_admin" autocapitalize="none"></div>
-        <div class="field"><label>Password *</label><input id="na-pass" type="password" class="input" placeholder="Min 6 characters"></div>
-        <div class="field"><label>Email</label><input id="na-email" type="email" class="input" placeholder="admin@company.com"></div>
+      <div id="add-company-panel" class="card hidden">
+        <h4 style="margin-bottom:14px">New Company</h4>
+        <div class="field"><label>Company Name *</label><input id="nc-name" type="text" class="input" placeholder="e.g. ACME Construction"></div>
+        <div class="field"><label>Company Code * <small>(short, no spaces)</small></label><input id="nc-code" type="text" class="input" placeholder="e.g. ACME" autocapitalize="characters"></div>
         <div class="btn-row">
-          <button class="btn btn-primary" onclick="addAdminAccount()">Create Account</button>
-          <button class="btn btn-outline" onclick="toggleAddAdmin()">Cancel</button>
+          <button class="btn btn-primary" onclick="addCompany()">Create Company</button>
+          <button class="btn btn-outline" onclick="toggleAddCompany()">Cancel</button>
         </div>
-        <div id="na-msg" class="msg hidden"></div>
+        <div id="nc-msg" class="msg hidden"></div>
       </div>
+      <div id="companies-list"><div class="empty">Loading…</div></div>
+    </div>
 
-      <div id="admins-list"><div class="empty">Loading…</div></div>
+    <!-- Super Admins -->
+    <div id="tab-dev-superadmins" class="tab-pane">
+      <div class="tab-bar">
+        <span class="sec-lbl">Super Admins</span>
+        <button class="btn btn-primary btn-sm" onclick="toggleAddSuperAdmin()">+ New Super Admin</button>
+      </div>
+      <div id="add-superadmin-panel" class="card hidden">
+        <h4 style="margin-bottom:14px">New Super Admin</h4>
+        <div class="field"><label>Company *</label>
+          <select id="nsa-company" class="input"><option value="">Select Company…</option></select>
+        </div>
+        <div class="field"><label>Full Name *</label><input id="nsa-name" type="text" class="input" placeholder="Full Name"></div>
+        <div class="field"><label>Username *</label><input id="nsa-user" type="text" class="input" placeholder="e.g. john_admin" autocapitalize="none"></div>
+        <div class="field"><label>Password *</label><input id="nsa-pass" type="password" class="input" placeholder="Min 6 characters"></div>
+        <div class="field"><label>Email</label><input id="nsa-email" type="email" class="input" placeholder="admin@company.com"></div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="addSuperAdmin()">Create Account</button>
+          <button class="btn btn-outline" onclick="toggleAddSuperAdmin()">Cancel</button>
+        </div>
+        <div id="nsa-msg" class="msg hidden"></div>
+      </div>
+      <div id="superadmins-list"><div class="empty">Loading…</div></div>
     </div>
 
     <!-- System Info -->
@@ -541,8 +633,8 @@
         <div class="info-row"><span class="info-lbl">App</span><span>WorkClock Staff Attendance</span></div>
         <div class="info-row"><span class="info-lbl">Hosting</span><span>GitHub Pages</span></div>
         <div class="info-row"><span class="info-lbl">Database</span><span>Supabase (PostgreSQL)</span></div>
-        <div class="info-row"><span class="info-lbl">Project</span><span>uwxnbaicwfbygvkiyhcf</span></div>
-        <div class="info-row"><span class="info-lbl">Version</span><span>v1.0 — 2025</span></div>
+        <div class="info-row"><span class="info-lbl">Project ID</span><span>uwxnbaicwfbygvkiyhcf</span></div>
+        <div class="info-row"><span class="info-lbl">Version</span><span>v2.0 — 2025</span></div>
       </div>
       <div class="card">
         <div class="sec-lbl" style="margin-bottom:10px">Developer Account</div>

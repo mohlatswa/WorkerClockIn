@@ -608,6 +608,75 @@ async function adminLogin() {
 
 function adminLogout() { S.admin = null; showPage('home'); }
 
+// ── Forgot Password (OTP via EmailJS) ────────────────
+const _otp = { code: null, expiry: null };
+
+function toggleForgot() {
+  const p = document.getElementById('forgot-panel');
+  p.classList.toggle('hidden');
+  // Reset to step 1 when opening
+  if (!p.classList.contains('hidden')) {
+    document.getElementById('forgot-step1').classList.remove('hidden');
+    document.getElementById('forgot-step2').classList.add('hidden');
+    document.getElementById('forgot-step3').classList.add('hidden');
+    document.getElementById('forgot-msg').classList.add('hidden');
+  }
+}
+
+async function sendResetOTP() {
+  const btn = document.getElementById('send-otp-btn');
+  if (typeof EMAILJS_PUBLIC_KEY === 'undefined' || EMAILJS_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
+    showMsg('forgot-msg', '⚠️ Email reset is not configured yet. See setup instructions.', 'err');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  showMsg('forgot-msg', '', '');
+
+  _otp.code   = String(Math.floor(100000 + Math.random() * 900000));
+  _otp.expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+  try {
+    emailjs.init(EMAILJS_PUBLIC_KEY);
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      to_email: ADMIN_RECOVERY_EMAIL,
+      otp:      _otp.code,
+      app_name: 'WorkClock',
+    });
+    document.getElementById('forgot-step1').classList.add('hidden');
+    document.getElementById('forgot-step2').classList.remove('hidden');
+    showMsg('forgot-msg', `✅ Code sent to ${ADMIN_RECOVERY_EMAIL} — check your inbox (and spam folder)`, 'ok');
+  } catch (err) {
+    showMsg('forgot-msg', 'Failed to send email: ' + (err?.text || err?.message || String(err)), 'err');
+  }
+  btn.disabled = false;
+  btn.textContent = '📧 Send Reset Code';
+}
+
+function verifyResetOTP() {
+  const entered = (document.getElementById('inp-otp').value || '').trim();
+  if (!_otp.code) { showMsg('forgot-msg', 'Please request a new code first.', 'err'); return; }
+  if (Date.now() > _otp.expiry) { showMsg('forgot-msg', 'Code has expired — request a new one.', 'err'); _otp.code = null; return; }
+  if (entered !== _otp.code) { showMsg('forgot-msg', 'Incorrect code — try again.', 'err'); return; }
+  document.getElementById('forgot-step2').classList.add('hidden');
+  document.getElementById('forgot-step3').classList.remove('hidden');
+  showMsg('forgot-msg', '✅ Identity verified — set your new password below.', 'ok');
+}
+
+async function applyNewPassword() {
+  const pw = (document.getElementById('inp-newpw').value || '').trim();
+  if (!pw || pw.length < 6) { showMsg('forgot-msg', 'Password must be at least 6 characters.', 'err'); return; }
+  const { error } = await db.from('admin_users').update({ password_hash: pw }).eq('username', 'admin');
+  if (error) { showMsg('forgot-msg', 'Failed to update: ' + error.message, 'err'); return; }
+  _otp.code = null;
+  showMsg('forgot-msg', '✅ Password updated! Please log in with your new password.', 'ok');
+  document.getElementById('forgot-step3').classList.add('hidden');
+  setTimeout(() => {
+    document.getElementById('forgot-panel').classList.add('hidden');
+    document.getElementById('inp-newpw').value = '';
+  }, 2500);
+}
+
 function switchTab(name, btn) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); btn.classList.add('active');
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));

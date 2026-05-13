@@ -325,7 +325,10 @@ body {
 .msg.err { background: #FEE2E2; color: #991B1B; border: 1px solid #FECACA; }
 .hidden { display: none !important; }
 .empty  { text-align: center; color: var(--muted); padding: 24px; }
-.hint   { font-size: .75rem; color: var(--muted); margin-top: 14px; }
+.hint         { font-size: .75rem; color: var(--muted); margin-top: 14px; }
+.forgot-link  { background: none; border: none; color: var(--blue); font-size: .85rem; cursor: pointer; margin-top: 10px; padding: 4px 0; text-decoration: underline; }
+.forgot-divider { border-top: 1px solid var(--border); margin: 14px 0; }
+.btn-text-sm  { background: none; border: none; color: var(--muted); font-size: .82rem; cursor: pointer; margin-top: 6px; text-decoration: underline; padding: 2px 0; }
 
 /* ── Spinners ────────────────────────────────────── */
 .spin-sm { width: 15px; height: 15px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }

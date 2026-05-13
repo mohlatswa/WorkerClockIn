@@ -3,3 +3,10 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 // Use a different name to avoid conflict with the supabase library global
 var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ── EmailJS — password reset OTP ─────────────────────
+// Fill these in after setting up your free EmailJS account (see setup instructions)
+const EMAILJS_PUBLIC_KEY  = 'YOUR_PUBLIC_KEY';
+const EMAILJS_SERVICE_ID  = 'YOUR_SERVICE_ID';
+const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID';
+const ADMIN_RECOVERY_EMAIL = 'hennie.mohlatswa@outlook.com';

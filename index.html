@@ -313,7 +313,39 @@
       </div>
       <button class="btn btn-primary btn-full" onclick="adminLogin()">Login</button>
       <div id="err-admin" class="err hidden"></div>
-      <p class="hint">Default credentials: admin / admin123</p>
+
+      <!-- Forgot password flow -->
+      <button class="forgot-link" onclick="toggleForgot()">Forgot password?</button>
+      <div id="forgot-panel" class="hidden">
+        <div class="forgot-divider"></div>
+
+        <!-- Step 1: Send OTP -->
+        <div id="forgot-step1">
+          <p class="sub" style="margin-bottom:10px">A 6-digit code will be sent to your registered email address.</p>
+          <button class="btn btn-outline btn-full" id="send-otp-btn" onclick="sendResetOTP()">📧 Send Reset Code</button>
+        </div>
+
+        <!-- Step 2: Enter OTP -->
+        <div id="forgot-step2" class="hidden">
+          <p class="sub" style="margin-bottom:8px">Enter the 6-digit code sent to your email:</p>
+          <div class="field">
+            <input id="inp-otp" type="number" class="input" placeholder="6-digit code" maxlength="6" inputmode="numeric">
+          </div>
+          <button class="btn btn-outline btn-full" onclick="verifyResetOTP()">Verify Code</button>
+          <button class="btn-text-sm" onclick="sendResetOTP()">Resend code</button>
+        </div>
+
+        <!-- Step 3: New password -->
+        <div id="forgot-step3" class="hidden">
+          <p class="sub" style="margin-bottom:8px">Code verified! Set your new password:</p>
+          <div class="field">
+            <input id="inp-newpw" type="password" class="input" placeholder="New password (min 6 chars)">
+          </div>
+          <button class="btn btn-primary btn-full" onclick="applyNewPassword()">Set New Password</button>
+        </div>
+
+        <div id="forgot-msg" class="msg hidden" style="margin-top:8px"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -490,6 +522,7 @@
 </div><!-- #app -->
 
 <!-- Libraries (local copies — no CDN dependency) -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="supabase.min.js"></script>
 <script src="jsQR.js"></script>
 <script src="qrcode.min.js"></script>

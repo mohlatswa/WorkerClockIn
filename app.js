@@ -615,12 +615,10 @@ function switchTab(name, btn) {
   if (name === 'workers')    loadWorkers();
   if (name === 'attendance') {
     const today = new Date().toISOString().slice(0, 10);
-    document.getElementById('att-date').value = today;
-    // Default CSV range: 8 months ago → today
     const eightMonthsAgo = new Date(); eightMonthsAgo.setMonth(eightMonthsAgo.getMonth() - 8);
-    document.getElementById('csv-from').value = eightMonthsAgo.toISOString().slice(0, 10);
-    document.getElementById('csv-to').value   = today;
-    loadAttendance();
+    document.getElementById('att-from').value = eightMonthsAgo.toISOString().slice(0, 10);
+    document.getElementById('att-to').value   = today;
+    loadWorkerOptions();
   }
   if (name === 'setup')      loadWorkplaceSetting();
 }
@@ -765,11 +763,12 @@ function printCard() { window.print(); }
 
 // ── CSV Export ───────────────────────────────────────
 async function downloadCSV() {
-  const from = document.getElementById('csv-from').value;
-  const to   = document.getElementById('csv-to').value;
-  const msgEl = document.getElementById('csv-msg');
+  const from   = document.getElementById('att-from').value;
+  const to     = document.getElementById('att-to').value;
+  const worker = document.getElementById('att-worker').value;
+  const method = document.getElementById('att-method').value;
 
-  if (!from || !to) { showMsg('csv-msg', 'Please select both a From and To date.', 'err'); return; }
+  if (!from || !to) { showMsg('csv-msg', 'Please select a date range first.', 'err'); return; }
   if (new Date(from) > new Date(to)) { showMsg('csv-msg', 'From date must be before To date.', 'err'); return; }
 
   showMsg('csv-msg', '⏳ Fetching records…', 'ok');
@@ -778,12 +777,17 @@ async function downloadCSV() {
   const end   = new Date(to);   end.setHours(23, 59, 59, 999);
 
   try {
-    const { data, error } = await db
+    let q = db
       .from('attendance')
       .select('*, w:workers(name, employee_id, job_title)')
       .gte('clock_in_time', start.toISOString())
       .lte('clock_in_time', end.toISOString())
       .order('clock_in_time');
+
+    if (worker) q = q.eq('worker_id', worker);
+    if (method) q = q.eq('auth_method', method);
+
+    const { data, error } = await q;
 
     if (error) throw error;
     if (!data?.length) { showMsg('csv-msg', 'No records found for this date range.', 'err'); return; }
@@ -823,39 +827,73 @@ async function downloadCSV() {
   }
 }
 
-// ── Attendance ───────────────────────────────────────
-async function loadAttendance() {
-  const ds = document.getElementById('att-date').value;
-  const el = document.getElementById('att-list');
+// ── Attendance report (filterable) ───────────────────
+async function loadWorkerOptions() {
+  const sel = document.getElementById('att-worker');
+  try {
+    const { data } = await db.from('workers').select('id, name, employee_id, job_title').order('name');
+    if (!data) return;
+    sel.innerHTML = '<option value="">All Workers</option>' +
+      data.map(w => `<option value="${w.id}">${w.name}${w.job_title ? ' · '+w.job_title : ''} (${w.employee_id})</option>`).join('');
+  } catch { /* keep default */ }
+}
+
+async function loadAttendanceReport() {
+  const from   = document.getElementById('att-from').value;
+  const to     = document.getElementById('att-to').value;
+  const worker = document.getElementById('att-worker').value;
+  const method = document.getElementById('att-method').value;
+  const el     = document.getElementById('att-list');
+  const sum    = document.getElementById('att-summary');
+
+  if (!from || !to) { el.innerHTML = '<div class="empty">Please select a date range</div>'; return; }
+
   el.innerHTML = '<div class="empty">Loading…</div>';
-  if (!ds) return;
+  sum.classList.add('hidden');
 
-  const start = new Date(ds); start.setHours(0,0,0,0);
-  const end   = new Date(start); end.setDate(end.getDate()+1);
+  const start = new Date(from); start.setHours(0, 0, 0, 0);
+  const end   = new Date(to);   end.setHours(23, 59, 59, 999);
 
-  const { data, error } = await db.from('attendance')
-    .select('*, w:workers(name,employee_id)')
-    .gte('clock_in_time', start.toISOString()).lt('clock_in_time', end.toISOString())
-    .order('clock_in_time');
+  try {
+    let q = db.from('attendance')
+      .select('*, w:workers(name, employee_id, job_title)')
+      .gte('clock_in_time', start.toISOString())
+      .lte('clock_in_time', end.toISOString())
+      .order('clock_in_time', { ascending: false });
 
-  if (error)         { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
-  if (!data?.length) { el.innerHTML = '<div class="empty">No records for this date</div>'; return; }
+    if (worker) q = q.eq('worker_id', worker);
+    if (method) q = q.eq('auth_method', method);
 
-  el.innerHTML = '<div class="att-list">' + data.map(r => {
-    const cin  = r.clock_in_time  ? fmtTime(r.clock_in_time)  : '--';
-    const cout = r.clock_out_time ? fmtTime(r.clock_out_time) : 'Still in';
-    const hrs  = (r.clock_in_time && r.clock_out_time)
-      ? ((new Date(r.clock_out_time)-new Date(r.clock_in_time))/3_600_000).toFixed(1)+'h' : '--';
-    return `<div class="att-item">
-      <div class="att-name">${r.w?.name??'Unknown'} <small style="color:#94a3b8">${r.w?.employee_id??''}</small></div>
-      <div class="att-times">
-        <span class="t-in">▶ ${cin}</span>
-        <span class="t-out">⬛ ${cout}</span>
-        <span class="t-hrs">⏱ ${hrs}</span>
-        <span class="t-meth">${r.auth_method??''}</span>
-      </div>
-    </div>`;
-  }).join('') + '</div>';
+    const { data, error } = await q;
+
+    if (error) { el.innerHTML = '<div class="empty">Failed to load records</div>'; return; }
+    if (!data?.length) { el.innerHTML = '<div class="empty">No records match your filters</div>'; return; }
+
+    const totalHrs = data.reduce((s, r) =>
+      s + (r.clock_in_time && r.clock_out_time
+        ? (new Date(r.clock_out_time) - new Date(r.clock_in_time)) / 3_600_000 : 0), 0);
+    const stillIn = data.filter(r => r.status === 'active').length;
+    sum.textContent = `${data.length} record${data.length !== 1 ? 's' : ''} · ${totalHrs.toFixed(1)}h total · ${stillIn} still clocked in`;
+    sum.classList.remove('hidden');
+
+    el.innerHTML = '<div class="att-list">' + data.map(r => {
+      const cin  = r.clock_in_time  ? fmtTime(r.clock_in_time)  : '--';
+      const cout = r.clock_out_time ? fmtTime(r.clock_out_time) : 'Still in';
+      const date = r.clock_in_time  ? new Date(r.clock_in_time).toLocaleDateString('en-ZA') : '';
+      const hrs  = (r.clock_in_time && r.clock_out_time)
+        ? ((new Date(r.clock_out_time) - new Date(r.clock_in_time)) / 3_600_000).toFixed(1) + 'h' : '--';
+      return `<div class="att-item">
+        <div class="att-name">${r.w?.name ?? 'Unknown'} <small style="color:#94a3b8">${r.w?.employee_id ?? ''}</small>${r.w?.job_title ? ` <small style="color:#2563EB">· ${r.w.job_title}</small>` : ''}</div>
+        <div class="att-date">${date}</div>
+        <div class="att-times">
+          <span class="t-in">▶ ${cin}</span>
+          <span class="t-out">⬛ ${cout}</span>
+          <span class="t-hrs">⏱ ${hrs}</span>
+          <span class="t-meth">${r.auth_method ?? ''}</span>
+        </div>
+      </div>`;
+    }).join('') + '</div>';
+  } catch (err) { el.innerHTML = `<div class="empty">Error: ${err.message}</div>`; }
 }
 
 // ── Workplace Setup ──────────────────────────────────

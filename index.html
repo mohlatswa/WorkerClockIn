@@ -372,35 +372,45 @@
     <!-- Attendance -->
     <div id="tab-attendance" class="tab-pane">
 
-      <!-- Single day view -->
+      <!-- Filters -->
       <div class="card" style="margin-bottom:12px">
-        <div class="sec-lbl" style="margin-bottom:10px">View by Day</div>
-        <div class="att-day-bar">
-          <input id="att-date" type="date" class="input input-sm" onchange="loadAttendance()">
-          <button class="btn btn-outline btn-sm" onclick="loadAttendance()">View</button>
-        </div>
-        <div id="att-list" style="margin-top:12px"><div class="empty">Select a date above</div></div>
-      </div>
-
-      <!-- Date range export -->
-      <div class="card">
-        <div class="sec-lbl" style="margin-bottom:10px">📥 Export to Excel / CSV</div>
-        <p class="sub" style="margin-bottom:12px">Download all attendance records for any date range — opens in Excel</p>
+        <div class="sec-lbl" style="margin-bottom:10px">🔍 Filter Records</div>
         <div class="field-row">
           <div class="field">
             <label>From</label>
-            <input id="csv-from" type="date" class="input">
+            <input id="att-from" type="date" class="input">
           </div>
           <div class="field">
             <label>To</label>
-            <input id="csv-to" type="date" class="input">
+            <input id="att-to" type="date" class="input">
           </div>
         </div>
-        <button class="btn btn-primary btn-full" onclick="downloadCSV()">
-          📥 Download CSV
-        </button>
+        <div class="field">
+          <label>Worker</label>
+          <select id="att-worker" class="input">
+            <option value="">All Workers</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Clock-in Method / Device</label>
+          <select id="att-method" class="input">
+            <option value="">All Methods</option>
+            <option value="pin">PIN</option>
+            <option value="biometric">Biometric (Fingerprint / Face)</option>
+            <option value="qr">QR Card Scan</option>
+            <option value="nfc">NFC Card Tap</option>
+          </select>
+        </div>
+        <div class="btn-row" style="margin-top:4px">
+          <button class="btn btn-primary" onclick="loadAttendanceReport()">🔍 View Report</button>
+          <button class="btn btn-outline" onclick="downloadCSV()">📥 Download CSV</button>
+        </div>
+        <div id="att-summary" class="att-summary hidden"></div>
         <div id="csv-msg" class="msg hidden"></div>
       </div>
+
+      <!-- Results -->
+      <div id="att-list"><div class="empty">Set filters above and tap View Report</div></div>
 
     </div>
 
@@ -410,7 +420,13 @@
         <h4>Workplace Location</h4>
         <p class="sub" style="margin-bottom:14px">Workers must be within the radius below to clock in</p>
         <div class="field"><label>Workplace Name *</label><input id="wp-name" type="text" class="input" placeholder="e.g. Main Office"></div>
-        <div class="field"><label>Address</label><input id="wp-addr" type="text" class="input" placeholder="Street Address"></div>
+        <div class="field">
+          <label>Address</label>
+          <div class="input-addr-wrap">
+            <input id="wp-addr" type="text" class="input" placeholder="Street Address or tap 📍 to detect">
+            <button class="btn-loc-inline" onclick="captureAdminLocation()" title="Detect my current location">📍</button>
+          </div>
+        </div>
         <div class="field-row">
           <div class="field"><label>Latitude *</label><input id="wp-lat" type="number" class="input" placeholder="-26.2041" step="0.000001"></div>
           <div class="field"><label>Longitude *</label><input id="wp-lng" type="number" class="input" placeholder="28.0473" step="0.000001"></div>

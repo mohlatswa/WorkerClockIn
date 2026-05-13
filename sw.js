@@ -1,5 +1,5 @@
-// Service Worker — enables offline support and "install to home screen"
-const CACHE = 'workclock-v3';
+// Service Worker — network-first so updates are always picked up immediately
+const CACHE = 'workclock-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -25,9 +25,18 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Always go network-first for Supabase API calls
-  if (e.request.url.includes('supabase.co')) return;
+  // Skip non-GET and cross-origin requests (Supabase, Nominatim, etc.)
+  if (e.request.method !== 'GET') return;
+  if (!e.request.url.startsWith(self.location.origin)) return;
+
+  // Network-first: always try to get the latest version; fall back to cache only when offline
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+    fetch(e.request)
+      .then(res => {
+        const clone = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, clone));
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });

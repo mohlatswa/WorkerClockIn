@@ -165,6 +165,7 @@
         <div>
           <div class="wname" id="auth-name">John Doe</div>
           <div class="wid"   id="auth-empid">EMP001</div>
+          <div class="wjob"  id="auth-jobtitle"></div>
         </div>
       </div>
     </div>
@@ -224,6 +225,7 @@
         <div>
           <div class="wname" id="clock-name">John Doe</div>
           <div class="wid"   id="clock-empid">EMP001</div>
+          <div class="wjob"  id="clock-jobtitle"></div>
         </div>
       </div>
       <div id="status-badge" class="badge badge-out"><span class="dot"></span> Clocked Out</div>
@@ -354,6 +356,7 @@
         <h4 style="margin-bottom:14px">New Worker</h4>
         <div class="field"><label>Employee ID *</label><input id="nw-id" type="text" class="input" placeholder="e.g. EMP001" autocapitalize="characters"></div>
         <div class="field"><label>Full Name *</label><input id="nw-name" type="text" class="input" placeholder="Full Name"></div>
+        <div class="field"><label>Job Title</label><input id="nw-jobtitle" type="text" class="input" placeholder="e.g. Site Foreman, Driver, Security"></div>
         <div class="field"><label>Phone</label><input id="nw-phone" type="tel" class="input" placeholder="Phone"></div>
         <div class="field"><label>Email</label><input id="nw-email" type="email" class="input" placeholder="Email"></div>
         <div class="field"><label>PIN (4–6 digits) *</label><input id="nw-pin" type="password" class="input" placeholder="Set PIN" maxlength="6" inputmode="numeric"></div>
@@ -453,8 +456,9 @@
     <div class="print-card" id="print-card-content">
       <div class="pc-header">⏱ WorkClock</div>
       <canvas id="qr-gen-canvas" class="pc-qr"></canvas>
-      <div class="pc-name" id="pc-name">John Doe</div>
-      <div class="pc-id"   id="pc-id">EMP001</div>
+      <div class="pc-name"     id="pc-name">John Doe</div>
+      <div class="pc-jobtitle" id="pc-jobtitle"></div>
+      <div class="pc-id"       id="pc-id">EMP001</div>
       <div class="pc-hint">Scan to clock in / out</div>
     </div>
     <div class="modal-footer">

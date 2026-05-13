@@ -128,6 +128,7 @@ body {
 .worker-card { padding: 16px 18px; }
 .wname { font-weight: 700; font-size: 1rem; }
 .wid   { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+.wjob  { font-size: .75rem; color: var(--blue); margin-top: 1px; font-weight: 500; }
 .avatar {
   border-radius: 50%; background: linear-gradient(135deg,var(--blue),#60A5FA);
   color: #fff; display: flex; align-items: center; justify-content: center;
@@ -387,9 +388,10 @@ body {
 }
 .pc-header { font-size: 1.1rem; font-weight: 800; color: var(--blue); margin-bottom: 16px; letter-spacing: 1px; }
 .pc-qr { display: block; margin: 0 auto 16px; border-radius: 8px; }
-.pc-name { font-size: 1.2rem; font-weight: 800; color: var(--text); }
-.pc-id   { font-size: .9rem; color: var(--muted); margin: 4px 0 8px; letter-spacing: 1px; }
-.pc-hint { font-size: .75rem; color: var(--muted); border-top: 1px dashed var(--border); padding-top: 8px; margin-top: 8px; }
+.pc-name    { font-size: 1.2rem; font-weight: 800; color: var(--text); }
+.pc-jobtitle{ font-size: .82rem; color: var(--blue); font-weight: 600; margin: 2px 0; }
+.pc-id      { font-size: .9rem; color: var(--muted); margin: 4px 0 8px; letter-spacing: 1px; }
+.pc-hint    { font-size: .75rem; color: var(--muted); border-top: 1px dashed var(--border); padding-top: 8px; margin-top: 8px; }
 
 /* ── Location blocked card ───────────────────────── */
 .loc-blocked-card {

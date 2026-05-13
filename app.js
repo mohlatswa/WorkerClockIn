@@ -217,9 +217,10 @@ async function findWorker(overrideId) {
 
 // ── Move to auth screen ──────────────────────────────
 function goToAuth(worker) {
-  document.getElementById('auth-avatar').textContent = initials(worker.name);
-  document.getElementById('auth-name').textContent   = worker.name;
-  document.getElementById('auth-empid').textContent  = worker.employee_id;
+  document.getElementById('auth-avatar').textContent   = initials(worker.name);
+  document.getElementById('auth-name').textContent     = worker.name;
+  document.getElementById('auth-empid').textContent    = worker.employee_id;
+  document.getElementById('auth-jobtitle').textContent = worker.job_title || '';
 
   const bioWrap = document.getElementById('bio-btn-wrap');
   if (worker.biometric_enabled && worker.biometric_credential_id && window.PublicKeyCredential) {
@@ -327,10 +328,11 @@ async function authenticateWithBiometric() {
 // ════════════════════════════════════════════════════
 async function enterClockScreen() {
   const w = S.worker;
-  document.getElementById('clock-avatar').textContent   = initials(w.name);
-  document.getElementById('clock-name').textContent     = w.name;
-  document.getElementById('clock-empid').textContent    = w.employee_id;
-  document.getElementById('clock-greeting').textContent = `Hello, ${w.name.split(' ')[0]}!`;
+  document.getElementById('clock-avatar').textContent    = initials(w.name);
+  document.getElementById('clock-name').textContent      = w.name;
+  document.getElementById('clock-empid').textContent     = w.employee_id;
+  document.getElementById('clock-jobtitle').textContent  = w.job_title || '';
+  document.getElementById('clock-greeting').textContent  = `Hello, ${w.name.split(' ')[0]}!`;
   S.workplace = w.workplace || null;
 
   showPage('clock');
@@ -344,7 +346,7 @@ async function enterClockScreen() {
 }
 
 // ── Geolocation watcher ──────────────────────────────
-function startGeoWatch() {
+async function startGeoWatch() {
   const locEl = document.getElementById('loc-status');
   locEl.innerHTML = '<div class="checking"><div class="spin-sm"></div> Getting your location…</div>';
 
@@ -669,11 +671,11 @@ async function loadWorkers() {
         <div class="avatar sm">${initials(w.name)}</div>
         <div>
           <div class="wr-name">${w.name}</div>
-          <div class="wr-meta">${w.employee_id}${w.biometric_enabled?' · 🔏':''} ${!w.is_active?'· <em>Inactive</em>':''}</div>
+          <div class="wr-meta">${w.employee_id}${w.job_title?' · '+w.job_title:''}${w.biometric_enabled?' · 🔏':''} ${!w.is_active?'· <em>Inactive</em>':''}</div>
         </div>
       </div>
       <div class="wr-btns">
-        <button class="icon-btn" title="Print ID Card" onclick="openCardModal('${w.id}','${w.employee_id}','${w.name.replace(/'/g,"\\'")}')">🪪</button>
+        <button class="icon-btn" title="Print ID Card" onclick="openCardModal('${w.id}','${w.employee_id}','${w.name.replace(/'/g,"\\'")}','${(w.job_title||'').replace(/'/g,"\\'")}')">🪪</button>
         <button class="icon-btn" title="Register Biometric" onclick="adminRegisterBio('${w.id}','${w.name.replace(/'/g,"\\'")}')">🔏</button>
         <button class="icon-btn" title="${w.is_active?'Deactivate':'Reactivate'}" onclick="toggleWorker('${w.id}',${w.is_active})">${w.is_active?'🚫':'✅'}</button>
       </div>
@@ -687,18 +689,19 @@ function toggleAddWorker() {
 }
 
 async function addWorker() {
-  const empId = (document.getElementById('nw-id').value   || '').trim().toUpperCase();
-  const name  = (document.getElementById('nw-name').value || '').trim();
-  const phone = (document.getElementById('nw-phone').value|| '').trim();
-  const email = (document.getElementById('nw-email').value|| '').trim();
-  const pin   = (document.getElementById('nw-pin').value  || '').trim();
+  const empId    = (document.getElementById('nw-id').value      || '').trim().toUpperCase();
+  const name     = (document.getElementById('nw-name').value    || '').trim();
+  const jobTitle = (document.getElementById('nw-jobtitle').value|| '').trim();
+  const phone    = (document.getElementById('nw-phone').value   || '').trim();
+  const email    = (document.getElementById('nw-email').value   || '').trim();
+  const pin      = (document.getElementById('nw-pin').value     || '').trim();
 
   if (!empId || !name || !pin) { showMsg('nw-msg', 'Employee ID, Name and PIN are required.', 'err'); return; }
   if (pin.length < 4)          { showMsg('nw-msg', 'PIN must be at least 4 digits.', 'err');           return; }
 
   const { data: wps } = await db.from('workplaces').select('id').limit(1);
   const { error } = await db.from('workers').insert({
-    employee_id: empId, name, phone: phone||null, email: email||null, pin,
+    employee_id: empId, name, job_title: jobTitle||null, phone: phone||null, email: email||null, pin,
     workplace_id: wps?.[0]?.id ?? null, is_active: true,
   });
 
@@ -739,9 +742,10 @@ async function adminRegisterBio(workerId, workerName) {
 }
 
 // ── Print / QR Card ──────────────────────────────────
-async function openCardModal(workerId, empId, name) {
-  document.getElementById('pc-name').textContent = name;
-  document.getElementById('pc-id').textContent   = empId;
+async function openCardModal(workerId, empId, name, jobTitle) {
+  document.getElementById('pc-name').textContent     = name;
+  document.getElementById('pc-jobtitle').textContent = jobTitle || '';
+  document.getElementById('pc-id').textContent       = empId;
   document.getElementById('card-modal').classList.remove('hidden');
 
   const canvas = document.getElementById('qr-gen-canvas');
@@ -776,7 +780,7 @@ async function downloadCSV() {
   try {
     const { data, error } = await db
       .from('attendance')
-      .select('*, w:workers(name, employee_id)')
+      .select('*, w:workers(name, employee_id, job_title)')
       .gte('clock_in_time', start.toISOString())
       .lte('clock_in_time', end.toISOString())
       .order('clock_in_time');
@@ -784,7 +788,7 @@ async function downloadCSV() {
     if (error) throw error;
     if (!data?.length) { showMsg('csv-msg', 'No records found for this date range.', 'err'); return; }
 
-    const headers = ['Worker Name', 'Employee ID', 'Date', 'Clock In', 'Clock Out', 'Hours Worked', 'Auth Method', 'Status'];
+    const headers = ['Worker Name', 'Employee ID', 'Job Title', 'Date', 'Clock In', 'Clock Out', 'Hours Worked', 'Auth Method', 'Status'];
     const rows = data.map(r => {
       const cin  = r.clock_in_time  ? new Date(r.clock_in_time)  : null;
       const cout = r.clock_out_time ? new Date(r.clock_out_time) : null;
@@ -792,6 +796,7 @@ async function downloadCSV() {
       return [
         r.w?.name        || 'Unknown',
         r.w?.employee_id || '',
+        r.w?.job_title   || '',
         cin  ? cin.toLocaleDateString('en-ZA')  : '',
         cin  ? cin.toLocaleTimeString('en-ZA',  { hour:'2-digit', minute:'2-digit' }) : '',
         cout ? cout.toLocaleTimeString('en-ZA', { hour:'2-digit', minute:'2-digit' }) : 'Still In',
@@ -891,10 +896,28 @@ async function saveWorkplace() {
 
 function captureAdminLocation() {
   if (!navigator.geolocation) { toast('Geolocation not supported'); return; }
-  toast('Getting location…');
+  toast('📍 Getting your location…');
   navigator.geolocation.getCurrentPosition(
-    p => { document.getElementById('wp-lat').value = p.coords.latitude.toFixed(7); document.getElementById('wp-lng').value = p.coords.longitude.toFixed(7); toast(`📍 Captured (±${Math.round(p.coords.accuracy)}m)`); },
-    () => toast('Could not get location — enter manually.')
+    async pos => {
+      const lat = pos.coords.latitude.toFixed(7);
+      const lng = pos.coords.longitude.toFixed(7);
+      document.getElementById('wp-lat').value = lat;
+      document.getElementById('wp-lng').value = lng;
+      toast(`📍 Location captured (±${Math.round(pos.coords.accuracy)}m)`);
+      // Reverse geocode to fill in address automatically
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
+        const geo = await res.json();
+        if (geo?.display_name) {
+          document.getElementById('wp-addr').value = geo.display_name;
+          toast(`📍 Address detected — review and save`);
+        }
+      } catch { /* address stays blank if reverse geocode fails */ }
+    },
+    () => toast('Could not get location — enter coordinates manually.')
   );
 }
 

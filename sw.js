@@ -7,6 +7,9 @@ const ASSETS = [
   './app.js',
   './config.js',
   './manifest.json',
+  './supabase.min.js',
+  './jsQR.js',
+  './qrcode.min.js',
 ];
 
 self.addEventListener('install', e => {

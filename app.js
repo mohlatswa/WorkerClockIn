@@ -1937,21 +1937,17 @@ function checkIOSInstall() {
 
 // ── Bootstrap ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  // Cancel the HTML-level 3 s hard fallback — app.js is running fine.
-  if (window.__cancelSplashFallback) window.__cancelSplashFallback();
-
   checkIOSInstall();
 
-  // Guarantee the splash never hangs: show home after 1500 ms unless a
-  // session-restore finishes first and navigates to the clock screen.
+  // Always show home within 1.5 s. DB queries run in background and
+  // navigate to clock screen if a saved worker session is found.
   let pageShown = false;
   const splashTimer = setTimeout(() => {
     if (!pageShown) { pageShown = true; showPage('home'); }
   }, 1500);
 
-  // Run startup DB queries in the background — never block the splash timer.
   (async () => {
-    await initCompany(); // has its own 4 s timeout internally
+    await initCompany();
 
     const savedId = localStorage.getItem('wc_worker_id');
     if (!savedId) return;
@@ -1960,7 +1956,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const { data } = await withTimeout(
         db.from('workers').select('*, workplace:workplaces(*)')
           .eq('id', savedId).eq('is_active', true).maybeSingle(),
-        4000
+        5000
       );
       if (data) {
         S.worker = data;
@@ -1968,20 +1964,17 @@ document.addEventListener('DOMContentLoaded', () => {
           try {
             const { data: co } = await withTimeout(
               db.from('companies').select('*').eq('id', data.company_id).maybeSingle(),
-              4000
+              5000
             );
             if (co) setCompany(co, false);
           } catch {}
         }
-        // Navigate to clock screen — clears splash timer if still pending,
-        // or overrides home if the splash timer already fired.
         clearTimeout(splashTimer);
         pageShown = true;
         enterClockScreen();
         return;
       }
-    } catch { /* worker deleted / network error — fall through */ }
+    } catch {}
     localStorage.removeItem('wc_worker_id');
-    // splashTimer will show home at 1500 ms (or already has)
   })();
 });

@@ -848,25 +848,11 @@
 <script src="config.js"></script>
 <script src="app.js"></script>
 <script>
-  // Register Service Worker (enables "Add to Home Screen" / offline)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js').catch(() => {});
     });
   }
-
-  // Hard fallback: if app.js fails entirely, dismiss the splash after 3 s
-  // so the user never gets stuck on a white/spinning screen.
-  (function () {
-    var t = setTimeout(function () {
-      var all = document.querySelectorAll('.page');
-      for (var i = 0; i < all.length; i++) all[i].classList.remove('active');
-      var home = document.getElementById('page-home');
-      if (home) home.classList.add('active');
-    }, 3000);
-    // app.js cancels this once its own boot logic takes over
-    window.__cancelSplashFallback = function () { clearTimeout(t); };
-  }());
 </script>
 </body>
 </html>

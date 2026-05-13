@@ -939,6 +939,7 @@ async function openCardModal(workerId, empId, name, jobTitle) {
   document.getElementById('card-modal').classList.remove('hidden');
 
   const canvas = document.getElementById('qr-gen-canvas');
+  if (typeof QRCode === 'undefined') { toast('QR library still loading — please try again in a moment.'); return; }
   try {
     await QRCode.toCanvas(canvas, empId, { width: 180, margin: 2, color: { dark: '#1E293B', light: '#FFFFFF' } });
   } catch (err) {

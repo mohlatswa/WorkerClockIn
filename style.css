@@ -30,6 +30,13 @@ body {
 #page-loading {
   background: linear-gradient(160deg,#1E3A8A,#2563EB);
   align-items: center; justify-content: center;
+  /* Sit on top of home so home is always ready beneath it */
+  position: fixed; top:0; left:0; right:0; bottom:0; z-index:9999;
+  /* CSS-only auto-dismiss after 2 s — works even if JS never runs */
+  animation: fadeUp .2s ease, splashOut .35s ease-out 2s forwards;
+}
+@keyframes splashOut {
+  to { opacity:0; visibility:hidden; pointer-events:none; }
 }
 .splash { text-align: center; color: #fff; position: relative; }
 .splash-ring {

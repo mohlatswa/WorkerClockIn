@@ -813,6 +813,10 @@ async function loadDashboard() {
     : '<div class="empty">No clock-ins today</div>';
 }
 
+// ── Shared edit caches (worker + company) ────────────
+const _wCache = {};
+const _cCache = {};
+
 // ── Workers ──────────────────────────────────────────
 async function loadWorkers() {
   const el = document.getElementById('workers-list');
@@ -820,6 +824,8 @@ async function loadWorkers() {
   const { data, error } = await db.from('workers').select('*').eq('company_id', S.admin?.company_id).order('name');
   if (error || !data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
   if (!data.length)   { el.innerHTML = '<div class="empty">No workers yet — add one above</div>'; return; }
+
+  data.forEach(w => { _wCache[w.id] = { ...w, _ctx: 'admin' }; });
 
   el.innerHTML = '<div class="workers-list">' + data.map(w => `
     <div class="wr-row">
@@ -831,6 +837,7 @@ async function loadWorkers() {
         </div>
       </div>
       <div class="wr-btns">
+        <button class="icon-btn" title="Edit Worker" onclick="openEditWorkerById('${w.id}')">✏️</button>
         <button class="icon-btn" title="Print ID Card" onclick="openCardModal('${w.id}','${w.employee_id}','${w.name.replace(/'/g,"\\'")}','${(w.job_title||'').replace(/'/g,"\\'")}')">🪪</button>
         <button class="icon-btn" title="Register Biometric" onclick="adminRegisterBio('${w.id}','${w.name.replace(/'/g,"\\'")}')">🔏</button>
         <button class="icon-btn" title="${w.is_active?'Deactivate':'Reactivate'}" onclick="toggleWorker('${w.id}',${w.is_active})">${w.is_active?'🚫':'✅'}</button>
@@ -1184,6 +1191,7 @@ function switchDevTab(name, btn) {
   document.getElementById(`tab-${name}`).classList.add('active');
   if (name === 'dev-companies')   loadDevCompanies();
   if (name === 'dev-superadmins') loadDevSuperAdmins();
+  if (name === 'dev-workers')     loadDevWorkers();
   if (name === 'dev-info')        loadDevInfo();
 }
 
@@ -1194,6 +1202,7 @@ async function loadDevCompanies() {
   const { data, error } = await db.from('companies').select('*').order('name');
   if (error || !data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
   if (!data.length)   { el.innerHTML = '<div class="empty">No companies yet — create one above</div>'; return; }
+  data.forEach(c => { _cCache[c.id] = c; });
   el.innerHTML = '<div class="workers-list">' + data.map(c => `
     <div class="wr-row">
       <div class="wr-info">
@@ -1204,6 +1213,7 @@ async function loadDevCompanies() {
         </div>
       </div>
       <div class="wr-btns">
+        <button class="icon-btn" title="Edit Company" onclick="openEditCompanyById('${c.id}')">✏️</button>
         <button class="icon-btn" title="${c.is_active?'Deactivate':'Reactivate'}" onclick="devToggleCompany('${c.id}',${c.is_active})">${c.is_active?'🚫':'✅'}</button>
       </div>
     </div>`).join('') + '</div>';
@@ -1480,6 +1490,122 @@ async function saveEditAccount() {
     if (_editCtx === 'dev') loadDevSuperAdmins();
     else loadCompanyAdmins();
   }, 1200);
+}
+
+// ── Edit Company (developer) ─────────────────────────
+function openEditCompanyById(id) {
+  const c = _cCache[id];
+  if (!c) return;
+  document.getElementById('edit-co-id').value   = id;
+  document.getElementById('edit-co-name').value = c.name || '';
+  document.getElementById('edit-co-code').value = c.code || '';
+  document.getElementById('edit-co-msg').classList.add('hidden');
+  document.getElementById('edit-company-modal').classList.remove('hidden');
+}
+
+function closeEditCompany(e) {
+  if (!e || e.target === document.getElementById('edit-company-modal'))
+    document.getElementById('edit-company-modal').classList.add('hidden');
+}
+
+async function saveEditCompany() {
+  const id   = document.getElementById('edit-co-id').value;
+  const name = (document.getElementById('edit-co-name').value || '').trim();
+  const code = (document.getElementById('edit-co-code').value || '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!name || !code) { showMsg('edit-co-msg', 'Name and Code are required.', 'err'); return; }
+  if (!/^[A-Z0-9_]+$/.test(code)) { showMsg('edit-co-msg', 'Code may only contain letters, numbers and underscores.', 'err'); return; }
+  const { error } = await db.from('companies').update({ name, code }).eq('id', id);
+  if (error) { showMsg('edit-co-msg', error.code === '23505' ? 'Company code already exists.' : error.message, 'err'); return; }
+  showMsg('edit-co-msg', '✅ Company updated!', 'ok');
+  setTimeout(() => { closeEditCompany(); loadDevCompanies(); }, 1200);
+}
+
+// ── Edit Worker (employer + developer) ───────────────
+function openEditWorkerById(id) {
+  const w = _wCache[id];
+  if (!w) return;
+  document.getElementById('edit-wk-id').value       = id;
+  document.getElementById('edit-wk-ctx').value      = w._ctx || 'admin';
+  document.getElementById('edit-wk-empid').value    = w.employee_id || '';
+  document.getElementById('edit-wk-name').value     = w.name || '';
+  document.getElementById('edit-wk-jobtitle').value = w.job_title || '';
+  document.getElementById('edit-wk-phone').value    = w.phone || '';
+  document.getElementById('edit-wk-email').value    = w.email || '';
+  document.getElementById('edit-wk-pin').value      = '';
+  document.getElementById('edit-wk-msg').classList.add('hidden');
+  document.getElementById('edit-worker-modal').classList.remove('hidden');
+}
+
+function closeEditWorker(e) {
+  if (!e || e.target === document.getElementById('edit-worker-modal'))
+    document.getElementById('edit-worker-modal').classList.add('hidden');
+}
+
+async function saveEditWorker() {
+  const id       = document.getElementById('edit-wk-id').value;
+  const ctx      = document.getElementById('edit-wk-ctx').value;
+  const empId    = (document.getElementById('edit-wk-empid').value    || '').trim().toUpperCase();
+  const name     = (document.getElementById('edit-wk-name').value     || '').trim();
+  const jobTitle = (document.getElementById('edit-wk-jobtitle').value || '').trim();
+  const phone    = (document.getElementById('edit-wk-phone').value    || '').trim();
+  const email    = (document.getElementById('edit-wk-email').value    || '').trim();
+  const pin      = (document.getElementById('edit-wk-pin').value      || '').trim();
+
+  if (!empId || !name) { showMsg('edit-wk-msg', 'Employee ID and Name are required.', 'err'); return; }
+  if (pin && pin.length < 4) { showMsg('edit-wk-msg', 'PIN must be at least 4 digits.', 'err'); return; }
+
+  const updates = { employee_id: empId, name, job_title: jobTitle || null, phone: phone || null, email: email || null };
+  if (pin) updates.pin = pin;
+
+  const { error } = await db.from('workers').update(updates).eq('id', id);
+  if (error) { showMsg('edit-wk-msg', error.code === '23505' ? 'Employee ID already in use.' : error.message, 'err'); return; }
+  showMsg('edit-wk-msg', '✅ Worker updated!', 'ok');
+  setTimeout(() => {
+    closeEditWorker();
+    if (ctx === 'dev') loadDevWorkers(); else loadWorkers();
+  }, 1200);
+}
+
+// ── Developer: Workers tab ────────────────────────────
+async function loadDevWorkers() {
+  const el        = document.getElementById('dev-workers-list');
+  const filterSel = document.getElementById('dev-filter-company-wk');
+
+  if (filterSel.options.length <= 1) {
+    const { data: cos } = await db.from('companies').select('id,name').eq('is_active', true).order('name');
+    filterSel.innerHTML = '<option value="">Select a company…</option>' +
+      (cos || []).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  }
+
+  const cid = filterSel.value;
+  if (!cid) { el.innerHTML = '<div class="empty">Select a company above to view its workers</div>'; return; }
+
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  const { data, error } = await db.from('workers').select('*').eq('company_id', cid).order('name');
+  if (error || !data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
+  if (!data.length)   { el.innerHTML = '<div class="empty">No workers in this company</div>'; return; }
+
+  data.forEach(w => { _wCache[w.id] = { ...w, _ctx: 'dev' }; });
+
+  el.innerHTML = '<div class="workers-list">' + data.map(w => `
+    <div class="wr-row">
+      <div class="wr-info">
+        <div class="avatar sm">${initials(w.name)}</div>
+        <div>
+          <div class="wr-name">${w.name}</div>
+          <div class="wr-meta">${w.employee_id}${w.job_title?' · '+w.job_title:''}${w.biometric_enabled?' · 🔏':''}${!w.is_active?' · <em>Inactive</em>':''}</div>
+        </div>
+      </div>
+      <div class="wr-btns">
+        <button class="icon-btn" title="Edit Worker" onclick="openEditWorkerById('${w.id}')">✏️</button>
+        <button class="icon-btn" title="${w.is_active?'Deactivate':'Reactivate'}" onclick="devToggleWorker('${w.id}',${w.is_active})">${w.is_active?'🚫':'✅'}</button>
+      </div>
+    </div>`).join('') + '</div>';
+}
+
+async function devToggleWorker(id, cur) {
+  const { error } = await db.from('workers').update({ is_active: !cur }).eq('id', id);
+  if (!error) { toast(cur ? 'Worker deactivated' : 'Worker reactivated'); loadDevWorkers(); }
 }
 
 // ── PWA Install ──────────────────────────────────────

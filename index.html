@@ -562,7 +562,8 @@
   </header>
   <nav class="tabs">
     <button class="tab active" onclick="switchDevTab('dev-companies',this)">Companies</button>
-    <button class="tab" onclick="switchDevTab('dev-superadmins',this)">Super Admins</button>
+    <button class="tab" onclick="switchDevTab('dev-superadmins',this)">Accounts</button>
+    <button class="tab" onclick="switchDevTab('dev-workers',this)">Workers</button>
     <button class="tab" onclick="switchDevTab('dev-info',this)">System</button>
   </nav>
   <div class="content">
@@ -624,6 +625,16 @@
       <div id="superadmins-list"><div class="empty">Loading…</div></div>
     </div>
 
+    <!-- Workers (by company) -->
+    <div id="tab-dev-workers" class="tab-pane">
+      <div style="margin-bottom:10px">
+        <select id="dev-filter-company-wk" class="input" onchange="loadDevWorkers()" style="width:100%">
+          <option value="">Select a company…</option>
+        </select>
+      </div>
+      <div id="dev-workers-list"><div class="empty">Select a company above to view its workers</div></div>
+    </div>
+
     <!-- System Info -->
     <div id="tab-dev-info" class="tab-pane">
       <div class="card">
@@ -681,6 +692,58 @@
     <div class="modal-footer">
       <button class="btn btn-primary" onclick="printCard()">🖨 Print Card</button>
       <button class="btn btn-outline" onclick="closeCardModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Company Modal -->
+<div id="edit-company-modal" class="modal-backdrop hidden" onclick="closeEditCompany(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Edit Company</h3>
+      <button class="modal-close" onclick="closeEditCompany()">✕</button>
+    </div>
+    <div style="padding:16px 18px">
+      <input type="hidden" id="edit-co-id">
+      <div class="field"><label>Company Name *</label><input id="edit-co-name" type="text" class="input" placeholder="e.g. ACME Construction"></div>
+      <div class="field">
+        <label>Company Code *</label>
+        <input id="edit-co-code" type="text" class="input" placeholder="e.g. ACME" autocapitalize="characters">
+        <p class="hint" style="color:var(--red);margin-top:4px">⚠️ Changing the code breaks any clock-in links already shared with workers.</p>
+      </div>
+      <div id="edit-co-msg" class="msg hidden"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="saveEditCompany()">Save Changes</button>
+      <button class="btn btn-outline" onclick="closeEditCompany()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Worker Modal -->
+<div id="edit-worker-modal" class="modal-backdrop hidden" onclick="closeEditWorker(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Edit Worker</h3>
+      <button class="modal-close" onclick="closeEditWorker()">✕</button>
+    </div>
+    <div style="padding:16px 18px;max-height:60vh;overflow-y:auto">
+      <input type="hidden" id="edit-wk-id">
+      <input type="hidden" id="edit-wk-ctx" value="admin">
+      <div class="field"><label>Employee ID *</label><input id="edit-wk-empid" type="text" class="input" placeholder="e.g. EMP001" autocapitalize="characters"></div>
+      <div class="field"><label>Full Name *</label><input id="edit-wk-name" type="text" class="input" placeholder="Full Name"></div>
+      <div class="field"><label>Job Title</label><input id="edit-wk-jobtitle" type="text" class="input" placeholder="e.g. Site Foreman, Driver, Security"></div>
+      <div class="field"><label>Phone</label><input id="edit-wk-phone" type="tel" class="input" placeholder="Phone number"></div>
+      <div class="field"><label>Email</label><input id="edit-wk-email" type="email" class="input" placeholder="Email address"></div>
+      <div class="field">
+        <label>New PIN <small>(leave blank to keep current)</small></label>
+        <input id="edit-wk-pin" type="password" class="input" placeholder="Leave blank to keep unchanged" maxlength="6" inputmode="numeric">
+      </div>
+      <div id="edit-wk-msg" class="msg hidden"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="saveEditWorker()">Save Changes</button>
+      <button class="btn btn-outline" onclick="closeEditWorker()">Cancel</button>
     </div>
   </div>
 </div>

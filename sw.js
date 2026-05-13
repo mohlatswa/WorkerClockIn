@@ -1,5 +1,5 @@
 // Service Worker — network-first so updates are always picked up immediately
-const CACHE = 'workclock-v4';
+const CACHE = 'workclock-v5';
 const ASSETS = [
   './',
   './index.html',
@@ -10,6 +10,8 @@ const ASSETS = [
   './supabase.min.js',
   './jsQR.js',
   './qrcode.min.js',
+  './icon-192.png',
+  './icon-512.png',
 ];
 
 self.addEventListener('install', e => {

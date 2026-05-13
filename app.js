@@ -1036,7 +1036,49 @@ async function changeAdminPw() {
   else { showMsg('pw-msg', '✅ Password updated!', 'ok'); document.getElementById('new-pw').value = ''; }
 }
 
+// ── PWA Install ──────────────────────────────────────
+let _installPrompt = null;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _installPrompt = e;
+  // Show install banner once home page is visible
+  setTimeout(() => {
+    const banner = document.getElementById('install-banner');
+    if (banner) banner.classList.remove('hidden');
+  }, 2000);
+});
+
+window.addEventListener('appinstalled', () => {
+  const banner = document.getElementById('install-banner');
+  if (banner) banner.classList.add('hidden');
+  _installPrompt = null;
+  toast('✅ WorkClock installed! Find it on your home screen.');
+});
+
+async function installApp() {
+  if (!_installPrompt) return;
+  _installPrompt.prompt();
+  const { outcome } = await _installPrompt.userChoice;
+  if (outcome === 'accepted') {
+    document.getElementById('install-banner').classList.add('hidden');
+    _installPrompt = null;
+  }
+}
+
+function checkIOSInstall() {
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone = window.navigator.standalone === true;
+  if (isIOS && !isStandalone) {
+    setTimeout(() => {
+      const b = document.getElementById('ios-install-banner');
+      if (b) b.classList.remove('hidden');
+    }, 2000);
+  }
+}
+
 // ── Bootstrap ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  checkIOSInstall();
   setTimeout(() => showPage('home'), 1500);
 });

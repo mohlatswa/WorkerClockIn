@@ -62,6 +62,24 @@
     </button>
 
     <button class="admin-link" onclick="showPage('admin-login')">🔧 Admin Panel</button>
+
+    <!-- Install app banner (shown only when browser supports it) -->
+    <div id="install-banner" class="install-banner hidden">
+      <div class="install-banner-text">
+        <strong>📲 Install WorkClock</strong>
+        <span>Add to your home screen for quick access</span>
+      </div>
+      <button class="btn-install" id="install-btn" onclick="installApp()">Install</button>
+    </div>
+
+    <!-- iOS install instructions -->
+    <div id="ios-install-banner" class="install-banner hidden">
+      <div class="install-banner-text">
+        <strong>📲 Install WorkClock</strong>
+        <span>Tap <strong>Share</strong> → <strong>Add to Home Screen</strong></span>
+      </div>
+      <button class="btn-install-close" onclick="document.getElementById('ios-install-banner').classList.add('hidden')">✕</button>
+    </div>
   </div>
 </div>
 

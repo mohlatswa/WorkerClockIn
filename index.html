@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1E40AF">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <title>WorkClock</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+<!-- ═══════════════════════════════════════════════
+     SPLASH
+════════════════════════════════════════════════ -->
+<div id="page-loading" class="page active">
+  <div class="splash">
+    <div class="splash-ring"></div>
+    <span class="splash-ico">⏱</span>
+    <h1>WorkClock</h1>
+    <p>Staff Attendance System</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     HOME — choose clock-in method
+════════════════════════════════════════════════ -->
+<div id="page-home" class="page">
+  <div class="home-wrap">
+    <div class="home-brand">
+      <span class="home-ico">⏱</span>
+      <h1>WorkClock</h1>
+      <p>Choose how to clock in</p>
+    </div>
+
+    <div class="method-grid">
+      <!-- QR Scan -->
+      <button class="method-tile" onclick="openScanner()">
+        <span class="tile-ico">📸</span>
+        <strong>Scan QR Card</strong>
+        <span>Point camera at your card</span>
+      </button>
+      <!-- NFC -->
+      <button class="method-tile" id="nfc-tile" onclick="openNFC()">
+        <span class="tile-ico">📲</span>
+        <strong>Tap NFC Card</strong>
+        <span>Hold card to phone</span>
+      </button>
+    </div>
+
+    <!-- Manual entry -->
+    <button class="method-wide" onclick="showPage('manual')">
+      <span class="tile-ico">👤</span>
+      <span class="method-wide-text">
+        <strong>Enter Employee ID</strong>
+        <span>Type your ID manually</span>
+      </span>
+      <span class="chevron">›</span>
+    </button>
+
+    <button class="admin-link" onclick="showPage('admin-login')">🔧 Admin Panel</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     QR SCANNER (full-screen camera)
+════════════════════════════════════════════════ -->
+<div id="page-scan" class="page">
+  <div class="scanner-wrap">
+    <video id="qr-video" playsinline muted></video>
+    <canvas id="qr-canvas" style="display:none"></canvas>
+
+    <!-- Overlay UI on top of camera -->
+    <div class="scanner-ui">
+      <div class="scanner-topbar">
+        <button class="scan-back" onclick="stopScanner(); showPage('home')">&#8592; Back</button>
+        <span>Scan QR Card</span>
+        <span style="width:60px"></span>
+      </div>
+
+      <div class="finder-zone">
+        <div class="finder-box">
+          <div class="corner tl"></div><div class="corner tr"></div>
+          <div class="corner bl"></div><div class="corner br"></div>
+          <div class="scan-line"></div>
+        </div>
+        <p class="scan-hint">Hold your QR card steady inside the frame</p>
+      </div>
+
+      <div id="scan-status" class="scan-status">Searching for QR code…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     NFC TAP SCREEN
+════════════════════════════════════════════════ -->
+<div id="page-nfc" class="page">
+  <header class="topbar">
+    <button class="back" onclick="stopNFC(); showPage('home')">&#8592;</button>
+    <span>Tap NFC Card</span>
+    <span style="width:40px"></span>
+  </header>
+  <div class="content center-content">
+    <div class="nfc-zone">
+      <div class="nfc-rings">
+        <div class="nfc-ring r1"></div>
+        <div class="nfc-ring r2"></div>
+        <div class="nfc-ring r3"></div>
+      </div>
+      <div class="nfc-icon">📲</div>
+    </div>
+    <h2>Hold card to back of phone</h2>
+    <p class="sub" id="nfc-hint">Ready — tap your NFC card now</p>
+    <div id="nfc-err" class="err hidden"></div>
+
+    <div class="nfc-note card" style="margin-top:auto">
+      <strong>Don't have an NFC card?</strong><br>
+      <span class="sub">Ask your admin to set one up, or use QR or Manual ID instead.</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     MANUAL ID ENTRY
+════════════════════════════════════════════════ -->
+<div id="page-manual" class="page">
+  <header class="topbar">
+    <button class="back" onclick="showPage('home')">&#8592;</button>
+    <span>Enter Employee ID</span>
+  </header>
+  <div class="content">
+    <div class="card center">
+      <div class="card-ico">👤</div>
+      <h2>Your Employee ID</h2>
+      <p class="sub">Check your ID card or ask your manager</p>
+      <div class="field">
+        <input id="inp-empid" type="text" class="input input-xl" placeholder="e.g. EMP001"
+               autocomplete="off" autocapitalize="characters"
+               onkeydown="if(event.key==='Enter') findWorker()">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="findWorker()">Continue →</button>
+      <div id="err-empid" class="err hidden"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     AUTH — PIN numpad + biometric
+════════════════════════════════════════════════ -->
+<div id="page-auth" class="page">
+  <header class="topbar">
+    <button class="back" onclick="backFromAuth()">&#8592;</button>
+    <span>Verify Identity</span>
+  </header>
+  <div class="content">
+
+    <!-- Worker chip -->
+    <div class="card worker-card">
+      <div class="wchip">
+        <div class="avatar lg" id="auth-avatar">JD</div>
+        <div>
+          <div class="wname" id="auth-name">John Doe</div>
+          <div class="wid"   id="auth-empid">EMP001</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Biometric button (shown when registered) -->
+    <div id="bio-btn-wrap" class="hidden">
+      <button class="btn-bio" onclick="authenticateWithBiometric()">
+        <span>🔏</span> Use Fingerprint / Face ID
+      </button>
+      <div class="or-divider">or enter PIN</div>
+    </div>
+
+    <!-- PIN numpad -->
+    <div class="card numpad-card">
+      <div class="pin-display" id="pin-display">
+        <span class="pdot" id="pd0"></span>
+        <span class="pdot" id="pd1"></span>
+        <span class="pdot" id="pd2"></span>
+        <span class="pdot" id="pd3"></span>
+        <span class="pdot" id="pd4"></span>
+        <span class="pdot" id="pd5"></span>
+      </div>
+      <div class="numpad">
+        <button class="nk" onclick="npPress(1)">1</button>
+        <button class="nk" onclick="npPress(2)">2</button>
+        <button class="nk" onclick="npPress(3)">3</button>
+        <button class="nk" onclick="npPress(4)">4</button>
+        <button class="nk" onclick="npPress(5)">5</button>
+        <button class="nk" onclick="npPress(6)">6</button>
+        <button class="nk" onclick="npPress(7)">7</button>
+        <button class="nk" onclick="npPress(8)">8</button>
+        <button class="nk" onclick="npPress(9)">9</button>
+        <button class="nk nk-fn" onclick="npClear()">Clear</button>
+        <button class="nk" onclick="npPress(0)">0</button>
+        <button class="nk nk-fn" onclick="npBack()">⌫</button>
+      </div>
+      <div id="err-auth" class="err hidden" style="margin-top:10px"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     CLOCK IN / OUT
+════════════════════════════════════════════════ -->
+<div id="page-clock" class="page">
+  <header class="topbar topbar-flex">
+    <span id="clock-greeting" class="topbar-greeting">Hello!</span>
+    <button class="btn-logout" onclick="logoutWorker()">Logout</button>
+  </header>
+  <div class="content">
+
+    <!-- Worker + status -->
+    <div class="card row-card">
+      <div class="wchip compact">
+        <div class="avatar md" id="clock-avatar">JD</div>
+        <div>
+          <div class="wname" id="clock-name">John Doe</div>
+          <div class="wid"   id="clock-empid">EMP001</div>
+        </div>
+      </div>
+      <div id="status-badge" class="badge badge-out"><span class="dot"></span> Clocked Out</div>
+    </div>
+
+    <!-- Live clock -->
+    <div class="card clock-card">
+      <div id="live-time" class="live-time">--:--:--</div>
+      <div id="live-date" class="live-date">—</div>
+    </div>
+
+    <!-- Location check -->
+    <div class="card">
+      <div class="sec-lbl">📍 Location</div>
+      <div id="loc-status"><div class="checking"><div class="spin-sm"></div> Getting your location…</div></div>
+    </div>
+
+    <!-- BIG clock button -->
+    <button id="clock-btn" class="clock-btn disabled" onclick="clockAction()" disabled>
+      <span id="clock-icon">▶</span>
+      <span id="clock-label">Checking Location…</span>
+    </button>
+
+    <!-- Today's record -->
+    <div class="card" id="today-card" style="display:none">
+      <div class="sec-lbl">Today's Record</div>
+      <div class="rec-row">
+        <div class="rec-cell"><span class="rlbl">Clock In</span><span id="rec-in"  class="rval green">--:--</span></div>
+        <div class="rec-cell"><span class="rlbl">Clock Out</span><span id="rec-out" class="rval red">--:--</span></div>
+        <div class="rec-cell"><span class="rlbl">Hours</span><span id="rec-hrs" class="rval">--</span></div>
+      </div>
+    </div>
+
+    <!-- Register biometric -->
+    <div class="card" id="bio-reg-card" style="display:none">
+      <div class="sec-lbl">Optional: Biometric</div>
+      <p class="sub" style="margin-bottom:12px">Register your fingerprint to clock in faster — no PIN needed.</p>
+      <button class="btn-bio" onclick="workerRegisterBiometric()">
+        <span>🔏</span> Register My Fingerprint / Face
+      </button>
+      <div id="bio-reg-msg" class="msg hidden"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     ADMIN LOGIN
+════════════════════════════════════════════════ -->
+<div id="page-admin-login" class="page">
+  <header class="topbar">
+    <button class="back" onclick="showPage('home')">&#8592;</button>
+    <span>Admin Login</span>
+  </header>
+  <div class="content">
+    <div class="card center">
+      <div class="card-ico">🔧</div>
+      <h2>Admin Access</h2>
+      <div class="field">
+        <label>Username</label>
+        <input id="inp-auser" type="text" class="input" placeholder="Username"
+               onkeydown="if(event.key==='Enter') adminLogin()">
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input id="inp-apass" type="password" class="input" placeholder="Password"
+               onkeydown="if(event.key==='Enter') adminLogin()">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="adminLogin()">Login</button>
+      <div id="err-admin" class="err hidden"></div>
+      <p class="hint">Default credentials: admin / admin123</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     ADMIN DASHBOARD
+════════════════════════════════════════════════ -->
+<div id="page-admin" class="page">
+  <header class="topbar topbar-dark">
+    <span>⏱ WorkClock Admin</span>
+    <button class="btn-logout-w" onclick="adminLogout()">Logout</button>
+  </header>
+  <nav class="tabs">
+    <button class="tab active" onclick="switchTab('dash',this)">Dashboard</button>
+    <button class="tab" onclick="switchTab('workers',this)">Workers</button>
+    <button class="tab" onclick="switchTab('attendance',this)">Attendance</button>
+    <button class="tab" onclick="switchTab('setup',this)">Setup</button>
+  </nav>
+  <div class="content">
+
+    <!-- Dashboard -->
+    <div id="tab-dash" class="tab-pane active">
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-val" id="s-present">--</div><div class="stat-lbl">Present Today</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-total">--</div><div class="stat-lbl">Total Workers</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-absent">--</div><div class="stat-lbl">Absent</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-active">--</div><div class="stat-lbl">Still In</div></div>
+      </div>
+      <div class="sec-lbl" style="margin-bottom:8px">Recent Activity</div>
+      <div id="activity-list"><div class="empty">Loading…</div></div>
+    </div>
+
+    <!-- Workers -->
+    <div id="tab-workers" class="tab-pane">
+      <div class="tab-bar">
+        <span class="sec-lbl">Workers</span>
+        <button class="btn btn-primary btn-sm" onclick="toggleAddWorker()">+ Add Worker</button>
+      </div>
+      <div id="add-worker-panel" class="card hidden">
+        <h4 style="margin-bottom:14px">New Worker</h4>
+        <div class="field"><label>Employee ID *</label><input id="nw-id" type="text" class="input" placeholder="e.g. EMP001" autocapitalize="characters"></div>
+        <div class="field"><label>Full Name *</label><input id="nw-name" type="text" class="input" placeholder="Full Name"></div>
+        <div class="field"><label>Phone</label><input id="nw-phone" type="tel" class="input" placeholder="Phone"></div>
+        <div class="field"><label>Email</label><input id="nw-email" type="email" class="input" placeholder="Email"></div>
+        <div class="field"><label>PIN (4–6 digits) *</label><input id="nw-pin" type="password" class="input" placeholder="Set PIN" maxlength="6" inputmode="numeric"></div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="addWorker()">Save Worker</button>
+          <button class="btn btn-outline" onclick="toggleAddWorker()">Cancel</button>
+        </div>
+        <div id="nw-msg" class="msg hidden"></div>
+      </div>
+      <div id="workers-list"><div class="empty">Loading…</div></div>
+    </div>
+
+    <!-- Attendance -->
+    <div id="tab-attendance" class="tab-pane">
+      <div class="tab-bar">
+        <span class="sec-lbl">Attendance</span>
+        <input id="att-date" type="date" class="input input-sm" onchange="loadAttendance()">
+      </div>
+      <div id="att-list"><div class="empty">Loading…</div></div>
+    </div>
+
+    <!-- Setup -->
+    <div id="tab-setup" class="tab-pane">
+      <div class="card">
+        <h4>Workplace Location</h4>
+        <p class="sub" style="margin-bottom:14px">Workers must be within the radius below to clock in</p>
+        <div class="field"><label>Workplace Name *</label><input id="wp-name" type="text" class="input" placeholder="e.g. Main Office"></div>
+        <div class="field"><label>Address</label><input id="wp-addr" type="text" class="input" placeholder="Street Address"></div>
+        <div class="field-row">
+          <div class="field"><label>Latitude *</label><input id="wp-lat" type="number" class="input" placeholder="-26.2041" step="0.000001"></div>
+          <div class="field"><label>Longitude *</label><input id="wp-lng" type="number" class="input" placeholder="28.0473" step="0.000001"></div>
+        </div>
+        <div class="field"><label>Allowed Radius (metres)</label><input id="wp-radius" type="number" class="input" value="100" min="10" max="5000"></div>
+        <button class="btn btn-outline btn-sm" onclick="captureAdminLocation()" style="margin-bottom:10px">📍 Use My Current Location</button>
+        <button class="btn btn-primary btn-full" onclick="saveWorkplace()">Save Workplace</button>
+        <div id="wp-msg" class="msg hidden"></div>
+      </div>
+      <div class="card">
+        <h4>Change Admin Password</h4>
+        <div class="field"><label>New Password (min 6 chars)</label><input id="new-pw" type="password" class="input" placeholder="New password"></div>
+        <button class="btn btn-outline btn-full" onclick="changeAdminPw()">Update Password</button>
+        <div id="pw-msg" class="msg hidden"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SUCCESS OVERLAY (appears over everything)
+════════════════════════════════════════════════ -->
+<div id="success-overlay" class="success-overlay hidden">
+  <div class="success-inner">
+    <div class="success-icon" id="success-icon">✓</div>
+    <div class="success-action" id="success-action">Clocked In!</div>
+    <div class="success-name"   id="success-name">John Doe</div>
+    <div class="success-time"   id="success-time">08:30</div>
+    <div class="success-wp"     id="success-wp">Main Office</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     PRINT CARD MODAL
+════════════════════════════════════════════════ -->
+<div id="card-modal" class="modal-backdrop hidden" onclick="closeCardModal(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Worker ID Card</h3>
+      <button class="modal-close" onclick="closeCardModal()">✕</button>
+    </div>
+    <div class="print-card" id="print-card-content">
+      <div class="pc-header">⏱ WorkClock</div>
+      <canvas id="qr-gen-canvas" class="pc-qr"></canvas>
+      <div class="pc-name" id="pc-name">John Doe</div>
+      <div class="pc-id"   id="pc-id">EMP001</div>
+      <div class="pc-hint">Scan to clock in / out</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="printCard()">🖨 Print Card</button>
+      <button class="btn btn-outline" onclick="closeCardModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast hidden"></div>
+
+</div><!-- #app -->
+
+<!-- Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+  // Register Service Worker (enables "Add to Home Screen" / offline)
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>

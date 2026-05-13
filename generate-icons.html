@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<!-- Run this file once in a browser to generate icon files, then delete it -->
+<html><body>
+<p>Generating icons… check Downloads/WorkerClockIn folder.</p>
+<canvas id="c"></canvas>
+<script>
+function drawIcon(size) {
+  const c = document.getElementById('c');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  // Background
+  const grad = ctx.createLinearGradient(0,0,size,size);
+  grad.addColorStop(0,'#1E40AF'); grad.addColorStop(1,'#3B82F6');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.roundRect(0,0,size,size,size*0.18);
+  ctx.fill();
+  // Clock emoji
+  ctx.font = `${size*0.55}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('⏱', size/2, size/2);
+  return c.toDataURL('image/png');
+}
+
+async function save(size, name) {
+  const data = drawIcon(size);
+  const res  = await fetch(data);
+  const blob = await res.blob();
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+}
+
+save(192, 'icon-192.png');
+setTimeout(() => save(512, 'icon-512.png'), 500);
+setTimeout(() => document.body.innerHTML = '✅ Done! Move icon-192.png and icon-512.png into the WorkerClockIn folder, then delete this file.', 1000);
+</script>
+</body></html>

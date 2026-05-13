@@ -1937,6 +1937,9 @@ function checkIOSInstall() {
 
 // ── Bootstrap ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  // Cancel the HTML-level 3 s hard fallback — app.js is running fine.
+  if (window.__cancelSplashFallback) window.__cancelSplashFallback();
+
   checkIOSInstall();
 
   // Guarantee the splash never hangs: show home after 1500 ms unless a

@@ -2,22 +2,23 @@
 
 // ── App State ────────────────────────────────────────
 const S = {
-  worker:       null,
-  admin:        null,
-  workplace:    null,
-  userLoc:      null,
-  geoWatcher:   null,
-  clockStatus:  'out',
-  attendanceId: null,
-  authMethod:   'pin',
-  scanStream:   null,
-  scanRunning:  false,
-  nfcReader:    null,
-  npPin:        [],
-  npAutoTimer:  null,
-  authSource:   'manual',
-  companyId:    null,
-  companyName:  null,
+  worker:         null,
+  admin:          null,
+  workplace:      null,
+  userLoc:        null,
+  geoWatcher:     null,
+  clockStatus:    'out',
+  attendanceId:   null,
+  authMethod:     'pin',
+  scanStream:     null,
+  scanRunning:    false,
+  nfcReader:      null,
+  npPin:          [],
+  npAutoTimer:    null,
+  authSource:     'manual',
+  companyId:      null,
+  companyName:    null,
+  companyFromUrl: false, // true only when ?c=CODE is in the URL
 };
 
 // ── Navigation ───────────────────────────────────────
@@ -28,9 +29,10 @@ function showPage(id) {
 }
 
 // ── Company (set from URL or localStorage — workers never pick manually) ─
-function setCompany(co) {
-  S.companyId   = co.id;
-  S.companyName = co.name;
+function setCompany(co, fromUrl = false) {
+  S.companyId      = co.id;
+  S.companyName    = co.name;
+  S.companyFromUrl = fromUrl;
   localStorage.setItem('wc_company', JSON.stringify(co));
   updateHomeCompanyUI();
 }
@@ -51,18 +53,17 @@ function updateHomeCompanyUI() {
 }
 
 async function initCompany() {
-  // 1. Try URL param ?c=CODE  (primary — shared by employer)
+  // 1. URL param ?c=CODE — authoritative, marks company as "from URL"
   const params = new URLSearchParams(window.location.search);
   const code   = params.get('c') || params.get('company');
   if (code) {
     const { data } = await db.from('companies').select('*')
       .eq('code', code.toUpperCase()).eq('is_active', true).maybeSingle();
-    if (data) { setCompany(data); return; }
+    if (data) { setCompany(data, true); return; }
   }
-  // 2. Fall back to last-used company stored in localStorage
+  // 2. localStorage fallback — company is set but NOT from URL (no strict filter)
   const saved = localStorage.getItem('wc_company');
-  if (saved) { try { setCompany(JSON.parse(saved)); return; } catch {} }
-  // 3. No company — show "use employer link" message
+  if (saved) { try { setCompany(JSON.parse(saved), false); return; } catch {} }
   updateHomeCompanyUI();
 }
 
@@ -241,7 +242,7 @@ async function homeScreenBiometric() {
     S.authSource  = 'biometric';
     S.authMethod  = 'biometric';
     let q = db.from('workers').select('*, workplace:workplaces(*)').eq('id', workerId).eq('is_active', true);
-    if (S.companyId) q = q.eq('company_id', S.companyId);
+    if (S.companyId && S.companyFromUrl) q = q.eq('company_id', S.companyId);
     const { data, error } = await q.maybeSingle();
     if (error || !data) { toast('❌ Account not found. Use Employee ID instead.'); return; }
     S.worker = data;
@@ -265,9 +266,16 @@ async function findWorker(overrideId) {
   try {
     let q = db.from('workers').select('*, workplace:workplaces(*)')
       .eq('employee_id', id).eq('is_active', true);
-    if (S.companyId) q = q.eq('company_id', S.companyId);
+    // Only scope by company when the company URL param was used (?c=CODE).
+    // If company came from localStorage only, don't filter — avoids "not found"
+    // errors when a worker opens the app without their employer's link.
+    if (S.companyId && S.companyFromUrl) q = q.eq('company_id', S.companyId);
     const { data, error } = await q.maybeSingle();
 
+    if (error?.code === 'PGRST116') {
+      showErr('err-empid', 'Multiple accounts share this ID. Please use your employer's sign-in link (?c=CODE).');
+      return;
+    }
     if (error || !data) {
       if (S.authSource === 'card') {
         toast(`❌ Card not recognised (${id})`);
@@ -405,6 +413,9 @@ async function enterClockScreen() {
   document.getElementById('clock-jobtitle').textContent  = w.job_title || '';
   document.getElementById('clock-greeting').textContent  = `Hello, ${w.name.split(' ')[0]}!`;
   S.workplace = w.workplace || null;
+
+  // Persist session so worker stays logged in across page reloads / app restarts
+  localStorage.setItem('wc_worker_id', w.id);
 
   showPage('clock');
   startClock();
@@ -647,6 +658,7 @@ async function workerRegisterBiometric() {
 function logoutWorker() {
   if (S.geoWatcher) { navigator.geolocation.clearWatch(S.geoWatcher); S.geoWatcher = null; }
   Object.assign(S, { worker: null, userLoc: null, clockStatus: 'out', attendanceId: null, authSource: 'manual' });
+  localStorage.removeItem('wc_worker_id');
   document.getElementById('inp-empid').value = '';
   showPage('home');
 }
@@ -1915,5 +1927,28 @@ function checkIOSInstall() {
 document.addEventListener('DOMContentLoaded', async () => {
   checkIOSInstall();
   await initCompany();
+
+  // Restore worker session — worker stays logged in until they manually sign out
+  const savedId = localStorage.getItem('wc_worker_id');
+  if (savedId) {
+    try {
+      const { data } = await db.from('workers')
+        .select('*, workplace:workplaces(*)')
+        .eq('id', savedId).eq('is_active', true).maybeSingle();
+      if (data) {
+        S.worker = data;
+        // Ensure company context is set from worker's own company record
+        if (!S.companyId) {
+          const { data: co } = await db.from('companies').select('*')
+            .eq('id', data.company_id).maybeSingle();
+          if (co) setCompany(co, false);
+        }
+        setTimeout(() => enterClockScreen(), 1500);
+        return;
+      }
+    } catch { /* worker may have been deleted or deactivated — fall through */ }
+    localStorage.removeItem('wc_worker_id');
+  }
+
   setTimeout(() => showPage('home'), 1500);
 });

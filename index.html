@@ -236,9 +236,26 @@
     </div>
 
     <!-- Location check -->
-    <div class="card">
+    <div class="card" id="loc-card">
       <div class="sec-lbl">📍 Location</div>
       <div id="loc-status"><div class="checking"><div class="spin-sm"></div> Getting your location…</div></div>
+    </div>
+
+    <!-- Location blocked (shown when GPS is off/denied) -->
+    <div id="loc-blocked-card" class="card loc-blocked-card hidden">
+      <div class="loc-blocked-icon">📍</div>
+      <h3>Location Required</h3>
+      <p>Your location must be <strong>turned ON</strong> to clock in. This prevents clocking in from outside the workplace.</p>
+      <div class="loc-blocked-steps">
+        <strong>How to fix:</strong>
+        <ol>
+          <li>Open your phone <strong>Settings</strong></li>
+          <li>Go to <strong>Privacy → Location</strong></li>
+          <li>Turn location <strong>ON</strong></li>
+          <li>Come back and tap <strong>Retry</strong></li>
+        </ol>
+      </div>
+      <button class="btn btn-primary btn-full" onclick="retryLocation()" style="margin-top:12px">🔄 Retry Location</button>
     </div>
 
     <!-- BIG clock button -->
@@ -351,11 +368,37 @@
 
     <!-- Attendance -->
     <div id="tab-attendance" class="tab-pane">
-      <div class="tab-bar">
-        <span class="sec-lbl">Attendance</span>
-        <input id="att-date" type="date" class="input input-sm" onchange="loadAttendance()">
+
+      <!-- Single day view -->
+      <div class="card" style="margin-bottom:12px">
+        <div class="sec-lbl" style="margin-bottom:10px">View by Day</div>
+        <div class="att-day-bar">
+          <input id="att-date" type="date" class="input input-sm" onchange="loadAttendance()">
+          <button class="btn btn-outline btn-sm" onclick="loadAttendance()">View</button>
+        </div>
+        <div id="att-list" style="margin-top:12px"><div class="empty">Select a date above</div></div>
       </div>
-      <div id="att-list"><div class="empty">Loading…</div></div>
+
+      <!-- Date range export -->
+      <div class="card">
+        <div class="sec-lbl" style="margin-bottom:10px">📥 Export to Excel / CSV</div>
+        <p class="sub" style="margin-bottom:12px">Download all attendance records for any date range — opens in Excel</p>
+        <div class="field-row">
+          <div class="field">
+            <label>From</label>
+            <input id="csv-from" type="date" class="input">
+          </div>
+          <div class="field">
+            <label>To</label>
+            <input id="csv-to" type="date" class="input">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="downloadCSV()">
+          📥 Download CSV
+        </button>
+        <div id="csv-msg" class="msg hidden"></div>
+      </div>
+
     </div>
 
     <!-- Setup -->

@@ -349,24 +349,64 @@ function startGeoWatch() {
   locEl.innerHTML = '<div class="checking"><div class="spin-sm"></div> Getting your location…</div>';
 
   if (!navigator.geolocation) {
-    locEl.innerHTML = '<span class="loc-err">❌ Geolocation not supported on this device</span>';
+    showLocationBlocked('This device does not support GPS. Location is required to clock in.');
     return;
   }
 
   if (S.geoWatcher) navigator.geolocation.clearWatch(S.geoWatcher);
 
+  // Check permission state before watching (Permissions API)
+  if (navigator.permissions) {
+    try {
+      const perm = await navigator.permissions.query({ name: 'geolocation' });
+      if (perm.state === 'denied') { showLocationBlocked(); return; }
+      perm.onchange = () => { if (perm.state === 'denied') showLocationBlocked(); };
+    } catch {}
+  }
+
   S.geoWatcher = navigator.geolocation.watchPosition(
     pos => {
       S.userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: Math.round(pos.coords.accuracy) };
+      hideLocationBlocked();
       refreshLocUI();
     },
     err => {
-      const msgs = { 1: 'Location access denied — allow location in browser settings.', 2: 'Location unavailable. Move to an open area.', 3: 'Location timed out.' };
-      document.getElementById('loc-status').innerHTML = `<span class="loc-err">❌ ${msgs[err.code]||'Location error'}</span>`;
-      setClockBtn(false);
+      if (err.code === 1) {
+        // Permission denied — hard block
+        showLocationBlocked();
+      } else if (err.code === 2) {
+        // Position unavailable (GPS off at device level)
+        showLocationBlocked('Location services appear to be OFF on your device. Turn on GPS to clock in.');
+      } else {
+        document.getElementById('loc-status').innerHTML = '<span class="loc-err">❌ Location timed out — move to an open area and retry</span>';
+        setClockBtn(false);
+      }
     },
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
   );
+}
+
+function showLocationBlocked(customMsg) {
+  document.getElementById('loc-card').classList.add('hidden');
+  document.getElementById('loc-blocked-card').classList.remove('hidden');
+  document.getElementById('clock-btn').disabled = true;
+  document.getElementById('clock-btn').className = 'clock-btn disabled';
+  document.getElementById('clock-label').textContent = 'Location Required';
+  document.getElementById('clock-icon').textContent = '📍';
+  if (customMsg) {
+    document.querySelector('.loc-blocked-card p').textContent = customMsg;
+  }
+}
+
+function hideLocationBlocked() {
+  document.getElementById('loc-card').classList.remove('hidden');
+  document.getElementById('loc-blocked-card').classList.add('hidden');
+}
+
+function retryLocation() {
+  hideLocationBlocked();
+  S.userLoc = null;
+  startGeoWatch();
 }
 
 function refreshLocUI() {
@@ -563,7 +603,15 @@ function switchTab(name, btn) {
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   document.getElementById(`tab-${name}`).classList.add('active');
   if (name === 'workers')    loadWorkers();
-  if (name === 'attendance') { document.getElementById('att-date').value = new Date().toISOString().slice(0,10); loadAttendance(); }
+  if (name === 'attendance') {
+    const today = new Date().toISOString().slice(0, 10);
+    document.getElementById('att-date').value = today;
+    // Default CSV range: 8 months ago → today
+    const eightMonthsAgo = new Date(); eightMonthsAgo.setMonth(eightMonthsAgo.getMonth() - 8);
+    document.getElementById('csv-from').value = eightMonthsAgo.toISOString().slice(0, 10);
+    document.getElementById('csv-to').value   = today;
+    loadAttendance();
+  }
   if (name === 'setup')      loadWorkplaceSetting();
 }
 
@@ -702,6 +750,65 @@ function closeCardModal(e) {
 }
 
 function printCard() { window.print(); }
+
+// ── CSV Export ───────────────────────────────────────
+async function downloadCSV() {
+  const from = document.getElementById('csv-from').value;
+  const to   = document.getElementById('csv-to').value;
+  const msgEl = document.getElementById('csv-msg');
+
+  if (!from || !to) { showMsg('csv-msg', 'Please select both a From and To date.', 'err'); return; }
+  if (new Date(from) > new Date(to)) { showMsg('csv-msg', 'From date must be before To date.', 'err'); return; }
+
+  showMsg('csv-msg', '⏳ Fetching records…', 'ok');
+
+  const start = new Date(from); start.setHours(0, 0, 0, 0);
+  const end   = new Date(to);   end.setHours(23, 59, 59, 999);
+
+  try {
+    const { data, error } = await db
+      .from('attendance')
+      .select('*, w:workers(name, employee_id)')
+      .gte('clock_in_time', start.toISOString())
+      .lte('clock_in_time', end.toISOString())
+      .order('clock_in_time');
+
+    if (error) throw error;
+    if (!data?.length) { showMsg('csv-msg', 'No records found for this date range.', 'err'); return; }
+
+    const headers = ['Worker Name', 'Employee ID', 'Date', 'Clock In', 'Clock Out', 'Hours Worked', 'Auth Method', 'Status'];
+    const rows = data.map(r => {
+      const cin  = r.clock_in_time  ? new Date(r.clock_in_time)  : null;
+      const cout = r.clock_out_time ? new Date(r.clock_out_time) : null;
+      const hrs  = (cin && cout) ? ((cout - cin) / 3_600_000).toFixed(2) : '';
+      return [
+        r.w?.name        || 'Unknown',
+        r.w?.employee_id || '',
+        cin  ? cin.toLocaleDateString('en-ZA')  : '',
+        cin  ? cin.toLocaleTimeString('en-ZA',  { hour:'2-digit', minute:'2-digit' }) : '',
+        cout ? cout.toLocaleTimeString('en-ZA', { hour:'2-digit', minute:'2-digit' }) : 'Still In',
+        hrs  ? hrs + 'h' : '',
+        r.auth_method || '',
+        r.status || ''
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+    });
+
+    const csv  = '﻿' + [headers.join(','), ...rows].join('\r\n'); // BOM for Excel
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `attendance_${from}_to_${to}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showMsg('csv-msg', `✅ Downloaded ${data.length} record${data.length !== 1 ? 's' : ''}`, 'ok');
+  } catch (err) {
+    showMsg('csv-msg', 'Export failed: ' + err.message, 'err');
+  }
+}
 
 // ── Attendance ───────────────────────────────────────
 async function loadAttendance() {

@@ -57,6 +57,16 @@
 
       <div class="other-methods-lbl">— or use another method —</div>
 
+      <!-- Face Recognition (auto-identify) -->
+      <button class="method-wide" onclick="openFaceRecognition()" style="background:linear-gradient(135deg,#065F46,#10B981);color:#fff;margin-bottom:10px">
+        <span class="tile-ico">🤳</span>
+        <span class="method-wide-text">
+          <strong style="color:#fff">Face Recognition</strong>
+          <span style="color:rgba(255,255,255,.8)">Look at the camera to identify yourself</span>
+        </span>
+        <span class="chevron" style="color:rgba(255,255,255,.7)">›</span>
+      </button>
+
       <div class="method-grid">
         <button class="method-tile" onclick="openScanner()">
           <span class="tile-ico">📸</span>
@@ -154,6 +164,26 @@
     <div class="nfc-note card" style="margin-top:auto">
       <strong>Don't have an NFC card?</strong><br>
       <span class="sub">Ask your admin to set one up, or use QR or Manual ID instead.</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     FACE RECOGNITION (full-screen camera)
+════════════════════════════════════════════════ -->
+<div id="page-face-scan" class="page">
+  <div class="face-scan-wrap">
+    <video id="face-video" playsinline muted></video>
+    <div class="face-scan-ui">
+      <div class="scanner-topbar" style="pointer-events:auto">
+        <button class="scan-back" onclick="stopFaceRecognition()">&#8592; Back</button>
+        <span>Face Recognition</span>
+        <span style="width:60px"></span>
+      </div>
+      <div class="face-oval-zone">
+        <div class="face-oval" id="face-oval"></div>
+      </div>
+      <div id="face-status" class="face-scan-status">Initialising…</div>
     </div>
   </div>
 </div>
@@ -310,14 +340,24 @@
       </div>
     </div>
 
-    <!-- Register biometric -->
+    <!-- Register fingerprint / Face ID (WebAuthn) -->
     <div class="card" id="bio-reg-card" style="display:none">
-      <div class="sec-lbl">Optional: Biometric</div>
-      <p class="sub" style="margin-bottom:12px">Register your fingerprint to clock in faster — no PIN needed.</p>
+      <div class="sec-lbl">Optional: Fingerprint / Face ID</div>
+      <p class="sub" style="margin-bottom:12px">Register your device fingerprint or Face ID to clock in with one tap.</p>
       <button class="btn-bio" onclick="workerRegisterBiometric()">
-        <span>🔏</span> Register My Fingerprint / Face
+        <span>🔏</span> Register Fingerprint / Face ID
       </button>
       <div id="bio-reg-msg" class="msg hidden"></div>
+    </div>
+
+    <!-- Register face for camera recognition -->
+    <div class="card" id="face-reg-card" style="display:none">
+      <div class="sec-lbl">Optional: Face Recognition</div>
+      <p class="sub" style="margin-bottom:12px">Register your face so the camera can identify and clock you in automatically.</p>
+      <button class="btn-bio" style="background:linear-gradient(135deg,#10B981,#059669)" onclick="workerEnrollFace()">
+        <span>🤳</span> Register My Face
+      </button>
+      <div id="face-reg-msg" class="msg hidden"></div>
     </div>
 
   </div>
@@ -696,6 +736,21 @@
   </div>
 </div>
 
+<!-- Face Enrolment Modal -->
+<div id="face-enroll-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeFaceEnrollModal()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="face-enroll-title">Enrol Face</h3>
+      <button class="modal-close" onclick="closeFaceEnrollModal()">✕</button>
+    </div>
+    <video id="enroll-video" class="face-enroll-preview" playsinline muted></video>
+    <div style="padding:14px 18px">
+      <p id="enroll-face-status" class="sub" style="text-align:center;margin-bottom:12px">Loading…</p>
+      <button id="enroll-face-snap-btn" class="btn btn-primary btn-full" onclick="captureFaceEnroll()" disabled>📷 Capture Face</button>
+    </div>
+  </div>
+</div>
+
 <!-- Edit Company Modal -->
 <div id="edit-company-modal" class="modal-backdrop hidden" onclick="closeEditCompany(event)">
   <div class="modal-box" onclick="event.stopPropagation()">
@@ -786,6 +841,7 @@
 
 <!-- Libraries (local copies — no CDN dependency) -->
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 <script src="supabase.min.js"></script>
 <script src="jsQR.js"></script>
 <script src="qrcode.min.js"></script>

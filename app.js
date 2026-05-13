@@ -411,9 +411,11 @@ async function enterClockScreen() {
   await refreshClockStatus();
   startGeoWatch();
 
-  // Show biometric registration if not yet set and WebAuthn supported
+  // Show biometric / face registration cards if not yet enrolled
   document.getElementById('bio-reg-card').style.display =
     (!w.biometric_enabled && window.PublicKeyCredential) ? 'block' : 'none';
+  document.getElementById('face-reg-card').style.display =
+    !w.face_descriptor ? 'block' : 'none';
 }
 
 // ── Geolocation watcher ──────────────────────────────
@@ -833,13 +835,14 @@ async function loadWorkers() {
         <div class="avatar sm">${initials(w.name)}</div>
         <div>
           <div class="wr-name">${w.name}</div>
-          <div class="wr-meta">${w.employee_id}${w.job_title?' · '+w.job_title:''}${w.biometric_enabled?' · 🔏':''} ${!w.is_active?'· <em>Inactive</em>':''}</div>
+          <div class="wr-meta">${w.employee_id}${w.job_title?' · '+w.job_title:''}${w.biometric_enabled?' · 🔏':''}${w.face_descriptor?' · 🤳':''} ${!w.is_active?'· <em>Inactive</em>':''}</div>
         </div>
       </div>
       <div class="wr-btns">
         <button class="icon-btn" title="Edit Worker" onclick="openEditWorkerById('${w.id}')">✏️</button>
+        <button class="icon-btn" title="Enrol Face" onclick="adminEnrollFace('${w.id}','${w.name.replace(/'/g,"\\'")}','admin')">🤳</button>
         <button class="icon-btn" title="Print ID Card" onclick="openCardModal('${w.id}','${w.employee_id}','${w.name.replace(/'/g,"\\'")}','${(w.job_title||'').replace(/'/g,"\\'")}')">🪪</button>
-        <button class="icon-btn" title="Register Biometric" onclick="adminRegisterBio('${w.id}','${w.name.replace(/'/g,"\\'")}')">🔏</button>
+        <button class="icon-btn" title="Register Fingerprint/Face ID" onclick="adminRegisterBio('${w.id}','${w.name.replace(/'/g,"\\'")}')">🔏</button>
         <button class="icon-btn" title="${w.is_active?'Deactivate':'Reactivate'}" onclick="toggleWorker('${w.id}',${w.is_active})">${w.is_active?'🚫':'✅'}</button>
       </div>
     </div>`).join('') + '</div>';
@@ -1593,11 +1596,12 @@ async function loadDevWorkers() {
         <div class="avatar sm">${initials(w.name)}</div>
         <div>
           <div class="wr-name">${w.name}</div>
-          <div class="wr-meta">${w.employee_id}${w.job_title?' · '+w.job_title:''}${w.biometric_enabled?' · 🔏':''}${!w.is_active?' · <em>Inactive</em>':''}</div>
+          <div class="wr-meta">${w.employee_id}${w.job_title?' · '+w.job_title:''}${w.biometric_enabled?' · 🔏':''}${w.face_descriptor?' · 🤳':''}${!w.is_active?' · <em>Inactive</em>':''}</div>
         </div>
       </div>
       <div class="wr-btns">
         <button class="icon-btn" title="Edit Worker" onclick="openEditWorkerById('${w.id}')">✏️</button>
+        <button class="icon-btn" title="Enrol Face" onclick="adminEnrollFace('${w.id}','${w.name.replace(/'/g,"\\'")}','dev')">🤳</button>
         <button class="icon-btn" title="${w.is_active?'Deactivate':'Reactivate'}" onclick="devToggleWorker('${w.id}',${w.is_active})">${w.is_active?'🚫':'✅'}</button>
       </div>
     </div>`).join('') + '</div>';
@@ -1606,6 +1610,264 @@ async function loadDevWorkers() {
 async function devToggleWorker(id, cur) {
   const { error } = await db.from('workers').update({ is_active: !cur }).eq('id', id);
   if (!error) { toast(cur ? 'Worker deactivated' : 'Worker reactivated'); loadDevWorkers(); }
+}
+
+// ════════════════════════════════════════════════════
+//  FACE RECOGNITION  (face-api.js)
+// ════════════════════════════════════════════════════
+const FACE_MODELS_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
+let _faceModelsLoaded = false;
+let _faceLoadPromise  = null;
+
+async function loadFaceModels() {
+  if (_faceModelsLoaded) return;
+  if (_faceLoadPromise) return _faceLoadPromise;
+  _faceLoadPromise = Promise.all([
+    faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODELS_URL),
+    faceapi.nets.faceLandmark68TinyNet.loadFromUri(FACE_MODELS_URL),
+    faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODELS_URL),
+  ]).then(() => {
+    _faceModelsLoaded = true;
+  }).catch(err => {
+    _faceLoadPromise = null;
+    throw err;
+  });
+  return _faceLoadPromise;
+}
+
+const faceOpts = () => new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 });
+
+// ── Face recognition clock-in ─────────────────────────
+let _faceStream    = null;
+let _faceRunning   = false;
+let _faceMatcher   = null;
+let _faceWorkerMap = {};
+
+async function openFaceRecognition() {
+  showPage('face-scan');
+  const statusEl = document.getElementById('face-status');
+  const oval     = document.getElementById('face-oval');
+  oval.classList.remove('face-found');
+
+  if (!S.companyId) {
+    statusEl.textContent = '⚠️ No company linked — open the employer's clock-in link first.';
+    return;
+  }
+
+  statusEl.textContent = '⏳ Loading face models (first time may take a moment)…';
+  try {
+    await loadFaceModels();
+  } catch {
+    statusEl.textContent = '❌ Could not load face models — check your internet connection.';
+    return;
+  }
+
+  statusEl.textContent = 'Loading enrolled faces…';
+  const { data: workers } = await db.from('workers')
+    .select('id, name, employee_id, face_descriptor')
+    .eq('company_id', S.companyId)
+    .eq('is_active', true)
+    .not('face_descriptor', 'is', null);
+
+  if (!workers?.length) {
+    statusEl.textContent = '⚠️ No faces enrolled yet — ask your admin to enrol your face first.';
+    return;
+  }
+
+  const labeled = [];
+  _faceWorkerMap = {};
+  for (const w of workers) {
+    try {
+      const arr = JSON.parse(w.face_descriptor);
+      labeled.push(new faceapi.LabeledFaceDescriptors(w.id, [new Float32Array(arr)]));
+      _faceWorkerMap[w.id] = w;
+    } catch { /* skip corrupt entries */ }
+  }
+
+  if (!labeled.length) {
+    statusEl.textContent = '⚠️ Face data invalid — ask admin to re-enrol your face.';
+    return;
+  }
+
+  _faceMatcher = new faceapi.FaceMatcher(labeled, 0.50);
+
+  statusEl.textContent = 'Position your face inside the oval…';
+  try {
+    _faceStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+    });
+    const video = document.getElementById('face-video');
+    video.srcObject = _faceStream;
+    await video.play();
+    _faceRunning = true;
+    requestAnimationFrame(faceRecognitionFrame);
+  } catch (err) {
+    statusEl.textContent = err.name === 'NotAllowedError'
+      ? '❌ Camera access denied — allow camera in your browser settings'
+      : '❌ Camera error: ' + err.message;
+  }
+}
+
+async function faceRecognitionFrame() {
+  if (!_faceRunning) return;
+  const video    = document.getElementById('face-video');
+  const statusEl = document.getElementById('face-status');
+  const oval     = document.getElementById('face-oval');
+
+  if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+    requestAnimationFrame(faceRecognitionFrame);
+    return;
+  }
+
+  try {
+    const det = await faceapi
+      .detectSingleFace(video, faceOpts())
+      .withFaceLandmarks(true)
+      .withFaceDescriptor();
+
+    if (!det) {
+      oval.classList.remove('face-found');
+      requestAnimationFrame(faceRecognitionFrame);
+      return;
+    }
+
+    const match = _faceMatcher.findBestMatch(det.descriptor);
+
+    if (match.label === 'unknown') {
+      oval.classList.remove('face-found');
+      statusEl.textContent = '❓ Face not recognised — try again or use Employee ID';
+      await new Promise(r => setTimeout(r, 1500));
+      if (_faceRunning) statusEl.textContent = 'Position your face inside the oval…';
+      requestAnimationFrame(faceRecognitionFrame);
+      return;
+    }
+
+    // ── Match found ──────────────────────────────────
+    _faceRunning = false;
+    oval.classList.add('face-found');
+    const matched = _faceWorkerMap[match.label];
+    statusEl.textContent = `✅ Recognised: ${matched?.name || 'Unknown'}`;
+    vibrate([50, 30, 100]);
+
+    if (_faceStream) { _faceStream.getTracks().forEach(t => t.stop()); _faceStream = null; }
+
+    const { data } = await db.from('workers')
+      .select('*, workplace:workplaces(*)')
+      .eq('id', match.label).eq('is_active', true).maybeSingle();
+
+    if (!data) {
+      statusEl.textContent = '❌ Account not found — contact your admin.';
+      setTimeout(() => showPage('home'), 2500);
+      return;
+    }
+    S.worker     = data;
+    S.authMethod = 'biometric';
+    S.authSource = 'face';
+    setTimeout(() => enterClockScreen(), 900);
+
+  } catch {
+    requestAnimationFrame(faceRecognitionFrame);
+  }
+}
+
+function stopFaceRecognition() {
+  _faceRunning = false;
+  if (_faceStream) { _faceStream.getTracks().forEach(t => t.stop()); _faceStream = null; }
+  showPage('home');
+}
+
+// ── Face enrolment ────────────────────────────────────
+let _enrollStream = null;
+let _enrollTarget = null; // { id, name, ctx }
+
+async function adminEnrollFace(workerId, workerName, ctx) {
+  _enrollTarget = { id: workerId, name: workerName, ctx: ctx || 'admin' };
+  document.getElementById('face-enroll-title').textContent  = `Enrol Face — ${workerName}`;
+  document.getElementById('enroll-face-status').textContent = '⏳ Loading models…';
+  document.getElementById('enroll-face-snap-btn').disabled  = true;
+  document.getElementById('face-enroll-modal').classList.remove('hidden');
+
+  try {
+    await loadFaceModels();
+  } catch {
+    document.getElementById('enroll-face-status').textContent = '❌ Could not load models — check internet.';
+    return;
+  }
+
+  document.getElementById('enroll-face-status').textContent = 'Opening camera…';
+  try {
+    _enrollStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+    });
+    const video = document.getElementById('enroll-video');
+    video.srcObject = _enrollStream;
+    await video.play();
+    document.getElementById('enroll-face-status').textContent =
+      `Position ${workerName}'s face clearly in the frame, then tap Capture.`;
+    document.getElementById('enroll-face-snap-btn').disabled = false;
+  } catch (err) {
+    document.getElementById('enroll-face-status').textContent = err.name === 'NotAllowedError'
+      ? '❌ Camera access denied' : '❌ ' + err.message;
+  }
+}
+
+function workerEnrollFace() {
+  if (!S.worker) return;
+  adminEnrollFace(S.worker.id, S.worker.name, 'worker');
+}
+
+async function captureFaceEnroll() {
+  const statusEl = document.getElementById('enroll-face-status');
+  const btn      = document.getElementById('enroll-face-snap-btn');
+  btn.disabled   = true;
+  statusEl.textContent = 'Detecting face…';
+
+  const video = document.getElementById('enroll-video');
+  try {
+    const det = await faceapi
+      .detectSingleFace(video, faceOpts())
+      .withFaceLandmarks(true)
+      .withFaceDescriptor();
+
+    if (!det) {
+      statusEl.textContent = '❌ No face detected — ensure good lighting and face is fully visible.';
+      btn.disabled = false;
+      return;
+    }
+
+    const descriptor = JSON.stringify(Array.from(det.descriptor));
+    const { error } = await db.from('workers')
+      .update({ face_descriptor: descriptor }).eq('id', _enrollTarget.id);
+
+    if (error) {
+      statusEl.textContent = '❌ Save failed: ' + error.message;
+      btn.disabled = false;
+      return;
+    }
+
+    vibrate([50, 30, 100]);
+    statusEl.textContent = `✅ Face enrolled for ${_enrollTarget.name}!`;
+
+    if (_enrollTarget.ctx === 'worker') {
+      S.worker.face_descriptor = descriptor;
+      document.getElementById('face-reg-card').style.display = 'none';
+    }
+
+    setTimeout(() => {
+      closeFaceEnrollModal();
+      if (_enrollTarget.ctx === 'dev')   loadDevWorkers();
+      else if (_enrollTarget.ctx === 'admin') loadWorkers();
+    }, 1400);
+
+  } catch (err) {
+    statusEl.textContent = '❌ Detection error: ' + err.message;
+    btn.disabled = false;
+  }
+}
+
+function closeFaceEnrollModal() {
+  if (_enrollStream) { _enrollStream.getTracks().forEach(t => t.stop()); _enrollStream = null; }
+  document.getElementById('face-enroll-modal').classList.add('hidden');
 }
 
 // ── PWA Install ──────────────────────────────────────

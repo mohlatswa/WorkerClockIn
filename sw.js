@@ -1,5 +1,5 @@
 // Service Worker — network-first so updates are always picked up immediately
-const CACHE = 'workclock-v7';
+const CACHE = 'workclock-v8';
 const ASSETS = [
   './',
   './index.html',

@@ -345,6 +345,9 @@ body {
 .hidden { display: none !important; }
 .empty  { text-align: center; color: var(--muted); padding: 24px; }
 .hint         { font-size: .75rem; color: var(--muted); margin-top: 14px; }
+.info-row  { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: .88rem; }
+.info-row:last-child { border-bottom: none; }
+.info-lbl  { color: var(--muted); font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .4px; }
 .forgot-link  { background: none; border: none; color: var(--blue); font-size: .85rem; cursor: pointer; margin-top: 10px; padding: 4px 0; text-decoration: underline; }
 .forgot-divider { border-top: 1px solid var(--border); margin: 14px 0; }
 .btn-text-sm  { background: none; border: none; color: var(--muted); font-size: .82rem; cursor: pointer; margin-top: 6px; text-decoration: underline; padding: 2px 0; }

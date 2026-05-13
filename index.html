@@ -498,6 +498,67 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════
+     DEVELOPER PANEL
+════════════════════════════════════════════════ -->
+<div id="page-developer" class="page">
+  <header class="topbar topbar-dark">
+    <span>⚙ Developer Panel</span>
+    <button class="btn-logout-w" onclick="devLogout()">Logout</button>
+  </header>
+  <nav class="tabs">
+    <button class="tab active" onclick="switchDevTab('dev-admins',this)">Admin Accounts</button>
+    <button class="tab" onclick="switchDevTab('dev-info',this)">System Info</button>
+  </nav>
+  <div class="content">
+
+    <!-- Admin Accounts -->
+    <div id="tab-dev-admins" class="tab-pane active">
+      <div class="tab-bar">
+        <span class="sec-lbl">Admin Accounts</span>
+        <button class="btn btn-primary btn-sm" onclick="toggleAddAdmin()">+ New Admin</button>
+      </div>
+
+      <div id="add-admin-panel" class="card hidden">
+        <h4 style="margin-bottom:14px">New Admin Account</h4>
+        <div class="field"><label>Full Name *</label><input id="na-name" type="text" class="input" placeholder="Full Name"></div>
+        <div class="field"><label>Username *</label><input id="na-user" type="text" class="input" placeholder="e.g. jane_admin" autocapitalize="none"></div>
+        <div class="field"><label>Password *</label><input id="na-pass" type="password" class="input" placeholder="Min 6 characters"></div>
+        <div class="field"><label>Email</label><input id="na-email" type="email" class="input" placeholder="admin@company.com"></div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="addAdminAccount()">Create Account</button>
+          <button class="btn btn-outline" onclick="toggleAddAdmin()">Cancel</button>
+        </div>
+        <div id="na-msg" class="msg hidden"></div>
+      </div>
+
+      <div id="admins-list"><div class="empty">Loading…</div></div>
+    </div>
+
+    <!-- System Info -->
+    <div id="tab-dev-info" class="tab-pane">
+      <div class="card">
+        <div class="sec-lbl" style="margin-bottom:10px">System</div>
+        <div class="info-row"><span class="info-lbl">App</span><span>WorkClock Staff Attendance</span></div>
+        <div class="info-row"><span class="info-lbl">Hosting</span><span>GitHub Pages</span></div>
+        <div class="info-row"><span class="info-lbl">Database</span><span>Supabase (PostgreSQL)</span></div>
+        <div class="info-row"><span class="info-lbl">Project</span><span>uwxnbaicwfbygvkiyhcf</span></div>
+        <div class="info-row"><span class="info-lbl">Version</span><span>v1.0 — 2025</span></div>
+      </div>
+      <div class="card">
+        <div class="sec-lbl" style="margin-bottom:10px">Developer Account</div>
+        <div id="dev-account-info"><div class="empty">Loading…</div></div>
+        <div class="field" style="margin-top:14px"><label>Change Developer Password</label>
+          <input id="dev-new-pw" type="password" class="input" placeholder="New password (min 6 chars)">
+        </div>
+        <button class="btn btn-outline btn-full" onclick="changeDevPw()">Update Password</button>
+        <div id="dev-pw-msg" class="msg hidden"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
      SUCCESS OVERLAY (appears over everything)
 ════════════════════════════════════════════════ -->
 <div id="success-overlay" class="success-overlay hidden">

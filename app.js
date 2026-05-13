@@ -601,8 +601,13 @@ async function adminLogin() {
     S.admin = data;
     document.getElementById('inp-auser').value = '';
     document.getElementById('inp-apass').value = '';
-    showPage('admin');
-    loadDashboard();
+    if (data.role === 'developer') {
+      showPage('developer');
+      loadAdminAccounts();
+    } else {
+      showPage('admin');
+      loadDashboard();
+    }
   } catch(err) { showErr('err-admin', 'Error: ' + (err?.message || String(err))); }
 }
 
@@ -1034,6 +1039,106 @@ async function changeAdminPw() {
   const { error } = await db.from('admin_users').update({ password_hash: pw }).eq('id', S.admin.id);
   if (error) showMsg('pw-msg', 'Failed: ' + error.message, 'err');
   else { showMsg('pw-msg', '✅ Password updated!', 'ok'); document.getElementById('new-pw').value = ''; }
+}
+
+// ════════════════════════════════════════════════════
+//  DEVELOPER PANEL
+// ════════════════════════════════════════════════════
+function devLogout() { S.admin = null; showPage('home'); }
+
+function switchDevTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  if (name === 'dev-admins') loadAdminAccounts();
+  if (name === 'dev-info')   loadDevInfo();
+}
+
+async function loadAdminAccounts() {
+  const el = document.getElementById('admins-list');
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  const { data, error } = await db.from('admin_users')
+    .select('*').neq('role', 'developer').order('username');
+  if (error || !data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
+  if (!data.length)   { el.innerHTML = '<div class="empty">No admin accounts yet — create one above</div>'; return; }
+
+  el.innerHTML = '<div class="workers-list">' + data.map(a => `
+    <div class="wr-row">
+      <div class="wr-info">
+        <div class="avatar sm">${(a.full_name||a.username).split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>
+        <div>
+          <div class="wr-name">${a.full_name || a.username}</div>
+          <div class="wr-meta">@${a.username}${a.email?' · '+a.email:''}${!a.is_active?' · <em>Inactive</em>':''}</div>
+        </div>
+      </div>
+      <div class="wr-btns">
+        <button class="icon-btn" title="Reset Password" onclick="devResetAdminPw('${a.id}','${a.username}')">🔑</button>
+        <button class="icon-btn" title="${a.is_active?'Deactivate':'Reactivate'}" onclick="devToggleAdmin('${a.id}',${a.is_active})">${a.is_active?'🚫':'✅'}</button>
+      </div>
+    </div>`).join('') + '</div>';
+}
+
+function toggleAddAdmin() {
+  const p = document.getElementById('add-admin-panel');
+  p.classList.toggle('hidden');
+  if (!p.classList.contains('hidden')) document.getElementById('na-name').focus();
+}
+
+async function addAdminAccount() {
+  const name  = (document.getElementById('na-name').value  || '').trim();
+  const user  = (document.getElementById('na-user').value  || '').trim().toLowerCase();
+  const pass  = (document.getElementById('na-pass').value  || '').trim();
+  const email = (document.getElementById('na-email').value || '').trim();
+
+  if (!name || !user || !pass) { showMsg('na-msg', 'Full Name, Username and Password are required.', 'err'); return; }
+  if (pass.length < 6)         { showMsg('na-msg', 'Password must be at least 6 characters.', 'err'); return; }
+  if (!/^[a-z0-9_]+$/.test(user)) { showMsg('na-msg', 'Username may only contain letters, numbers and underscores.', 'err'); return; }
+
+  const { error } = await db.from('admin_users').insert({
+    username: user, password_hash: pass, full_name: name,
+    email: email || null, role: 'admin', is_active: true,
+  });
+
+  if (error) {
+    showMsg('na-msg', error.code === '23505' ? 'Username already exists.' : error.message, 'err');
+    return;
+  }
+  showMsg('na-msg', `✅ Admin account "@${user}" created!`, 'ok');
+  ['na-name','na-user','na-pass','na-email'].forEach(id => document.getElementById(id).value = '');
+  setTimeout(() => { toggleAddAdmin(); loadAdminAccounts(); }, 1400);
+}
+
+async function devToggleAdmin(id, cur) {
+  const { error } = await db.from('admin_users').update({ is_active: !cur }).eq('id', id);
+  if (!error) { toast(cur ? 'Admin deactivated' : 'Admin reactivated'); loadAdminAccounts(); }
+  else toast('Error: ' + error.message);
+}
+
+async function devResetAdminPw(id, username) {
+  const pw = prompt(`Set new password for @${username}:`);
+  if (!pw) return;
+  if (pw.length < 6) { toast('Password must be at least 6 characters.'); return; }
+  const { error } = await db.from('admin_users').update({ password_hash: pw }).eq('id', id);
+  if (!error) toast(`✅ Password updated for @${username}`);
+  else toast('Error: ' + error.message);
+}
+
+async function loadDevInfo() {
+  const el = document.getElementById('dev-account-info');
+  if (!S.admin) return;
+  el.innerHTML = `
+    <div class="info-row"><span class="info-lbl">Username</span><span>@${S.admin.username}</span></div>
+    <div class="info-row"><span class="info-lbl">Name</span><span>${S.admin.full_name || '—'}</span></div>
+    <div class="info-row"><span class="info-lbl">Role</span><span style="color:var(--purple);font-weight:700">Developer</span></div>`;
+}
+
+async function changeDevPw() {
+  const pw = document.getElementById('dev-new-pw').value;
+  if (!pw || pw.length < 6) { showMsg('dev-pw-msg', 'Password must be at least 6 characters.', 'err'); return; }
+  const { error } = await db.from('admin_users').update({ password_hash: pw }).eq('id', S.admin.id);
+  if (error) showMsg('dev-pw-msg', 'Failed: ' + error.message, 'err');
+  else { showMsg('dev-pw-msg', '✅ Password updated!', 'ok'); document.getElementById('dev-new-pw').value = ''; }
 }
 
 // ── PWA Install ──────────────────────────────────────

@@ -1209,24 +1209,47 @@ async function devToggleCompany(id, cur) {
   if (!error) { toast(cur ? 'Company deactivated' : 'Company reactivated'); loadDevCompanies(); }
 }
 
-// ── Super Admins ─────────────────────────────────────
+// ── Company Accounts ─────────────────────────────────
+const ROLE_LABELS = { super_admin: 'Super Admin', admin: 'Admin', developer: 'Developer' };
+const ROLE_COLORS = { super_admin: 'var(--green)', admin: 'var(--blue)', developer: 'var(--purple)' };
+
 async function loadDevSuperAdmins() {
-  const el = document.getElementById('superadmins-list');
-  el.innerHTML = '<div class="empty">Loading…</div>';
-  const { data, error } = await db.from('admin_users')
-    .select('*, co:companies(name,code)').eq('role','super_admin').order('username');
+  const el        = document.getElementById('superadmins-list');
+  const filterSel = document.getElementById('dev-filter-company');
+  el.innerHTML    = '<div class="empty">Loading…</div>';
+
+  // Populate filter dropdown if empty
+  if (filterSel.options.length <= 1) {
+    const { data: cos } = await db.from('companies').select('id,name').eq('is_active', true).order('name');
+    filterSel.innerHTML = '<option value="">All Companies</option>' +
+      (cos||[]).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  }
+
+  let q = db.from('admin_users')
+    .select('*, co:companies(name,code)')
+    .neq('role', 'developer')
+    .order('full_name');
+  const filterCid = filterSel?.value;
+  if (filterCid) q = q.eq('company_id', filterCid);
+
+  const { data, error } = await q;
   if (error || !data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
-  if (!data.length)   { el.innerHTML = '<div class="empty">No super admins yet</div>'; return; }
+  if (!data.length)   { el.innerHTML = '<div class="empty">No accounts yet — create one above</div>'; return; }
+
   el.innerHTML = '<div class="workers-list">' + data.map(a => `
     <div class="wr-row">
       <div class="wr-info">
-        <div class="avatar sm" style="background:var(--green)">${(a.full_name||a.username).slice(0,2).toUpperCase()}</div>
+        <div class="avatar sm" style="background:${ROLE_COLORS[a.role]||'var(--blue)'}">${(a.full_name||a.username).slice(0,2).toUpperCase()}</div>
         <div>
-          <div class="wr-name">${a.full_name || a.username} <small style="color:var(--purple)">@${a.username}</small></div>
-          <div class="wr-meta">🏢 ${a.co?.name||'Unknown company'}${!a.is_active?' · <em>Inactive</em>':''}</div>
+          <div class="wr-name">${a.full_name||a.username} <small style="color:var(--muted)">@${a.username}</small></div>
+          <div class="wr-meta">
+            <span class="role-pill" style="background:${ROLE_COLORS[a.role]||'var(--blue)'}22;color:${ROLE_COLORS[a.role]||'var(--blue)'};">${ROLE_LABELS[a.role]||a.role}</span>
+            🏢 ${a.co?.name||'—'}${!a.is_active?' · <em>Inactive</em>':''}
+          </div>
         </div>
       </div>
       <div class="wr-btns">
+        <button class="icon-btn" title="Change Role" onclick="devChangeRole('${a.id}','${a.username}','${a.role}','${a.company_id||''}')">🎭</button>
         <button class="icon-btn" title="Reset Password" onclick="devResetAdminPw('${a.id}','${a.username}')">🔑</button>
         <button class="icon-btn" title="${a.is_active?'Deactivate':'Reactivate'}" onclick="devToggleSA('${a.id}',${a.is_active})">${a.is_active?'🚫':'✅'}</button>
       </div>
@@ -1237,7 +1260,6 @@ function toggleAddSuperAdmin() {
   const p = document.getElementById('add-superadmin-panel');
   p.classList.toggle('hidden');
   if (!p.classList.contains('hidden')) {
-    // Populate company dropdown
     db.from('companies').select('id,name').eq('is_active',true).order('name').then(({ data }) => {
       const sel = document.getElementById('nsa-company');
       sel.innerHTML = '<option value="">Select Company…</option>' +
@@ -1249,6 +1271,7 @@ function toggleAddSuperAdmin() {
 
 async function addSuperAdmin() {
   const cid   = document.getElementById('nsa-company').value;
+  const role  = document.getElementById('nsa-role').value;
   const name  = (document.getElementById('nsa-name').value || '').trim();
   const user  = (document.getElementById('nsa-user').value || '').trim().toLowerCase();
   const pass  = (document.getElementById('nsa-pass').value || '').trim();
@@ -1259,17 +1282,35 @@ async function addSuperAdmin() {
   if (!/^[a-z0-9_]+$/.test(user)) { showMsg('nsa-msg','Username may only contain letters, numbers and underscores.','err'); return; }
   const { error } = await db.from('admin_users').insert({
     username: user, password_hash: pass, full_name: name,
-    email: email||null, role: 'super_admin', company_id: cid, is_active: true,
+    email: email||null, role, company_id: cid, is_active: true,
   });
-  if (error) { showMsg('nsa-msg', error.code==='23505'?'Username already exists.':error.message, 'err'); return; }
-  showMsg('nsa-msg', `✅ Super Admin "@${user}" created!`, 'ok');
+  if (error) { showMsg('nsa-msg', error.code==='23505'?'Username already exists.':error.message,'err'); return; }
+  showMsg('nsa-msg', `✅ ${ROLE_LABELS[role]||role} "@${user}" created!`,'ok');
   ['nsa-name','nsa-user','nsa-pass','nsa-email'].forEach(id => document.getElementById(id).value='');
   setTimeout(() => { toggleAddSuperAdmin(); loadDevSuperAdmins(); }, 1400);
 }
 
+async function devChangeRole(id, username, currentRole, companyId) {
+  // Build role options excluding developer
+  const roles = [
+    { value: 'super_admin', label: 'Super Admin — full company access' },
+    { value: 'admin',       label: 'Admin — workers & attendance' },
+  ];
+  const opts = roles.map(r => `${r.value === currentRole ? '✓ ' : ''}${r.label}`).join('\n');
+  const choice = prompt(`Change role for @${username}.\n\nCurrent: ${ROLE_LABELS[currentRole]||currentRole}\n\nEnter new role:\n1 = Super Admin\n2 = Admin`);
+  if (!choice) return;
+  const roleMap = { '1': 'super_admin', '2': 'admin' };
+  const newRole = roleMap[choice.trim()];
+  if (!newRole) { toast('Invalid choice — enter 1 or 2'); return; }
+  if (newRole === currentRole) { toast('Role unchanged'); return; }
+  const { error } = await db.from('admin_users').update({ role: newRole }).eq('id', id);
+  if (!error) { toast(`✅ @${username} is now ${ROLE_LABELS[newRole]}`); loadDevSuperAdmins(); }
+  else toast('Error: ' + error.message);
+}
+
 async function devToggleSA(id, cur) {
   const { error } = await db.from('admin_users').update({ is_active: !cur }).eq('id', id);
-  if (!error) { toast(cur ? 'Super Admin deactivated' : 'Super Admin reactivated'); loadDevSuperAdmins(); }
+  if (!error) { toast(cur ? 'Account deactivated' : 'Account reactivated'); loadDevSuperAdmins(); }
 }
 
 async function devResetAdminPw(id, username) {

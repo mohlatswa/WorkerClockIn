@@ -602,16 +602,22 @@
       <div id="companies-list"><div class="empty">Loading…</div></div>
     </div>
 
-    <!-- Super Admins -->
+    <!-- Company Accounts -->
     <div id="tab-dev-superadmins" class="tab-pane">
       <div class="tab-bar">
-        <span class="sec-lbl">Super Admins</span>
-        <button class="btn btn-primary btn-sm" onclick="toggleAddSuperAdmin()">+ New Super Admin</button>
+        <span class="sec-lbl">Company Accounts</span>
+        <button class="btn btn-primary btn-sm" onclick="toggleAddSuperAdmin()">+ New Account</button>
       </div>
       <div id="add-superadmin-panel" class="card hidden">
-        <h4 style="margin-bottom:14px">New Super Admin</h4>
+        <h4 style="margin-bottom:14px">New Company Account</h4>
         <div class="field"><label>Company *</label>
           <select id="nsa-company" class="input"><option value="">Select Company…</option></select>
+        </div>
+        <div class="field"><label>Role *</label>
+          <select id="nsa-role" class="input">
+            <option value="super_admin">Super Admin — full company access</option>
+            <option value="admin">Admin — workers &amp; attendance</option>
+          </select>
         </div>
         <div class="field"><label>Full Name *</label><input id="nsa-name" type="text" class="input" placeholder="Full Name"></div>
         <div class="field"><label>Username *</label><input id="nsa-user" type="text" class="input" placeholder="e.g. john_admin" autocapitalize="none"></div>
@@ -623,6 +629,14 @@
         </div>
         <div id="nsa-msg" class="msg hidden"></div>
       </div>
+
+      <!-- Filter by company -->
+      <div style="margin-bottom:10px">
+        <select id="dev-filter-company" class="input input-sm" onchange="loadDevSuperAdmins()" style="width:100%">
+          <option value="">All Companies</option>
+        </select>
+      </div>
+
       <div id="superadmins-list"><div class="empty">Loading…</div></div>
     </div>
 

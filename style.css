@@ -376,6 +376,7 @@ body {
 .hidden { display: none !important; }
 .empty  { text-align: center; color: var(--muted); padding: 24px; }
 .hint         { font-size: .75rem; color: var(--muted); margin-top: 14px; }
+.role-pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: .72rem; font-weight: 700; margin-right: 6px; }
 .info-row  { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: .88rem; }
 .info-row:last-child { border-bottom: none; }
 .info-lbl  { color: var(--muted); font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .4px; }

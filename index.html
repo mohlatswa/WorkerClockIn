@@ -26,32 +26,6 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════
-     COMPANY SELECT
-════════════════════════════════════════════════ -->
-<div id="page-company-select" class="page">
-  <header class="topbar">
-    <button class="back" onclick="showPage('home')">&#8592;</button>
-    <span>Select Company</span>
-    <span style="width:40px"></span>
-  </header>
-  <div class="content">
-    <div class="card center">
-      <div class="card-ico">🏢</div>
-      <h2>Your Company</h2>
-      <p class="sub" style="margin-bottom:14px">Choose your employer to clock in</p>
-      <div class="field">
-        <label>Company</label>
-        <select id="company-select-dd" class="input">
-          <option value="">Loading…</option>
-        </select>
-      </div>
-      <button class="btn btn-primary btn-full" onclick="confirmCompanySelect()">Continue →</button>
-      <div id="company-select-err" class="err hidden"></div>
-    </div>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════════════
      HOME — choose clock-in method
 ════════════════════════════════════════════════ -->
 <div id="page-home" class="page">
@@ -59,21 +33,17 @@
     <div class="home-brand">
       <span class="home-ico">⏱</span>
       <h1>WorkClock</h1>
-      <!-- Company badge — shown once company is selected -->
-      <button id="home-company-badge" class="home-company-badge hidden" onclick="showPage('company-select')">
-        🏢 <span id="home-company-name">Company</span> <span class="badge-change">Change ›</span>
-      </button>
+      <p id="home-company-name" class="home-company-name"></p>
     </div>
 
-    <!-- No company selected: prompt to select -->
-    <div id="no-company-card" class="card home-select-card">
-      <div style="font-size:2.4rem;margin-bottom:10px">🏢</div>
-      <h3>Select Your Company</h3>
-      <p class="sub" style="margin:6px 0 16px">Choose your employer to get started</p>
-      <button class="btn btn-primary btn-full" onclick="openCompanySelect()">Select Company →</button>
+    <!-- No employer link detected -->
+    <div id="no-company-card" class="card home-select-card hidden">
+      <div style="font-size:2.4rem;margin-bottom:10px">🔗</div>
+      <h3>No Employer Link</h3>
+      <p class="sub" style="margin:6px 0">Please open the link provided by your employer to clock in.</p>
     </div>
 
-    <!-- Clock-in methods — shown once company is selected -->
+    <!-- Clock-in methods (shown when company is known) -->
     <div id="clock-methods" class="hidden">
 
       <!-- PRIMARY: Biometric -->
@@ -558,6 +528,20 @@
         <div id="wp-msg" class="msg hidden"></div>
       </div>
       <div class="card">
+        <h4>📎 Worker Clock-In Link</h4>
+        <p class="sub" style="margin-bottom:12px">Share this link with your workers — it connects them directly to your company. They will never need to select a company.</p>
+        <div class="link-box" id="clockin-link-box">Loading…</div>
+        <button class="btn btn-primary btn-full" style="margin-top:10px" onclick="copyClockInLink()">📋 Copy Link</button>
+        <div id="link-copy-msg" class="msg hidden"></div>
+      </div>
+      <div class="card">
+        <h4>My Profile</h4>
+        <div class="field"><label>Full Name</label><input id="my-name" type="text" class="input" placeholder="Full Name"></div>
+        <div class="field"><label>Email</label><input id="my-email" type="email" class="input" placeholder="Email address"></div>
+        <button class="btn btn-primary btn-full" onclick="saveMyProfile()">Save Profile</button>
+        <div id="profile-msg" class="msg hidden"></div>
+      </div>
+      <div class="card">
         <h4>Change Admin Password</h4>
         <div class="field"><label>New Password (min 6 chars)</label><input id="new-pw" type="password" class="input" placeholder="New password"></div>
         <button class="btn btn-outline btn-full" onclick="changeAdminPw()">Update Password</button>
@@ -697,6 +681,37 @@
     <div class="modal-footer">
       <button class="btn btn-primary" onclick="printCard()">🖨 Print Card</button>
       <button class="btn btn-outline" onclick="closeCardModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Account Modal -->
+<div id="edit-account-modal" class="modal-backdrop hidden" onclick="closeEditAccount(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Edit Account</h3>
+      <button class="modal-close" onclick="closeEditAccount()">✕</button>
+    </div>
+    <div style="padding:16px 18px">
+      <input type="hidden" id="edit-acct-id">
+      <div class="field"><label>Full Name *</label><input id="edit-acct-name" type="text" class="input" placeholder="Full Name"></div>
+      <div class="field"><label>Email</label><input id="edit-acct-email" type="email" class="input" placeholder="Email address"></div>
+      <div id="edit-acct-role-wrap" class="field hidden">
+        <label>Role</label>
+        <select id="edit-acct-role" class="input">
+          <option value="super_admin">Super Admin — full company access</option>
+          <option value="admin">Admin — workers &amp; attendance</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>New Password <small>(leave blank to keep current)</small></label>
+        <input id="edit-acct-pw" type="password" class="input" placeholder="Leave blank to keep unchanged">
+      </div>
+      <div id="edit-acct-msg" class="msg hidden"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="saveEditAccount()">Save Changes</button>
+      <button class="btn btn-outline" onclick="closeEditAccount()">Cancel</button>
     </div>
   </div>
 </div>

@@ -476,6 +476,26 @@ select.input { appearance: none; background-image: url("data:image/svg+xml,%3Csv
 .att-day-bar { display: flex; gap: 8px; align-items: center; }
 .att-day-bar .input-sm { flex: 1; }
 
+/* ── Home company name ───────────────────────────── */
+.home-company-name {
+  color: rgba(255,255,255,.75);
+  font-size: .82rem;
+  margin-top: 4px;
+  min-height: 1.2em;
+}
+
+/* ── Clock-in link box ───────────────────────────── */
+.link-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 10px 14px;
+  font-size: .82rem;
+  color: var(--muted);
+  word-break: break-all;
+  font-family: monospace;
+}
+
 /* ── @media print ────────────────────────────────── */
 @media print {
   body * { visibility: hidden !important; }

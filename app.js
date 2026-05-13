@@ -27,7 +27,7 @@ function showPage(id) {
   if (el) { el.classList.add('active'); window.scrollTo(0, 0); }
 }
 
-// ── Company Selector ─────────────────────────────────
+// ── Company (set from URL or localStorage — workers never pick manually) ─
 function setCompany(co) {
   S.companyId   = co.id;
   S.companyName = co.name;
@@ -36,50 +36,34 @@ function setCompany(co) {
 }
 
 function updateHomeCompanyUI() {
-  const badge   = document.getElementById('home-company-badge');
   const nameEl  = document.getElementById('home-company-name');
   const noCard  = document.getElementById('no-company-card');
   const methods = document.getElementById('clock-methods');
   if (S.companyId) {
-    badge.classList.remove('hidden');
-    nameEl.textContent = S.companyName;
-    noCard.classList.add('hidden');
-    methods.classList.remove('hidden');
+    if (nameEl)  nameEl.textContent = S.companyName;
+    if (noCard)  noCard.classList.add('hidden');
+    if (methods) methods.classList.remove('hidden');
   } else {
-    badge.classList.add('hidden');
-    noCard.classList.remove('hidden');
-    methods.classList.add('hidden');
+    if (nameEl)  nameEl.textContent = '';
+    if (noCard)  noCard.classList.remove('hidden');
+    if (methods) methods.classList.add('hidden');
   }
-}
-
-async function openCompanySelect() {
-  showPage('company-select');
-  const sel = document.getElementById('company-select-dd');
-  sel.innerHTML = '<option value="">Loading…</option>';
-  const { data } = await db.from('companies').select('*').eq('is_active', true).order('name');
-  if (!data?.length) { sel.innerHTML = '<option value="">No companies found</option>'; return; }
-  sel.innerHTML = '<option value="">Select a company…</option>' +
-    data.map(c => `<option value="${c.id}" data-name="${c.name}" data-code="${c.code}">${c.name}</option>`).join('');
-  if (S.companyId) sel.value = S.companyId;
-}
-
-function confirmCompanySelect() {
-  const sel = document.getElementById('company-select-dd');
-  const opt = sel.options[sel.selectedIndex];
-  if (!sel.value) { showErr('company-select-err', 'Please select a company.'); return; }
-  setCompany({ id: sel.value, name: opt.text, code: opt.dataset.code });
-  showPage('home');
 }
 
 async function initCompany() {
+  // 1. Try URL param ?c=CODE  (primary — shared by employer)
   const params = new URLSearchParams(window.location.search);
   const code   = params.get('c') || params.get('company');
   if (code) {
-    const { data } = await db.from('companies').select('*').eq('code', code.toUpperCase()).eq('is_active', true).maybeSingle();
+    const { data } = await db.from('companies').select('*')
+      .eq('code', code.toUpperCase()).eq('is_active', true).maybeSingle();
     if (data) { setCompany(data); return; }
   }
+  // 2. Fall back to last-used company stored in localStorage
   const saved = localStorage.getItem('wc_company');
-  if (saved) { try { setCompany(JSON.parse(saved)); } catch {} }
+  if (saved) { try { setCompany(JSON.parse(saved)); return; } catch {} }
+  // 3. No company — show "use employer link" message
+  updateHomeCompanyUI();
 }
 
 // ── Utilities ────────────────────────────────────────
@@ -1089,6 +1073,45 @@ async function loadWorkplaceSetting() {
     document.getElementById('wp-lng').value    = w.longitude ?? '';
     document.getElementById('wp-radius').value = w.radius_meters ?? 100;
   }
+  // Populate clock-in link box
+  const code    = S.admin?.co?.code;
+  const linkBox = document.getElementById('clockin-link-box');
+  if (linkBox) {
+    if (code) {
+      const base = window.location.origin + window.location.pathname;
+      linkBox.textContent = `${base}?c=${code}`;
+    } else {
+      linkBox.textContent = 'Company code not found — contact developer.';
+    }
+  }
+  // Populate My Profile fields
+  const nameEl  = document.getElementById('my-name');
+  const emailEl = document.getElementById('my-email');
+  if (nameEl)  nameEl.value  = S.admin?.full_name || '';
+  if (emailEl) emailEl.value = S.admin?.email     || '';
+}
+
+function copyClockInLink() {
+  const code = S.admin?.co?.code;
+  if (!code) { showMsg('link-copy-msg', 'Company code not found.', 'err'); return; }
+  const base = window.location.origin + window.location.pathname;
+  const link = `${base}?c=${code}`;
+  navigator.clipboard.writeText(link).then(() => {
+    showMsg('link-copy-msg', '✅ Link copied!', 'ok');
+  }).catch(() => {
+    document.getElementById('clockin-link-box').textContent = link;
+    showMsg('link-copy-msg', 'Copy the link above manually.', 'ok');
+  });
+}
+
+async function saveMyProfile() {
+  const name  = (document.getElementById('my-name').value  || '').trim();
+  const email = (document.getElementById('my-email').value || '').trim();
+  if (!name) { showMsg('profile-msg', 'Full name is required.', 'err'); return; }
+  const { error } = await db.from('admin_users').update({ full_name: name, email: email || null }).eq('id', S.admin.id);
+  if (error) { showMsg('profile-msg', 'Failed: ' + error.message, 'err'); return; }
+  S.admin.full_name = name; S.admin.email = email;
+  showMsg('profile-msg', '✅ Profile updated!', 'ok');
 }
 
 async function saveWorkplace() {
@@ -1249,7 +1272,7 @@ async function loadDevSuperAdmins() {
         </div>
       </div>
       <div class="wr-btns">
-        <button class="icon-btn" title="Change Role" onclick="devChangeRole('${a.id}','${a.username}','${a.role}','${a.company_id||''}')">🎭</button>
+        <button class="icon-btn" title="Edit Account" onclick="openEditAccount('${a.id}','${(a.full_name||'').replace(/'/g,"\\'")}','${(a.email||'').replace(/'/g,"\\'")}','${a.role}',true)">✏️</button>
         <button class="icon-btn" title="Reset Password" onclick="devResetAdminPw('${a.id}','${a.username}')">🔑</button>
         <button class="icon-btn" title="${a.is_active?'Deactivate':'Reactivate'}" onclick="devToggleSA('${a.id}',${a.is_active})">${a.is_active?'🚫':'✅'}</button>
       </div>
@@ -1327,8 +1350,25 @@ async function loadDevInfo() {
   if (!S.admin) return;
   el.innerHTML = `
     <div class="info-row"><span class="info-lbl">Username</span><span>@${S.admin.username}</span></div>
-    <div class="info-row"><span class="info-lbl">Name</span><span>${S.admin.full_name||'—'}</span></div>
-    <div class="info-row"><span class="info-lbl">Role</span><span style="color:var(--purple);font-weight:700">Developer</span></div>`;
+    <div class="info-row" style="margin-bottom:12px"><span class="info-lbl">Role</span><span style="color:var(--purple);font-weight:700">Developer</span></div>
+    <div class="field"><label>Full Name</label>
+      <input id="dev-profile-name" type="text" class="input" value="${(S.admin.full_name||'').replace(/"/g,'&quot;')}" placeholder="Full Name">
+    </div>
+    <div class="field"><label>Email</label>
+      <input id="dev-profile-email" type="email" class="input" value="${(S.admin.email||'').replace(/"/g,'&quot;')}" placeholder="Email address">
+    </div>
+    <button class="btn btn-outline btn-full" onclick="saveDevProfile()" style="margin-top:4px">Save Profile</button>
+    <div id="dev-profile-msg" class="msg hidden"></div>`;
+}
+
+async function saveDevProfile() {
+  const name  = (document.getElementById('dev-profile-name').value  || '').trim();
+  const email = (document.getElementById('dev-profile-email').value || '').trim();
+  if (!name) { showMsg('dev-profile-msg', 'Full name is required.', 'err'); return; }
+  const { error } = await db.from('admin_users').update({ full_name: name, email: email || null }).eq('id', S.admin.id);
+  if (error) { showMsg('dev-profile-msg', 'Failed: ' + error.message, 'err'); return; }
+  S.admin.full_name = name; S.admin.email = email;
+  showMsg('dev-profile-msg', '✅ Profile updated!', 'ok');
 }
 
 async function changeDevPw() {
@@ -1363,6 +1403,7 @@ async function loadCompanyAdmins() {
         </div>
       </div>
       <div class="wr-btns">
+        <button class="icon-btn" title="Edit Profile" onclick="openEditAccount('${a.id}','${(a.full_name||'').replace(/'/g,"\\'")}','${(a.email||'').replace(/'/g,"\\'")}','${a.role}',false)">✏️</button>
         <button class="icon-btn" title="Reset Password" onclick="devResetAdminPw('${a.id}','${a.username}')">🔑</button>
         <button class="icon-btn" onclick="caToggle('${a.id}',${a.is_active})">${a.is_active?'🚫':'✅'}</button>
       </div>
@@ -1389,6 +1430,56 @@ async function addCompanyAdmin() {
 async function caToggle(id, cur) {
   const { error } = await db.from('admin_users').update({ is_active: !cur }).eq('id', id);
   if (!error) { toast(cur?'Admin deactivated':'Admin reactivated'); loadCompanyAdmins(); }
+}
+
+// ── Edit Account Modal (developer + super admin) ─────
+let _editCtx = null; // 'dev' or 'admin'
+
+function openEditAccount(id, name, email, role, isDevCtx) {
+  _editCtx = isDevCtx ? 'dev' : 'admin';
+  document.getElementById('edit-acct-id').value    = id;
+  document.getElementById('edit-acct-name').value  = name;
+  document.getElementById('edit-acct-email').value = email;
+  document.getElementById('edit-acct-pw').value    = '';
+  document.getElementById('edit-acct-msg').classList.add('hidden');
+  const roleWrap = document.getElementById('edit-acct-role-wrap');
+  if (isDevCtx) {
+    roleWrap.classList.remove('hidden');
+    document.getElementById('edit-acct-role').value = role;
+  } else {
+    roleWrap.classList.add('hidden');
+  }
+  document.getElementById('edit-account-modal').classList.remove('hidden');
+}
+
+function closeEditAccount(e) {
+  if (!e || e.target === document.getElementById('edit-account-modal'))
+    document.getElementById('edit-account-modal').classList.add('hidden');
+}
+
+async function saveEditAccount() {
+  const id    = document.getElementById('edit-acct-id').value;
+  const name  = (document.getElementById('edit-acct-name').value  || '').trim();
+  const email = (document.getElementById('edit-acct-email').value || '').trim();
+  const pw    = (document.getElementById('edit-acct-pw').value    || '').trim();
+  const roleWrap = document.getElementById('edit-acct-role-wrap');
+
+  if (!name) { showMsg('edit-acct-msg', 'Full name is required.', 'err'); return; }
+  if (pw && pw.length < 6) { showMsg('edit-acct-msg', 'Password must be at least 6 characters.', 'err'); return; }
+
+  const updates = { full_name: name, email: email || null };
+  if (pw) updates.password_hash = pw;
+  if (!roleWrap.classList.contains('hidden')) updates.role = document.getElementById('edit-acct-role').value;
+
+  const { error } = await db.from('admin_users').update(updates).eq('id', id);
+  if (error) { showMsg('edit-acct-msg', 'Failed: ' + error.message, 'err'); return; }
+
+  showMsg('edit-acct-msg', '✅ Account updated!', 'ok');
+  setTimeout(() => {
+    closeEditAccount();
+    if (_editCtx === 'dev') loadDevSuperAdmins();
+    else loadCompanyAdmins();
+  }, 1200);
 }
 
 // ── PWA Install ──────────────────────────────────────

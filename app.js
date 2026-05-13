@@ -190,7 +190,7 @@ async function findWorker(overrideId) {
   if (!id) { showErr('err-empid', 'Please enter your Employee ID.'); return; }
 
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('workers')
       .select('*, workplace:workplaces(*)')
       .eq('employee_id', id)
@@ -409,7 +409,7 @@ async function refreshClockStatus() {
   const today = new Date(); today.setHours(0,0,0,0);
   const tmrw  = new Date(today); tmrw.setDate(tmrw.getDate()+1);
 
-  const { data } = await supabase
+  const { data } = await db
     .from('attendance').select('*')
     .eq('worker_id', S.worker.id)
     .gte('clock_in_time', today.toISOString())
@@ -454,7 +454,7 @@ async function clockAction() {
 
 async function doClockIn() {
   try {
-    const { data, error } = await supabase.from('attendance').insert({
+    const { data, error } = await db.from('attendance').insert({
       worker_id: S.worker.id, workplace_id: S.workplace?.id || null,
       clock_in_time: new Date().toISOString(),
       clock_in_latitude: S.userLoc?.lat, clock_in_longitude: S.userLoc?.lng,
@@ -473,7 +473,7 @@ async function doClockIn() {
 async function doClockOut() {
   if (!S.attendanceId) { toast('No active clock-in found.'); return; }
   try {
-    const { error } = await supabase.from('attendance').update({
+    const { error } = await db.from('attendance').update({
       clock_out_time: new Date().toISOString(),
       clock_out_latitude: S.userLoc?.lat, clock_out_longitude: S.userLoc?.lng,
       status: 'completed',
@@ -515,7 +515,7 @@ async function workerRegisterBiometric() {
     }});
     if (!cred) return;
     const credId = b64(cred.rawId);
-    const { error } = await supabase.from('workers')
+    const { error } = await db.from('workers')
       .update({ biometric_credential_id: credId, biometric_enabled: true }).eq('id', w.id);
     if (error) throw error;
     S.worker.biometric_enabled = true; S.worker.biometric_credential_id = credId;
@@ -545,7 +545,7 @@ async function adminLogin() {
   showErr('err-admin', '');
   if (!user || !pass) { showErr('err-admin', 'Enter username and password.'); return; }
   try {
-    const { data, error } = await supabase.from('admin_users')
+    const { data, error } = await db.from('admin_users')
       .select('*').eq('username', user).eq('password_hash', pass).eq('is_active', true).maybeSingle();
     if (error || !data) { showErr('err-admin', 'Invalid username or password.'); return; }
     S.admin = data;
@@ -573,8 +573,8 @@ async function loadDashboard() {
   const tmrw  = new Date(today); tmrw.setDate(tmrw.getDate()+1);
 
   const [{ count: total }, { data: recs }] = await Promise.all([
-    supabase.from('workers').select('id', { count:'exact', head:true }).eq('is_active', true),
-    supabase.from('attendance').select('*, w:workers(name,employee_id)')
+    db.from('workers').select('id', { count:'exact', head:true }).eq('is_active', true),
+    db.from('attendance').select('*, w:workers(name,employee_id)')
       .gte('clock_in_time', today.toISOString()).lt('clock_in_time', tmrw.toISOString())
       .order('clock_in_time', { ascending: false }),
   ]);
@@ -603,7 +603,7 @@ async function loadDashboard() {
 async function loadWorkers() {
   const el = document.getElementById('workers-list');
   el.innerHTML = '<div class="empty">Loading…</div>';
-  const { data, error } = await supabase.from('workers').select('*').order('name');
+  const { data, error } = await db.from('workers').select('*').order('name');
   if (error || !data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
   if (!data.length)   { el.innerHTML = '<div class="empty">No workers yet — add one above</div>'; return; }
 
@@ -640,8 +640,8 @@ async function addWorker() {
   if (!empId || !name || !pin) { showMsg('nw-msg', 'Employee ID, Name and PIN are required.', 'err'); return; }
   if (pin.length < 4)          { showMsg('nw-msg', 'PIN must be at least 4 digits.', 'err');           return; }
 
-  const { data: wps } = await supabase.from('workplaces').select('id').limit(1);
-  const { error } = await supabase.from('workers').insert({
+  const { data: wps } = await db.from('workplaces').select('id').limit(1);
+  const { error } = await db.from('workers').insert({
     employee_id: empId, name, phone: phone||null, email: email||null, pin,
     workplace_id: wps?.[0]?.id ?? null, is_active: true,
   });
@@ -655,7 +655,7 @@ async function addWorker() {
 }
 
 async function toggleWorker(id, cur) {
-  const { error } = await supabase.from('workers').update({ is_active: !cur }).eq('id', id);
+  const { error } = await db.from('workers').update({ is_active: !cur }).eq('id', id);
   if (!error) { toast(cur ? 'Worker deactivated' : 'Worker reactivated'); loadWorkers(); }
 }
 
@@ -673,7 +673,7 @@ async function adminRegisterBio(workerId, workerName) {
       timeout: 60000,
     }});
     if (!cred) return;
-    const { error } = await supabase.from('workers')
+    const { error } = await db.from('workers')
       .update({ biometric_credential_id: b64(cred.rawId), biometric_enabled: true }).eq('id', workerId);
     if (error) throw error;
     toast(`✅ Biometric registered for ${workerName}`); loadWorkers();
@@ -713,7 +713,7 @@ async function loadAttendance() {
   const start = new Date(ds); start.setHours(0,0,0,0);
   const end   = new Date(start); end.setDate(end.getDate()+1);
 
-  const { data, error } = await supabase.from('attendance')
+  const { data, error } = await db.from('attendance')
     .select('*, w:workers(name,employee_id)')
     .gte('clock_in_time', start.toISOString()).lt('clock_in_time', end.toISOString())
     .order('clock_in_time');
@@ -740,7 +740,7 @@ async function loadAttendance() {
 
 // ── Workplace Setup ──────────────────────────────────
 async function loadWorkplaceSetting() {
-  const { data } = await supabase.from('workplaces').select('*').limit(1);
+  const { data } = await db.from('workplaces').select('*').limit(1);
   if (data?.[0]) {
     const w = data[0];
     document.getElementById('wp-name').value   = w.name ?? '';
@@ -760,18 +760,18 @@ async function saveWorkplace() {
 
   if (!name || isNaN(lat) || isNaN(lng)) { showMsg('wp-msg', 'Name, Latitude and Longitude are required.', 'err'); return; }
 
-  const { data: ex } = await supabase.from('workplaces').select('id').limit(1);
+  const { data: ex } = await db.from('workplaces').select('id').limit(1);
   const payload = { name, address: addr, latitude: lat, longitude: lng, radius_meters: radius, updated_at: new Date() };
   const { error } = ex?.length
-    ? await supabase.from('workplaces').update(payload).eq('id', ex[0].id)
-    : await supabase.from('workplaces').insert(payload);
+    ? await db.from('workplaces').update(payload).eq('id', ex[0].id)
+    : await db.from('workplaces').insert(payload);
 
   if (error) { showMsg('wp-msg', 'Save failed: ' + error.message, 'err'); return; }
   showMsg('wp-msg', '✅ Workplace saved!', 'ok');
 
   // Link workers without a workplace
-  const { data: wp } = await supabase.from('workplaces').select('id').limit(1);
-  if (wp?.[0]?.id) await supabase.from('workers').update({ workplace_id: wp[0].id }).is('workplace_id', null);
+  const { data: wp } = await db.from('workplaces').select('id').limit(1);
+  if (wp?.[0]?.id) await db.from('workers').update({ workplace_id: wp[0].id }).is('workplace_id', null);
 }
 
 function captureAdminLocation() {
@@ -786,7 +786,7 @@ function captureAdminLocation() {
 async function changeAdminPw() {
   const pw = document.getElementById('new-pw').value;
   if (!pw || pw.length < 6) { showMsg('pw-msg', 'Password must be at least 6 characters.', 'err'); return; }
-  const { error } = await supabase.from('admin_users').update({ password_hash: pw }).eq('id', S.admin.id);
+  const { error } = await db.from('admin_users').update({ password_hash: pw }).eq('id', S.admin.id);
   if (error) showMsg('pw-msg', 'Failed: ' + error.message, 'err');
   else { showMsg('pw-msg', '✅ Password updated!', 'ok'); document.getElementById('new-pw').value = ''; }
 }

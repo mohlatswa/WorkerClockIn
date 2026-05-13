@@ -1940,24 +1940,31 @@ function checkIOSInstall() {
 document.addEventListener('DOMContentLoaded', () => {
   checkIOSInstall();
 
-  // Always show home within 1.5 s. DB queries run in background and
-  // navigate to clock screen if a saved worker session is found.
-  let pageShown = false;
-  const splashTimer = setTimeout(() => {
-    if (!pageShown) { pageShown = true; showPage('home'); }
-  }, 1500);
+  // CSS already shows home after 2 s even if nothing below runs.
+  // JS shows it faster (1 s) and also restores a saved worker session.
+  let done = false;
 
+  const finish = () => {
+    if (done) return;
+    done = true;
+    showPage('home');
+  };
+
+  // Hard deadline — home ALWAYS shows within 1 s
+  setTimeout(finish, 1000);
+
+  // Try to restore session in background
   (async () => {
-    await initCompany();
+    try { await withTimeout(initCompany(), 3000); } catch {}
 
     const savedId = localStorage.getItem('wc_worker_id');
-    if (!savedId) return;
+    if (!savedId) { finish(); return; }
 
     try {
       const { data } = await withTimeout(
         db.from('workers').select('*, workplace:workplaces(*)')
           .eq('id', savedId).eq('is_active', true).maybeSingle(),
-        5000
+        4000
       );
       if (data) {
         S.worker = data;
@@ -1965,17 +1972,18 @@ document.addEventListener('DOMContentLoaded', () => {
           try {
             const { data: co } = await withTimeout(
               db.from('companies').select('*').eq('id', data.company_id).maybeSingle(),
-              5000
+              4000
             );
             if (co) setCompany(co, false);
           } catch {}
         }
-        clearTimeout(splashTimer);
-        pageShown = true;
+        done = true;
         enterClockScreen();
         return;
       }
     } catch {}
+
     localStorage.removeItem('wc_worker_id');
+    finish();
   })();
 });

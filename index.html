@@ -848,10 +848,14 @@
 <script src="config.js"></script>
 <script src="app.js"></script>
 <script>
+  // Unregister any previously broken service workers so they can never
+  // intercept requests again. No new SW is registered — the app works
+  // without one (always fetches live from the network).
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(r => r.unregister());
     });
+    caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
   }
 </script>
 </body>

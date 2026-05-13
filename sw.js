@@ -1,5 +1,5 @@
 // Service Worker — enables offline support and "install to home screen"
-const CACHE = 'workclock-v1';
+const CACHE = 'workclock-v3';
 const ASSETS = [
   './',
   './index.html',

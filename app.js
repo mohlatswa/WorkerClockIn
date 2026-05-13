@@ -584,16 +584,24 @@ async function adminLogin() {
   const pass =  document.getElementById('inp-apass').value || '';
   showErr('err-admin', '');
   if (!user || !pass) { showErr('err-admin', 'Enter username and password.'); return; }
+
+  // Guard: verify db client loaded correctly
+  if (typeof db === 'undefined' || !db) {
+    showErr('err-admin', 'App failed to initialise. Hold Ctrl and press F5 to force-reload, then try again.');
+    return;
+  }
+
   try {
     const { data, error } = await db.from('admin_users')
       .select('*').eq('username', user).eq('password_hash', pass).eq('is_active', true).maybeSingle();
-    if (error || !data) { showErr('err-admin', 'Invalid username or password.'); return; }
+    if (error) { showErr('err-admin', 'Database error: ' + error.message); return; }
+    if (!data)  { showErr('err-admin', 'Invalid username or password.'); return; }
     S.admin = data;
     document.getElementById('inp-auser').value = '';
     document.getElementById('inp-apass').value = '';
     showPage('admin');
     loadDashboard();
-  } catch { showErr('err-admin', 'Connection error. Check internet.'); }
+  } catch(err) { showErr('err-admin', 'Error: ' + (err?.message || String(err))); }
 }
 
 function adminLogout() { S.admin = null; showPage('home'); }

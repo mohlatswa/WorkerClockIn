@@ -669,7 +669,7 @@ function logoutWorker() {
 //  ADMIN
 // ════════════════════════════════════════════════════
 async function adminLogin() {
-  const user = (document.getElementById('inp-auser').value || '').trim();
+  const user = (document.getElementById('inp-auser').value || '').trim().toLowerCase();
   const pass =  document.getElementById('inp-apass').value || '';
   showErr('err-admin', '');
   if (!user || !pass) { showErr('err-admin', 'Enter username and password.'); return; }

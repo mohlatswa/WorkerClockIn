@@ -969,6 +969,5 @@ async function changeAdminPw() {
 
 // ── Bootstrap ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('att-date').value = new Date().toISOString().slice(0, 10);
   setTimeout(() => showPage('home'), 1500);
 });

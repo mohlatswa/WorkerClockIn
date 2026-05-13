@@ -57,9 +57,13 @@ async function initCompany() {
   const params = new URLSearchParams(window.location.search);
   const code   = params.get('c') || params.get('company');
   if (code) {
-    const { data } = await db.from('companies').select('*')
-      .eq('code', code.toUpperCase()).eq('is_active', true).maybeSingle();
-    if (data) { setCompany(data, true); return; }
+    try {
+      const { data } = await withTimeout(
+        db.from('companies').select('*').eq('code', code.toUpperCase()).eq('is_active', true).maybeSingle(),
+        4000
+      );
+      if (data) { setCompany(data, true); return; }
+    } catch {}
   }
   // 2. localStorage fallback — company is set but NOT from URL (no strict filter)
   const saved = localStorage.getItem('wc_company');
@@ -69,6 +73,13 @@ async function initCompany() {
 
 // ── Utilities ────────────────────────────────────────
 const initials = n => (n || '??').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+  ]);
+}
 
 function haversineM(la1, lo1, la2, lo2) {
   const R = 6_371_000, r = d => d * Math.PI / 180;
@@ -1632,6 +1643,7 @@ let _faceModelsLoaded = false;
 let _faceLoadPromise  = null;
 
 async function loadFaceModels() {
+  if (typeof faceapi === 'undefined') throw new Error('face-api.js not loaded yet — please wait a moment and try again');
   if (_faceModelsLoaded) return;
   if (_faceLoadPromise) return _faceLoadPromise;
   _faceLoadPromise = Promise.all([
@@ -1924,31 +1936,49 @@ function checkIOSInstall() {
 }
 
 // ── Bootstrap ────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
   checkIOSInstall();
-  await initCompany();
 
-  // Restore worker session — worker stays logged in until they manually sign out
-  const savedId = localStorage.getItem('wc_worker_id');
-  if (savedId) {
+  // Guarantee the splash never hangs: show home after 1500 ms unless a
+  // session-restore finishes first and navigates to the clock screen.
+  let pageShown = false;
+  const splashTimer = setTimeout(() => {
+    if (!pageShown) { pageShown = true; showPage('home'); }
+  }, 1500);
+
+  // Run startup DB queries in the background — never block the splash timer.
+  (async () => {
+    await initCompany(); // has its own 4 s timeout internally
+
+    const savedId = localStorage.getItem('wc_worker_id');
+    if (!savedId) return;
+
     try {
-      const { data } = await db.from('workers')
-        .select('*, workplace:workplaces(*)')
-        .eq('id', savedId).eq('is_active', true).maybeSingle();
+      const { data } = await withTimeout(
+        db.from('workers').select('*, workplace:workplaces(*)')
+          .eq('id', savedId).eq('is_active', true).maybeSingle(),
+        4000
+      );
       if (data) {
         S.worker = data;
-        // Ensure company context is set from worker's own company record
         if (!S.companyId) {
-          const { data: co } = await db.from('companies').select('*')
-            .eq('id', data.company_id).maybeSingle();
-          if (co) setCompany(co, false);
+          try {
+            const { data: co } = await withTimeout(
+              db.from('companies').select('*').eq('id', data.company_id).maybeSingle(),
+              4000
+            );
+            if (co) setCompany(co, false);
+          } catch {}
         }
-        setTimeout(() => enterClockScreen(), 1500);
+        // Navigate to clock screen — clears splash timer if still pending,
+        // or overrides home if the splash timer already fired.
+        clearTimeout(splashTimer);
+        pageShown = true;
+        enterClockScreen();
         return;
       }
-    } catch { /* worker may have been deleted or deactivated — fall through */ }
+    } catch { /* worker deleted / network error — fall through */ }
     localStorage.removeItem('wc_worker_id');
-  }
-
-  setTimeout(() => showPage('home'), 1500);
+    // splashTimer will show home at 1500 ms (or already has)
+  })();
 });

@@ -839,9 +839,9 @@
 
 </div><!-- #app -->
 
-<!-- Libraries (local copies — no CDN dependency) -->
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<!-- CDN libs load asynchronously so a slow CDN never blocks DOMContentLoaded -->
+<script async src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 <script src="supabase.min.js"></script>
 <script src="jsQR.js"></script>
 <script src="qrcode.min.js"></script>

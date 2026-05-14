@@ -11,163 +11,122 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="app">
 
-<!-- SPLASH -->
-<div id="page-loading" class="page active">
-  <div class="splash-ring"></div>
-  <div class="splash">
-    <span class="splash-ico">⏱</span>
-    <h1>WorkClock</h1>
-    <p>Staff Attendance System</p>
-  </div>
+<!-- SPLASH (removed by JS after 1s) -->
+<div id="splash">
+  <span style="font-size:68px">⏱</span>
+  <h1>WorkClock</h1>
+  <p>Staff Attendance System</p>
 </div>
 
+<div id="app">
+
 <!-- HOME -->
-<div id="page-home" class="page active">
+<div id="pg-home" class="pg active">
   <div class="home-wrap">
     <div class="home-brand">
-      <span class="home-ico">⏱</span>
-      <h1>WorkClock</h1>
-      <p id="home-co-name" class="home-company-name"></p>
+      <span style="font-size:64px;display:block;margin-bottom:10px">⏱</span>
+      <h1 style="font-size:2.4rem;font-weight:800;color:#fff">WorkClock</h1>
+      <p id="home-co-name" style="color:rgba(255,255,255,.85);margin-top:4px;font-size:.95rem;min-height:1.2em"></p>
     </div>
 
-    <div id="no-co-card" class="home-no-co hidden">
+    <div id="no-co-card" class="card center hidden" style="background:rgba(255,255,255,.15);border:none">
       <div style="font-size:2rem;margin-bottom:8px">🔗</div>
-      <h3>No Employer Link</h3>
-      <p class="sub" style="color:rgba(255,255,255,.8)">Open the link your employer shared to clock in.</p>
+      <h3 style="color:#fff;margin-bottom:6px">No Employer Link</h3>
+      <p style="color:rgba(255,255,255,.8);font-size:.88rem">Open the link your employer shared to clock in.</p>
     </div>
 
     <div id="clock-methods" class="hidden">
-      <button class="method-bio-btn" id="bio-home-btn" onclick="homeBiometric()">
-        <span class="bio-ico">🔏</span>
-        <span class="bio-text">
-          <strong>Fingerprint / Face ID</strong>
-          <span>Tap to authenticate instantly</span>
-        </span>
+      <button class="method-bio" id="bio-home-btn" onclick="homeBiometric()">
+        <span style="font-size:1.6rem">🔏</span>
+        <span class="mw-text"><strong>Fingerprint / Face ID</strong><span>Tap to authenticate instantly</span></span>
       </button>
       <div class="methods-sep">— or use another method —</div>
-      <button class="method-wide" onclick="openFaceRecog()" style="background:linear-gradient(135deg,#065F46,#10B981);border-color:transparent;margin-bottom:10px">
+      <button class="method-wide" onclick="openFaceRecog()" style="background:linear-gradient(135deg,#065F46,#10B981)">
         <span class="tile-ico">🤳</span>
-        <span class="mw-text">
-          <strong style="color:#fff">Face Recognition</strong>
-          <span style="color:rgba(255,255,255,.8)">Camera identifies you automatically</span>
-        </span>
-        <span class="chevron" style="color:rgba(255,255,255,.7)">›</span>
+        <span class="mw-text"><strong style="color:#fff">Face Recognition</strong><span style="color:rgba(255,255,255,.8)">Camera identifies you automatically</span></span>
+        <span class="chev">›</span>
       </button>
       <div class="method-grid">
-        <button class="method-tile" onclick="openQR()">
-          <span class="tile-ico">📸</span>
-          <strong>Scan QR</strong>
-          <span>Camera scan</span>
-        </button>
-        <button class="method-tile" onclick="openNFC()">
-          <span class="tile-ico">📲</span>
-          <strong>NFC Card</strong>
-          <span>Tap to phone</span>
-        </button>
+        <button class="method-tile" onclick="openQR()"><span class="tile-ico">📸</span><strong>Scan QR</strong><span>Camera scan</span></button>
+        <button class="method-tile" onclick="openNFC()"><span class="tile-ico">📲</span><strong>NFC Card</strong><span>Tap to phone</span></button>
       </div>
-      <button class="method-wide" onclick="showPage('manual')">
+      <button class="method-wide" onclick="showPg('manual')">
         <span class="tile-ico">👤</span>
-        <span class="mw-text">
-          <strong>Enter Employee ID</strong>
-          <span>Type your ID manually</span>
-        </span>
-        <span class="chevron">›</span>
+        <span class="mw-text"><strong>Enter Employee ID</strong><span>Type your ID manually</span></span>
+        <span class="chev">›</span>
       </button>
     </div>
 
-    <button class="admin-link" onclick="showPage('admin-login')">🔧 Admin Panel</button>
+    <button class="admin-link" onclick="showPg('admin-login')">🔧 Admin Panel</button>
 
     <div id="install-banner" class="install-banner hidden">
-      <div class="ib-text">
-        <strong>📲 Install WorkClock</strong>
-        <span>Add to home screen for quick access</span>
-      </div>
-      <button class="btn-install" onclick="installPWA()">Install</button>
+      <div><strong>📲 Install WorkClock</strong><span>Add to home screen</span></div>
+      <button class="btn-sm btn-white" onclick="installPWA()">Install</button>
     </div>
-    <div id="ios-banner" class="install-banner hidden" style="margin-top:10px">
-      <div class="ib-text">
-        <strong>📲 Install WorkClock</strong>
-        <span>Tap <strong>Share</strong> → <strong>Add to Home Screen</strong></span>
-      </div>
-      <button class="btn-ib-close" onclick="this.closest('.install-banner').classList.add('hidden')">✕</button>
+    <div id="ios-banner" class="install-banner hidden" style="margin-top:8px">
+      <div><strong>📲 Install</strong><span>Tap Share → Add to Home Screen</span></div>
+      <button class="btn-sm btn-white" onclick="this.closest('.install-banner').classList.add('hidden')">✕</button>
     </div>
   </div>
 </div>
 
 <!-- QR SCANNER -->
-<div id="page-scan" class="page">
-  <div class="scan-wrap">
-    <video id="qr-video" playsinline muted></video>
-    <canvas id="qr-canvas" style="display:none"></canvas>
-    <div class="scan-ui">
-      <div class="scan-topbar">
-        <button class="scan-back" onclick="stopQR();showPage('home')">← Back</button>
-        <span>Scan QR Card</span>
-        <span style="width:60px"></span>
-      </div>
-      <div class="finder-zone">
-        <div class="finder-box">
-          <div class="corner tl"></div><div class="corner tr"></div>
-          <div class="corner bl"></div><div class="corner br"></div>
-          <div class="scan-line"></div>
-        </div>
-        <p class="scan-hint">Hold QR card steady inside the frame</p>
-      </div>
-      <div id="scan-status" class="scan-status">Searching for QR code…</div>
+<div id="pg-scan" class="pg">
+  <video id="qr-video" playsinline muted style="position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0"></video>
+  <canvas id="qr-canvas" style="display:none"></canvas>
+  <div style="position:fixed;inset:0;z-index:1;display:flex;flex-direction:column">
+    <div class="scan-bar">
+      <button class="scan-back" onclick="stopQR();showPg('home')">← Back</button>
+      <span>Scan QR Card</span><span style="width:70px"></span>
     </div>
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center">
+      <div class="finder-box">
+        <div class="corner tl"></div><div class="corner tr"></div>
+        <div class="corner bl"></div><div class="corner br"></div>
+        <div class="scan-line"></div>
+      </div>
+      <p style="color:#fff;margin-top:14px;font-size:.9rem;text-shadow:0 1px 3px rgba(0,0,0,.5)">Hold QR card steady inside the frame</p>
+    </div>
+    <div id="scan-status" style="text-align:center;color:#fff;padding:16px 20px 40px;font-size:.9rem;text-shadow:0 1px 3px rgba(0,0,0,.5)">Searching for QR code…</div>
   </div>
 </div>
 
 <!-- NFC -->
-<div id="page-nfc" class="page">
-  <header class="topbar">
-    <button class="back" onclick="stopNFC();showPage('home')">&#8592;</button>
-    <span>Tap NFC Card</span>
-  </header>
-  <div class="content center-content">
+<div id="pg-nfc" class="pg">
+  <header class="topbar"><button class="back" onclick="stopNFC();showPg('home')">&#8592;</button><span>Tap NFC Card</span></header>
+  <div class="content center-v">
     <div class="nfc-zone">
-      <div class="nfc-rings">
-        <div class="nfc-ring r1"></div>
-        <div class="nfc-ring r2"></div>
-        <div class="nfc-ring r3"></div>
-      </div>
-      <div class="nfc-icon">📲</div>
+      <div class="nfc-ring r1"></div><div class="nfc-ring r2"></div><div class="nfc-ring r3"></div>
+      <div style="font-size:3.5rem;position:relative;z-index:1">📲</div>
     </div>
-    <h2>Hold card to back of phone</h2>
-    <p class="sub" id="nfc-hint" style="margin-top:8px">Ready — tap your NFC card now</p>
-    <div id="nfc-err" class="err hidden" style="margin-top:10px"></div>
+    <h2 style="margin-bottom:8px">Hold card to back of phone</h2>
+    <p class="sub" id="nfc-hint">Ready — tap your NFC card now</p>
+    <p class="err hidden" id="nfc-err" style="margin-top:10px"></p>
   </div>
 </div>
 
 <!-- FACE RECOGNITION -->
-<div id="page-face-scan" class="page">
-  <div class="face-wrap">
-    <video id="face-video" playsinline muted></video>
-    <div class="face-ui">
-      <div class="scan-topbar" style="pointer-events:auto">
-        <button class="scan-back" onclick="stopFaceRecog()">← Back</button>
-        <span>Face Recognition</span>
-        <span style="width:60px"></span>
-      </div>
-      <div class="face-oval-zone">
-        <div class="face-oval" id="face-oval"></div>
-      </div>
-      <div id="face-recog-status" class="face-status">Initialising…</div>
+<div id="pg-face-scan" class="pg">
+  <video id="face-video" playsinline muted style="position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0"></video>
+  <div style="position:fixed;inset:0;z-index:1;display:flex;flex-direction:column">
+    <div class="scan-bar" style="pointer-events:auto">
+      <button class="scan-back" onclick="stopFaceRecog()">← Back</button>
+      <span>Face Recognition</span><span style="width:70px"></span>
     </div>
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center">
+      <div class="face-oval" id="face-oval"></div>
+    </div>
+    <div id="face-status" style="text-align:center;color:#fff;padding:16px 20px 40px;font-size:.9rem;text-shadow:0 1px 3px rgba(0,0,0,.5)">Initialising…</div>
   </div>
 </div>
 
 <!-- MANUAL ID -->
-<div id="page-manual" class="page">
-  <header class="topbar">
-    <button class="back" onclick="showPage('home')">&#8592;</button>
-    <span>Enter Employee ID</span>
-  </header>
+<div id="pg-manual" class="pg">
+  <header class="topbar"><button class="back" onclick="showPg('home')">&#8592;</button><span>Enter Employee ID</span></header>
   <div class="content">
     <div class="card center">
-      <div class="card-ico">👤</div>
+      <div style="font-size:2.4rem;margin-bottom:10px">👤</div>
       <h2>Your Employee ID</h2>
       <p class="sub">Check your ID card or ask your manager</p>
       <div class="field" style="margin-top:16px">
@@ -176,21 +135,18 @@
                onkeydown="if(event.key==='Enter')findWorker()">
       </div>
       <button class="btn btn-primary btn-full" onclick="findWorker()">Continue →</button>
-      <div id="err-empid" class="err hidden"></div>
+      <p class="err hidden" id="err-empid" style="margin-top:8px"></p>
     </div>
   </div>
 </div>
 
 <!-- PIN AUTH -->
-<div id="page-auth" class="page">
-  <header class="topbar">
-    <button class="back" onclick="backFromAuth()">&#8592;</button>
-    <span>Verify Identity</span>
-  </header>
+<div id="pg-auth" class="pg">
+  <header class="topbar"><button class="back" onclick="backFromAuth()">&#8592;</button><span>Verify Identity</span></header>
   <div class="content">
     <div class="card">
       <div class="wchip">
-        <div class="avatar av-lg" id="auth-avatar">JD</div>
+        <div class="av av-lg" id="auth-av">JD</div>
         <div>
           <div class="wname" id="auth-name">John Doe</div>
           <div class="wid"   id="auth-empid">EMP001</div>
@@ -198,7 +154,7 @@
         </div>
       </div>
     </div>
-    <div id="bio-auth-wrap" class="hidden" style="margin-bottom:14px">
+    <div id="bio-auth-wrap" class="hidden" style="margin-bottom:12px">
       <button class="btn-bio" onclick="authBiometric()">🔏 Use Fingerprint / Face ID</button>
       <div class="or-div">or enter PIN</div>
     </div>
@@ -209,34 +165,28 @@
         <span class="pdot" id="pd4"></span><span class="pdot" id="pd5"></span>
       </div>
       <div class="numpad">
-        <button class="nk" onclick="npKey(1)">1</button>
-        <button class="nk" onclick="npKey(2)">2</button>
-        <button class="nk" onclick="npKey(3)">3</button>
-        <button class="nk" onclick="npKey(4)">4</button>
-        <button class="nk" onclick="npKey(5)">5</button>
-        <button class="nk" onclick="npKey(6)">6</button>
-        <button class="nk" onclick="npKey(7)">7</button>
-        <button class="nk" onclick="npKey(8)">8</button>
-        <button class="nk" onclick="npKey(9)">9</button>
+        <button class="nk" onclick="npKey(1)">1</button><button class="nk" onclick="npKey(2)">2</button><button class="nk" onclick="npKey(3)">3</button>
+        <button class="nk" onclick="npKey(4)">4</button><button class="nk" onclick="npKey(5)">5</button><button class="nk" onclick="npKey(6)">6</button>
+        <button class="nk" onclick="npKey(7)">7</button><button class="nk" onclick="npKey(8)">8</button><button class="nk" onclick="npKey(9)">9</button>
         <button class="nk nk-fn" onclick="npClear()">Clear</button>
         <button class="nk" onclick="npKey(0)">0</button>
         <button class="nk nk-fn" onclick="npBack()">⌫</button>
       </div>
-      <div id="err-pin" class="err hidden" style="margin-top:10px"></div>
+      <p class="err hidden" id="err-pin" style="margin-top:10px"></p>
     </div>
   </div>
 </div>
 
-<!-- CLOCK IN/OUT -->
-<div id="page-clock" class="page">
+<!-- CLOCK SCREEN -->
+<div id="pg-clock" class="pg">
   <header class="topbar topbar-dark topbar-flex">
-    <span id="clock-greeting" class="topbar-greeting">Hello!</span>
+    <span id="clock-greeting" style="font-weight:600;font-size:.95rem">Hello!</span>
     <button class="btn-logout" onclick="logoutWorker()">Logout</button>
   </header>
   <div class="content">
     <div class="card row-card">
       <div class="wchip">
-        <div class="avatar av-md" id="clk-avatar">JD</div>
+        <div class="av av-md" id="clk-av">JD</div>
         <div>
           <div class="wname" id="clk-name">John Doe</div>
           <div class="wid"   id="clk-empid">EMP001</div>
@@ -245,28 +195,24 @@
       </div>
       <div id="clk-badge" class="badge badge-out"><span class="dot"></span> Clocked Out</div>
     </div>
-    <div class="card clock-card">
-      <div id="live-time" class="live-time">--:--:--</div>
-      <div id="live-date" class="live-date">—</div>
+    <div class="card" style="text-align:center">
+      <div id="live-time" style="font-size:2.6rem;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-1px">--:--:--</div>
+      <div id="live-date" style="color:var(--muted);font-size:.88rem;margin-top:4px">—</div>
     </div>
     <div class="card" id="loc-card">
       <div class="sec-lbl">📍 Location</div>
-      <div id="loc-status"><div class="checking"><div class="spin-sm"></div> Getting your location…</div></div>
+      <div id="loc-status"><div class="checking"><div class="spin"></div> Getting your location…</div></div>
     </div>
-    <div id="loc-blocked-card" class="card loc-blocked hidden">
-      <div class="loc-blocked-ico">📍</div>
+    <div id="loc-blocked-card" class="card hidden" style="text-align:center">
+      <div style="font-size:2rem;margin-bottom:8px">📍</div>
       <h3>Location Required</h3>
       <p class="sub" style="margin:8px 0">Your location must be <strong>ON</strong> to clock in.</p>
-      <div class="loc-blocked-steps">
-        <strong>How to fix:</strong>
-        <ol>
-          <li>Open phone <strong>Settings</strong></li>
-          <li>Go to <strong>Privacy → Location</strong></li>
-          <li>Turn location <strong>ON</strong></li>
-          <li>Come back and tap <strong>Retry</strong></li>
-        </ol>
-      </div>
-      <button class="btn btn-primary btn-full" style="margin-top:12px" onclick="retryLocation()">🔄 Retry Location</button>
+      <ol style="text-align:left;margin:10px 0 14px;padding-left:20px;font-size:.88rem;color:var(--muted)">
+        <li>Open phone <strong>Settings</strong></li>
+        <li>Go to <strong>Privacy → Location</strong></li>
+        <li>Turn location <strong>ON</strong> and come back</li>
+      </ol>
+      <button class="btn btn-primary btn-full" onclick="retryLocation()">🔄 Retry Location</button>
     </div>
     <button id="clk-btn" class="clock-btn clk-wait" onclick="clockAction()" disabled>
       <span id="clk-icon">⏳</span>
@@ -275,96 +221,87 @@
     <div class="card" id="today-card" style="display:none">
       <div class="sec-lbl">Today's Record</div>
       <div class="rec-row">
-        <div class="rec-cell"><span class="rlbl">Clock In</span><span id="rec-in"  class="rval green">--:--</span></div>
-        <div class="rec-cell"><span class="rlbl">Clock Out</span><span id="rec-out" class="rval red">--:--</span></div>
+        <div class="rec-cell"><span class="rlbl">Clock In</span><span id="rec-in"  class="rval" style="color:var(--green)">--:--</span></div>
+        <div class="rec-cell"><span class="rlbl">Clock Out</span><span id="rec-out" class="rval" style="color:var(--red)">--:--</span></div>
         <div class="rec-cell"><span class="rlbl">Hours</span><span id="rec-hrs" class="rval">--</span></div>
       </div>
     </div>
     <div class="card" id="bio-reg-card" style="display:none">
       <div class="sec-lbl">Optional: Fingerprint / Face ID</div>
-      <p class="sub" style="margin-bottom:12px">Register your device fingerprint or Face ID for one-tap clock-in.</p>
+      <p class="sub" style="margin-bottom:12px">Register your fingerprint for one-tap clock-in.</p>
       <button class="btn-bio" onclick="workerRegBio()">🔏 Register Fingerprint / Face ID</button>
-      <div id="bio-reg-msg" class="msg hidden"></div>
+      <p class="msg hidden" id="bio-reg-msg"></p>
     </div>
     <div class="card" id="face-reg-card" style="display:none">
       <div class="sec-lbl">Optional: Face Recognition</div>
-      <p class="sub" style="margin-bottom:12px">Register your face so the camera can clock you in automatically.</p>
+      <p class="sub" style="margin-bottom:12px">Register your face so the camera can identify you.</p>
       <button class="btn-bio" style="background:linear-gradient(135deg,#10B981,#059669)" onclick="workerEnrollFace()">🤳 Register My Face</button>
-      <div id="face-reg-msg" class="msg hidden"></div>
+      <p class="msg hidden" id="face-reg-msg"></p>
     </div>
   </div>
 </div>
 
 <!-- ADMIN LOGIN -->
-<div id="page-admin-login" class="page">
-  <header class="topbar">
-    <button class="back" onclick="showPage('home')">&#8592;</button>
-    <span>Admin Login</span>
-  </header>
+<div id="pg-admin-login" class="pg">
+  <header class="topbar"><button class="back" onclick="showPg('home')">&#8592;</button><span>Admin Login</span></header>
   <div class="content">
     <div class="card center">
-      <div class="card-ico">🔧</div>
+      <div style="font-size:2.4rem;margin-bottom:10px">🔧</div>
       <h2>Admin Access</h2>
       <div class="field">
         <label>Username</label>
         <input id="inp-auser" type="text" class="input" placeholder="Username"
-               autocapitalize="none" onkeydown="if(event.key==='Enter')adminLogin()">
+               autocapitalize="none" autocomplete="off"
+               onkeydown="if(event.key==='Enter')adminLogin()">
       </div>
       <div class="field">
         <label>Password</label>
         <input id="inp-apass" type="password" class="input" placeholder="Password"
                onkeydown="if(event.key==='Enter')adminLogin()">
       </div>
-      <button class="btn btn-primary btn-full" onclick="adminLogin()">Login</button>
-      <div id="err-admin" class="err hidden"></div>
-      <button class="forgot-link" onclick="toggleForgot()">Forgot password?</button>
-      <div id="forgot-panel" class="hidden">
-        <div class="forgot-divider"></div>
-        <div id="fp-step1">
+      <button class="btn btn-primary btn-full" id="login-btn" onclick="adminLogin()">Login</button>
+      <p class="err hidden" id="err-admin" style="margin-top:8px"></p>
+      <button class="btn-link" onclick="toggleForgot()" style="margin-top:10px">Forgot password?</button>
+      <div id="forgot-panel" class="hidden" style="margin-top:12px;text-align:left">
+        <hr style="border:none;border-top:1px solid var(--border);margin-bottom:12px">
+        <div id="fp-s1">
           <p class="sub" style="margin-bottom:10px">A 6-digit code will be sent to your registered email.</p>
           <button class="btn btn-outline btn-full" id="send-otp-btn" onclick="sendOTP()">📧 Send Reset Code</button>
         </div>
-        <div id="fp-step2" class="hidden">
+        <div id="fp-s2" class="hidden">
           <p class="sub" style="margin-bottom:8px">Enter the 6-digit code sent to your email:</p>
-          <div class="field">
-            <input id="inp-otp" type="number" class="input" placeholder="6-digit code" maxlength="6" inputmode="numeric">
-          </div>
+          <div class="field"><input id="inp-otp" type="number" class="input" placeholder="6-digit code" inputmode="numeric"></div>
           <button class="btn btn-outline btn-full" onclick="verifyOTP()">Verify Code</button>
-          <button class="btn-text-sm" onclick="sendOTP()">Resend code</button>
+          <button class="btn-link" onclick="sendOTP()" style="margin-top:6px">Resend code</button>
         </div>
-        <div id="fp-step3" class="hidden">
+        <div id="fp-s3" class="hidden">
           <p class="sub" style="margin-bottom:8px">Set your new password:</p>
-          <div class="field">
-            <input id="inp-newpw" type="password" class="input" placeholder="New password (min 6 chars)">
-          </div>
+          <div class="field"><input id="inp-newpw" type="password" class="input" placeholder="New password (min 6 chars)"></div>
           <button class="btn btn-primary btn-full" onclick="applyNewPw()">Set New Password</button>
         </div>
-        <div id="fp-msg" class="msg hidden"></div>
+        <p class="msg hidden" id="fp-msg"></p>
       </div>
     </div>
   </div>
 </div>
 
 <!-- ADMIN PANEL -->
-<div id="page-admin" class="page">
+<div id="pg-admin" class="pg">
   <header class="topbar topbar-dark topbar-flex">
-    <div>
-      <div style="font-weight:700">⏱ WorkClock Admin</div>
-      <div id="admin-co-label"></div>
-    </div>
-    <button class="btn-logout-w" onclick="adminLogout()">Logout</button>
+    <div><div style="font-weight:700">⏱ WorkClock Admin</div><div id="admin-co-lbl" style="font-size:.78rem;opacity:.8"></div></div>
+    <button class="btn-logout" onclick="adminLogout()">Logout</button>
   </header>
   <nav class="tabs" id="admin-tabs">
-    <button class="tab active" onclick="switchTab('dash',this)">Dashboard</button>
-    <button class="tab" onclick="switchTab('workers',this)">Workers</button>
-    <button class="tab" onclick="switchTab('attendance',this)">Attendance</button>
-    <button class="tab hidden" id="tab-btn-admins" onclick="switchTab('co-admins',this)">Admins</button>
-    <button class="tab" id="tab-btn-setup" onclick="switchTab('setup',this)">Setup</button>
+    <button class="tab active" data-tab="a-dash"     onclick="switchTab(this,'a-dash')">Dashboard</button>
+    <button class="tab"        data-tab="a-workers"  onclick="switchTab(this,'a-workers')">Workers</button>
+    <button class="tab"        data-tab="a-att"      onclick="switchTab(this,'a-att')">Attendance</button>
+    <button class="tab hidden" data-tab="a-admins"   onclick="switchTab(this,'a-admins')" id="tab-admins-btn">Admins</button>
+    <button class="tab"        data-tab="a-setup"    onclick="switchTab(this,'a-setup')">Setup</button>
   </nav>
   <div class="content">
 
     <!-- Dashboard -->
-    <div id="tab-dash" class="tab-pane active">
+    <div id="a-dash" class="tab-pane active">
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-val" id="s-present">--</div><div class="stat-lbl">Present Today</div></div>
         <div class="stat-card"><div class="stat-val" id="s-total">--</div><div class="stat-lbl">Total Workers</div></div>
@@ -372,34 +309,34 @@
         <div class="stat-card"><div class="stat-val" id="s-active">--</div><div class="stat-lbl">Still In</div></div>
       </div>
       <div class="sec-lbl" style="margin-bottom:8px">Recent Activity</div>
-      <div id="activity-list"><div class="empty">Loading…</div></div>
+      <div id="dash-activity"><div class="empty">Loading…</div></div>
     </div>
 
     <!-- Workers -->
-    <div id="tab-workers" class="tab-pane">
+    <div id="a-workers" class="tab-pane">
       <div class="tab-bar">
         <span class="sec-lbl">Workers</span>
         <button class="btn btn-primary btn-sm" onclick="toggleAddWorker()">+ Add Worker</button>
       </div>
       <div id="add-worker-panel" class="card hidden">
         <h4>New Worker</h4>
-        <div class="field"><label>Employee ID *</label><input id="nw-id"      type="text"     class="input" placeholder="e.g. EMP001" autocapitalize="characters"></div>
-        <div class="field"><label>Full Name *</label>  <input id="nw-name"    type="text"     class="input" placeholder="Full Name"></div>
-        <div class="field"><label>Job Title</label>    <input id="nw-job"     type="text"     class="input" placeholder="e.g. Driver, Security, Foreman"></div>
-        <div class="field"><label>Phone</label>        <input id="nw-phone"   type="tel"      class="input" placeholder="Phone number"></div>
-        <div class="field"><label>Email</label>        <input id="nw-email"   type="email"    class="input" placeholder="Email address"></div>
+        <div class="field"><label>Employee ID *</label><input id="nw-id"    type="text"     class="input" placeholder="e.g. EMP001" autocapitalize="characters"></div>
+        <div class="field"><label>Full Name *</label>  <input id="nw-name"  type="text"     class="input" placeholder="Full Name"></div>
+        <div class="field"><label>Job Title</label>    <input id="nw-job"   type="text"     class="input" placeholder="e.g. Driver, Security"></div>
+        <div class="field"><label>Phone</label>        <input id="nw-phone" type="tel"      class="input" placeholder="Phone number"></div>
+        <div class="field"><label>Email</label>        <input id="nw-email" type="email"    class="input" placeholder="Email address"></div>
         <div class="field"><label>PIN (4–6 digits) *</label><input id="nw-pin" type="password" class="input" placeholder="Set PIN" maxlength="6" inputmode="numeric"></div>
         <div class="btn-row">
           <button class="btn btn-primary" onclick="addWorker()">Save Worker</button>
           <button class="btn btn-outline" onclick="toggleAddWorker()">Cancel</button>
         </div>
-        <div id="nw-msg" class="msg hidden"></div>
+        <p class="msg hidden" id="nw-msg"></p>
       </div>
       <div id="workers-list"><div class="empty">Loading…</div></div>
     </div>
 
     <!-- Attendance -->
-    <div id="tab-attendance" class="tab-pane">
+    <div id="a-att" class="tab-pane">
       <div class="card" style="margin-bottom:12px">
         <div class="sec-lbl" style="margin-bottom:10px">🔍 Filter Records</div>
         <div class="field-row">
@@ -411,11 +348,11 @@
           <select id="att-worker" class="input"><option value="">All Workers</option></select>
         </div>
         <div class="field">
-          <label>Clock-in Method</label>
+          <label>Method</label>
           <select id="att-method" class="input">
             <option value="">All Methods</option>
             <option value="pin">PIN</option>
-            <option value="biometric">Biometric (Fingerprint/Face ID)</option>
+            <option value="biometric">Biometric</option>
             <option value="qr">QR Scan</option>
             <option value="nfc">NFC Card</option>
             <option value="face">Face Recognition</option>
@@ -423,16 +360,16 @@
         </div>
         <div class="btn-row" style="margin-top:4px">
           <button class="btn btn-primary" onclick="loadAttendance()">🔍 View Report</button>
-          <button class="btn btn-outline" onclick="downloadCSV()">📥 Download CSV</button>
+          <button class="btn btn-outline" onclick="downloadCSV()">📥 CSV</button>
         </div>
-        <div id="att-summary" class="att-summary hidden"></div>
-        <div id="csv-msg" class="msg hidden"></div>
+        <p class="msg hidden" id="att-summary" style="margin-top:8px"></p>
+        <p class="msg hidden" id="csv-msg"></p>
       </div>
-      <div id="att-list"><div class="empty">Select filters above and tap View Report</div></div>
+      <div id="att-list"><div class="empty">Select filters and tap View Report</div></div>
     </div>
 
-    <!-- Company Admins (super_admin only) -->
-    <div id="tab-co-admins" class="tab-pane">
+    <!-- Company Admins -->
+    <div id="a-admins" class="tab-pane">
       <div class="tab-bar">
         <span class="sec-lbl">Company Admins</span>
         <button class="btn btn-primary btn-sm" onclick="toggleAddAdmin()">+ New Admin</button>
@@ -453,51 +390,51 @@
           <button class="btn btn-primary" onclick="addAdmin()">Create Admin</button>
           <button class="btn btn-outline" onclick="toggleAddAdmin()">Cancel</button>
         </div>
-        <div id="ca-msg" class="msg hidden"></div>
+        <p class="msg hidden" id="ca-msg"></p>
       </div>
       <div id="co-admins-list"><div class="empty">Loading…</div></div>
     </div>
 
     <!-- Setup -->
-    <div id="tab-setup" class="tab-pane">
+    <div id="a-setup" class="tab-pane">
       <div class="card">
         <h4>Workplace Location</h4>
-        <p class="sub" style="margin-bottom:14px">Workers must be within the radius below to clock in</p>
+        <p class="sub" style="margin-bottom:14px">Workers must be within the radius to clock in</p>
         <div class="field"><label>Workplace Name *</label><input id="wp-name" type="text" class="input" placeholder="e.g. Main Office"></div>
         <div class="field">
           <label>Address</label>
-          <div class="input-addr-wrap">
-            <input id="wp-addr" type="text" class="input" placeholder="Street address or tap 📍">
-            <button class="btn-loc-inline" onclick="detectLocation()" title="Detect my location">📍</button>
+          <div style="display:flex;gap:8px">
+            <input id="wp-addr" type="text" class="input" placeholder="Address or tap 📍" style="flex:1">
+            <button class="btn btn-outline" onclick="detectLocation()" style="flex-shrink:0;padding:0 12px">📍</button>
           </div>
         </div>
         <div class="field-row">
           <div class="field"><label>Latitude *</label>  <input id="wp-lat" type="number" class="input" placeholder="-26.2041" step="0.000001"></div>
           <div class="field"><label>Longitude *</label> <input id="wp-lng" type="number" class="input" placeholder="28.0473"  step="0.000001"></div>
         </div>
-        <div class="field"><label>Allowed Radius (metres)</label><input id="wp-radius" type="number" class="input" value="100" min="10" max="5000"></div>
+        <div class="field"><label>Radius (metres)</label><input id="wp-radius" type="number" class="input" value="100" min="10" max="5000"></div>
         <button class="btn btn-primary btn-full" onclick="saveWorkplace()">Save Workplace</button>
-        <div id="wp-msg" class="msg hidden"></div>
+        <p class="msg hidden" id="wp-msg"></p>
       </div>
       <div class="card">
         <h4>📎 Worker Clock-In Link</h4>
-        <p class="sub" style="margin-bottom:12px">Share this link with workers — it connects them directly to your company.</p>
+        <p class="sub" style="margin-bottom:12px">Share this link with workers.</p>
         <div class="link-box" id="clockin-link">Loading…</div>
         <button class="btn btn-primary btn-full" style="margin-top:10px" onclick="copyClockInLink()">📋 Copy Link</button>
-        <div id="link-msg" class="msg hidden"></div>
+        <p class="msg hidden" id="link-msg"></p>
       </div>
       <div class="card">
         <h4>My Profile</h4>
-        <div class="field"><label>Full Name</label><input id="my-name"  type="text"  class="input" placeholder="Full Name"></div>
-        <div class="field"><label>Email</label>    <input id="my-email" type="email" class="input" placeholder="Email address"></div>
+        <div class="field"><label>Full Name</label><input id="my-name"  type="text"  class="input"></div>
+        <div class="field"><label>Email</label>    <input id="my-email" type="email" class="input"></div>
         <button class="btn btn-primary btn-full" onclick="saveProfile()">Save Profile</button>
-        <div id="profile-msg" class="msg hidden"></div>
+        <p class="msg hidden" id="profile-msg"></p>
       </div>
       <div class="card">
         <h4>Change Password</h4>
-        <div class="field"><label>New Password (min 6 chars)</label><input id="new-pw" type="password" class="input" placeholder="New password"></div>
+        <div class="field"><input id="new-pw" type="password" class="input" placeholder="New password (min 6 chars)"></div>
         <button class="btn btn-outline btn-full" onclick="changeAdminPw()">Update Password</button>
-        <div id="pw-msg" class="msg hidden"></div>
+        <p class="msg hidden" id="pw-msg"></p>
       </div>
     </div>
 
@@ -505,21 +442,21 @@
 </div>
 
 <!-- DEVELOPER PANEL -->
-<div id="page-developer" class="page">
+<div id="pg-developer" class="pg">
   <header class="topbar topbar-dark topbar-flex">
     <span style="font-weight:700">⚙ Developer Panel</span>
-    <button class="btn-logout-w" onclick="devLogout()">Logout</button>
+    <button class="btn-logout" onclick="devLogout()">Logout</button>
   </header>
   <nav class="tabs" id="dev-tabs">
-    <button class="tab active" onclick="switchDevTab('dev-cos',this)">Companies</button>
-    <button class="tab" onclick="switchDevTab('dev-accounts',this)">Accounts</button>
-    <button class="tab" onclick="switchDevTab('dev-workers',this)">Workers</button>
-    <button class="tab" onclick="switchDevTab('dev-system',this)">System</button>
+    <button class="tab active" data-tab="d-cos"      onclick="switchDevTab(this,'d-cos')">Companies</button>
+    <button class="tab"        data-tab="d-accounts" onclick="switchDevTab(this,'d-accounts')">Accounts</button>
+    <button class="tab"        data-tab="d-workers"  onclick="switchDevTab(this,'d-workers')">Workers</button>
+    <button class="tab"        data-tab="d-system"   onclick="switchDevTab(this,'d-system')">System</button>
   </nav>
   <div class="content">
 
     <!-- Companies -->
-    <div id="tab-dev-cos" class="tab-pane active">
+    <div id="d-cos" class="tab-pane active">
       <div class="tab-bar">
         <span class="sec-lbl">Companies</span>
         <button class="btn btn-primary btn-sm" onclick="toggleAddCo()">+ New Company</button>
@@ -532,22 +469,20 @@
           <button class="btn btn-primary" onclick="addCompany()">Create Company</button>
           <button class="btn btn-outline" onclick="toggleAddCo()">Cancel</button>
         </div>
-        <div id="nc-msg" class="msg hidden"></div>
+        <p class="msg hidden" id="nc-msg"></p>
       </div>
       <div id="dev-cos-list"><div class="empty">Loading…</div></div>
     </div>
 
     <!-- Accounts -->
-    <div id="tab-dev-accounts" class="tab-pane">
+    <div id="d-accounts" class="tab-pane">
       <div class="tab-bar">
         <span class="sec-lbl">Company Accounts</span>
-        <button class="btn btn-primary btn-sm" onclick="toggleAddDevAccount()">+ New Account</button>
+        <button class="btn btn-primary btn-sm" onclick="toggleAddDevAcct()">+ New Account</button>
       </div>
       <div id="add-dev-acct-panel" class="card hidden">
         <h4>New Company Account</h4>
-        <div class="field"><label>Company *</label>
-          <select id="da-company" class="input"><option value="">Select Company…</option></select>
-        </div>
+        <div class="field"><label>Company *</label><select id="da-company" class="input"><option value="">Select Company…</option></select></div>
         <div class="field"><label>Role *</label>
           <select id="da-role" class="input">
             <option value="super_admin">Super Admin — full company access</option>
@@ -559,47 +494,42 @@
         <div class="field"><label>Password *</label>   <input id="da-pass"  type="password" class="input" placeholder="Min 6 characters"></div>
         <div class="field"><label>Email</label>        <input id="da-email" type="email"    class="input" placeholder="admin@company.com"></div>
         <div class="btn-row">
-          <button class="btn btn-primary" onclick="addDevAccount()">Create Account</button>
-          <button class="btn btn-outline" onclick="toggleAddDevAccount()">Cancel</button>
+          <button class="btn btn-primary" onclick="addDevAcct()">Create Account</button>
+          <button class="btn btn-outline" onclick="toggleAddDevAcct()">Cancel</button>
         </div>
-        <div id="da-msg" class="msg hidden"></div>
+        <p class="msg hidden" id="da-msg"></p>
       </div>
       <div style="margin-bottom:10px">
-        <select id="dev-filter-co" class="input" onchange="loadDevAccounts()" style="width:100%">
-          <option value="">All Companies</option>
-        </select>
+        <select id="dev-filter-co" class="input" onchange="loadDevAccounts()" style="width:100%"><option value="">All Companies</option></select>
       </div>
       <div id="dev-accounts-list"><div class="empty">Loading…</div></div>
     </div>
 
     <!-- Workers -->
-    <div id="tab-dev-workers" class="tab-pane">
+    <div id="d-workers" class="tab-pane">
       <div style="margin-bottom:10px">
-        <select id="dev-filter-co-wk" class="input" onchange="loadDevWorkers()" style="width:100%">
-          <option value="">Select a company…</option>
-        </select>
+        <select id="dev-filter-co-wk" class="input" onchange="loadDevWorkers()" style="width:100%"><option value="">Select a company…</option></select>
       </div>
       <div id="dev-workers-list"><div class="empty">Select a company above</div></div>
     </div>
 
     <!-- System -->
-    <div id="tab-dev-system" class="tab-pane">
+    <div id="d-system" class="tab-pane">
       <div class="card">
         <div class="sec-lbl" style="margin-bottom:10px">System Info</div>
         <div class="info-row"><span class="info-lbl">App</span><span>WorkClock Staff Attendance</span></div>
         <div class="info-row"><span class="info-lbl">Hosting</span><span>GitHub Pages</span></div>
         <div class="info-row"><span class="info-lbl">Database</span><span>Supabase (PostgreSQL)</span></div>
-        <div class="info-row"><span class="info-lbl">Project ID</span><span>uwxnbaicwfbygvkiyhcf</span></div>
-        <div class="info-row"><span class="info-lbl">Version</span><span>v3.0 — 2026</span></div>
+        <div class="info-row"><span class="info-lbl">Project</span><span>uwxnbaicwfbygvkiyhcf</span></div>
       </div>
       <div class="card">
         <div class="sec-lbl" style="margin-bottom:10px">Developer Account</div>
         <div id="dev-acct-info"><div class="empty">Loading…</div></div>
-        <div class="field" style="margin-top:14px"><label>Change Developer Password</label>
+        <div class="field" style="margin-top:14px"><label>Change Password</label>
           <input id="dev-new-pw" type="password" class="input" placeholder="New password (min 6 chars)">
         </div>
         <button class="btn btn-outline btn-full" onclick="changeDevPw()">Update Password</button>
-        <div id="dev-pw-msg" class="msg hidden"></div>
+        <p class="msg hidden" id="dev-pw-msg"></p>
       </div>
     </div>
 
@@ -610,31 +540,30 @@
 <div id="success-overlay" class="success-overlay hidden">
   <div class="success-inner">
     <div class="succ-icon" id="succ-icon">✓</div>
-    <div class="succ-action" id="succ-action">Clocked In!</div>
-    <div class="succ-name"   id="succ-name">John Doe</div>
-    <div class="succ-time"   id="succ-time">08:30</div>
-    <div class="succ-wp"     id="succ-wp">Main Office</div>
+    <div id="succ-action" style="font-size:1.4rem;font-weight:800;color:#fff;margin-bottom:6px">Clocked In!</div>
+    <div id="succ-name"   style="font-size:1.1rem;color:rgba(255,255,255,.9)">John Doe</div>
+    <div id="succ-time"   style="font-size:1rem;color:rgba(255,255,255,.7);margin-top:4px">08:30</div>
+    <div id="succ-wp"     style="font-size:.85rem;color:rgba(255,255,255,.6);margin-top:2px"></div>
   </div>
 </div>
 
 <!-- MODAL: Print ID Card -->
-<div id="modal-card" class="modal-bd hidden" onclick="if(event.target===this)closeCardModal()">
+<div id="modal-card" class="modal-bd hidden" onclick="if(event.target===this)closeModal('modal-card')">
   <div class="modal-box">
-    <div class="modal-hd">
-      <h3>Worker ID Card</h3>
-      <button class="modal-close" onclick="closeCardModal()">✕</button>
-    </div>
-    <div class="print-card" id="print-card-inner">
-      <div class="pc-hd">⏱ WorkClock</div>
-      <canvas id="qr-card-canvas" class="pc-qr"></canvas>
-      <div class="pc-name" id="pc-name">John Doe</div>
-      <div class="pc-job"  id="pc-job"></div>
-      <div class="pc-id"   id="pc-id">EMP001</div>
-      <div class="pc-hint">Scan to clock in / out</div>
+    <div class="modal-hd"><h3>Worker ID Card</h3><button class="modal-close" onclick="closeModal('modal-card')">✕</button></div>
+    <div style="padding:18px">
+      <div class="print-card" id="print-card-inner">
+        <div style="font-weight:800;font-size:1rem;margin-bottom:8px">⏱ WorkClock</div>
+        <canvas id="qr-card-canvas" style="display:block;margin:0 auto 8px"></canvas>
+        <div style="font-weight:700;font-size:1.1rem" id="pc-name">John Doe</div>
+        <div style="color:#64748B;font-size:.85rem" id="pc-job"></div>
+        <div style="font-size:.8rem;margin-top:4px;color:#94A3B8" id="pc-id">EMP001</div>
+        <div style="font-size:.75rem;color:#94A3B8;margin-top:6px">Scan to clock in / out</div>
+      </div>
     </div>
     <div class="modal-ft">
-      <button class="btn btn-primary" onclick="window.print()">🖨 Print Card</button>
-      <button class="btn btn-outline" onclick="closeCardModal()">Close</button>
+      <button class="btn btn-primary" onclick="window.print()">🖨 Print</button>
+      <button class="btn btn-outline" onclick="closeModal('modal-card')">Close</button>
     </div>
   </div>
 </div>
@@ -642,11 +571,8 @@
 <!-- MODAL: Face Enrolment -->
 <div id="modal-face-enroll" class="modal-bd hidden" onclick="if(event.target===this)closeFaceEnroll()">
   <div class="modal-box">
-    <div class="modal-hd">
-      <h3 id="face-enroll-title">Enrol Face</h3>
-      <button class="modal-close" onclick="closeFaceEnroll()">✕</button>
-    </div>
-    <video id="enroll-video" class="face-enroll-video" playsinline muted></video>
+    <div class="modal-hd"><h3 id="enroll-title">Enrol Face</h3><button class="modal-close" onclick="closeFaceEnroll()">✕</button></div>
+    <video id="enroll-video" playsinline muted style="width:100%;border-radius:0;display:block;max-height:260px;object-fit:cover"></video>
     <div style="padding:14px 18px">
       <p id="enroll-status" class="sub" style="text-align:center;margin-bottom:12px">Loading…</p>
       <button id="enroll-snap-btn" class="btn btn-primary btn-full" onclick="captureEnroll()" disabled>📷 Capture Face</button>
@@ -654,14 +580,59 @@
   </div>
 </div>
 
-<!-- MODAL: Edit Company -->
-<div id="modal-edit-co" class="modal-bd hidden" onclick="if(event.target===this)closeEditCo()">
+<!-- MODAL: Edit Worker -->
+<div id="modal-edit-worker" class="modal-bd hidden" onclick="if(event.target===this)closeModal('modal-edit-worker')">
   <div class="modal-box">
-    <div class="modal-hd">
-      <h3>Edit Company</h3>
-      <button class="modal-close" onclick="closeEditCo()">✕</button>
+    <div class="modal-hd"><h3>Edit Worker</h3><button class="modal-close" onclick="closeModal('modal-edit-worker')">✕</button></div>
+    <div style="padding:18px">
+      <input type="hidden" id="ewk-id">
+      <input type="hidden" id="ewk-ctx">
+      <div class="field"><label>Employee ID *</label><input id="ewk-empid" type="text"     class="input" autocapitalize="characters"></div>
+      <div class="field"><label>Full Name *</label>  <input id="ewk-name"  type="text"     class="input"></div>
+      <div class="field"><label>Job Title</label>    <input id="ewk-job"   type="text"     class="input"></div>
+      <div class="field"><label>Phone</label>        <input id="ewk-phone" type="tel"      class="input"></div>
+      <div class="field"><label>Email</label>        <input id="ewk-email" type="email"    class="input"></div>
+      <div class="field"><label>New PIN <small>(blank = keep)</small></label><input id="ewk-pin" type="password" class="input" maxlength="6" inputmode="numeric"></div>
+      <p class="msg hidden" id="ewk-msg"></p>
     </div>
-    <div class="modal-body">
+    <div class="modal-ft">
+      <button class="btn btn-primary" onclick="saveEditWorker()">Save</button>
+      <button class="btn btn-outline" onclick="closeModal('modal-edit-worker')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Edit Account -->
+<div id="modal-edit-acct" class="modal-bd hidden" onclick="if(event.target===this)closeModal('modal-edit-acct')">
+  <div class="modal-box">
+    <div class="modal-hd"><h3>Edit Account</h3><button class="modal-close" onclick="closeModal('modal-edit-acct')">✕</button></div>
+    <div style="padding:18px">
+      <input type="hidden" id="eac-id">
+      <input type="hidden" id="eac-ctx">
+      <div class="field"><label>Full Name *</label><input id="eac-name"  type="text"  class="input"></div>
+      <div class="field"><label>Email</label>      <input id="eac-email" type="email" class="input"></div>
+      <div class="field" id="eac-role-wrap">
+        <label>Role</label>
+        <select id="eac-role" class="input">
+          <option value="super_admin">Super Admin</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="field"><label>New Password <small>(blank = keep)</small></label><input id="eac-pw" type="password" class="input"></div>
+      <p class="msg hidden" id="eac-msg"></p>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-primary" onclick="saveEditAcct()">Save</button>
+      <button class="btn btn-outline" onclick="closeModal('modal-edit-acct')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Edit Company -->
+<div id="modal-edit-co" class="modal-bd hidden" onclick="if(event.target===this)closeModal('modal-edit-co')">
+  <div class="modal-box">
+    <div class="modal-hd"><h3>Edit Company</h3><button class="modal-close" onclick="closeModal('modal-edit-co')">✕</button></div>
+    <div style="padding:18px">
       <input type="hidden" id="eco-id">
       <div class="field"><label>Company Name *</label><input id="eco-name" type="text" class="input"></div>
       <div class="field">
@@ -669,65 +640,11 @@
         <input id="eco-code" type="text" class="input" autocapitalize="characters">
         <p class="sub" style="color:var(--red);margin-top:4px;font-size:.78rem">⚠️ Changing the code breaks existing clock-in links.</p>
       </div>
-      <div id="eco-msg" class="msg hidden"></div>
+      <p class="msg hidden" id="eco-msg"></p>
     </div>
     <div class="modal-ft">
-      <button class="btn btn-primary" onclick="saveEditCo()">Save Changes</button>
-      <button class="btn btn-outline" onclick="closeEditCo()">Cancel</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: Edit Worker -->
-<div id="modal-edit-worker" class="modal-bd hidden" onclick="if(event.target===this)closeEditWorker()">
-  <div class="modal-box">
-    <div class="modal-hd">
-      <h3>Edit Worker</h3>
-      <button class="modal-close" onclick="closeEditWorker()">✕</button>
-    </div>
-    <div class="modal-body">
-      <input type="hidden" id="ewk-id">
-      <input type="hidden" id="ewk-ctx">
-      <div class="field"><label>Employee ID *</label><input id="ewk-empid"  type="text"     class="input" autocapitalize="characters"></div>
-      <div class="field"><label>Full Name *</label>  <input id="ewk-name"   type="text"     class="input"></div>
-      <div class="field"><label>Job Title</label>    <input id="ewk-job"    type="text"     class="input"></div>
-      <div class="field"><label>Phone</label>        <input id="ewk-phone"  type="tel"      class="input"></div>
-      <div class="field"><label>Email</label>        <input id="ewk-email"  type="email"    class="input"></div>
-      <div class="field"><label>New PIN <small>(blank = keep current)</small></label><input id="ewk-pin" type="password" class="input" maxlength="6" inputmode="numeric"></div>
-      <div id="ewk-msg" class="msg hidden"></div>
-    </div>
-    <div class="modal-ft">
-      <button class="btn btn-primary" onclick="saveEditWorker()">Save Changes</button>
-      <button class="btn btn-outline" onclick="closeEditWorker()">Cancel</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: Edit Account -->
-<div id="modal-edit-acct" class="modal-bd hidden" onclick="if(event.target===this)closeEditAcct()">
-  <div class="modal-box">
-    <div class="modal-hd">
-      <h3>Edit Account</h3>
-      <button class="modal-close" onclick="closeEditAcct()">✕</button>
-    </div>
-    <div class="modal-body">
-      <input type="hidden" id="eac-id">
-      <input type="hidden" id="eac-ctx">
-      <div class="field"><label>Full Name *</label><input id="eac-name"  type="text"     class="input"></div>
-      <div class="field"><label>Email</label>      <input id="eac-email" type="email"    class="input"></div>
-      <div class="field" id="eac-role-wrap">
-        <label>Role</label>
-        <select id="eac-role" class="input">
-          <option value="super_admin">Super Admin — full company access</option>
-          <option value="admin">Admin — workers &amp; attendance</option>
-        </select>
-      </div>
-      <div class="field"><label>New Password <small>(blank = keep current)</small></label><input id="eac-pw" type="password" class="input"></div>
-      <div id="eac-msg" class="msg hidden"></div>
-    </div>
-    <div class="modal-ft">
-      <button class="btn btn-primary" onclick="saveEditAcct()">Save Changes</button>
-      <button class="btn btn-outline" onclick="closeEditAcct()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEditCo()">Save</button>
+      <button class="btn btn-outline" onclick="closeModal('modal-edit-co')">Cancel</button>
     </div>
   </div>
 </div>
@@ -745,9 +662,10 @@
 <script src="config.js"></script>
 <script src="app.js"></script>
 <script>
+  // Remove any lingering service workers
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
-    caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+    navigator.serviceWorker.getRegistrations().then(r => r.forEach(x => x.unregister()));
+    caches.keys().then(k => k.forEach(x => caches.delete(x)));
   }
 </script>
 </body>

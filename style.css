@@ -43,6 +43,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .input:focus{border-color:var(--blue)}
 .input-xl{font-size:1.2rem;padding:14px;letter-spacing:1px;text-align:center}
 .field-row{display:flex;gap:10px}.field-row .field{flex:1}
+.methods-check{display:flex;flex-direction:column;gap:7px;margin-top:2px}
+.chk-lbl{display:flex;align-items:center;gap:9px;font-size:.88rem;color:var(--text);cursor:pointer;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--rsm);transition:border-color .15s,background .15s}
+.chk-lbl:has(input:checked){border-color:var(--blue);background:var(--blue-l)}
+.chk-lbl input[type=checkbox]{width:16px;height:16px;accent-color:var(--blue);cursor:pointer;flex-shrink:0}
+.chk-lbl input[type=checkbox]:disabled{cursor:default}
 
 /* Buttons */
 .btn{padding:12px 20px;border-radius:var(--rsm);font-size:.9rem;font-weight:600;cursor:pointer;border:none;transition:opacity .15s,transform .1s;display:inline-flex;align-items:center;justify-content:center;gap:6px;-webkit-tap-highlight-color:transparent}

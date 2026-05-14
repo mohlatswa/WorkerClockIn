@@ -756,9 +756,15 @@ async function loadWorkers() {
     }).join('') + '</div>';
   } catch (e) { el.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
 }
+var _newWorkerId = null, _newWorkerName = '';
 function toggleAddWorker() {
   var p = document.getElementById('add-worker-panel'); p.classList.toggle('hidden');
-  if (!p.classList.contains('hidden')) document.getElementById('nw-id').focus();
+  if (!p.classList.contains('hidden')) {
+    document.getElementById('nw-step1').classList.remove('hidden');
+    document.getElementById('nw-step2').classList.add('hidden');
+    document.getElementById('nw-id').focus();
+    _newWorkerId = null; _newWorkerName = '';
+  }
 }
 async function addWorker() {
   var empId = (document.getElementById('nw-id').value   || '').trim().toUpperCase();
@@ -778,16 +784,30 @@ async function addWorker() {
       workplace_id: (wpR.data && wpR.data[0]) ? wpR.data[0].id : null,
       company_id:   cid,
       is_active:    true
-    }), 5000);
+    }).select('id,name').single(), 5000);
     if (r.error) {
       showMsg('nw-msg', r.error.message.includes('unique') ? 'Employee ID already exists.' : r.error.message, 'err'); return;
     }
-    showMsg('nw-msg', '✅ Worker added!', 'ok');
-    setTimeout(function() {
-      toggleAddWorker(); loadWorkers();
-      ['nw-id', 'nw-name', 'nw-job', 'nw-pin'].forEach(function(id) { document.getElementById(id).value = ''; });
-    }, 1300);
+    _newWorkerId   = r.data.id;
+    _newWorkerName = r.data.name;
+    ['nw-id', 'nw-name', 'nw-job', 'nw-pin'].forEach(function(id) { document.getElementById(id).value = ''; });
+    document.getElementById('nw-s2-name').textContent = _newWorkerName;
+    document.getElementById('nw-step1').classList.add('hidden');
+    document.getElementById('nw-step2').classList.remove('hidden');
   } catch (e) { showMsg('nw-msg', 'Error: ' + e.message, 'err'); }
+}
+function nwEnrollFace() {
+  if (_newWorkerId) adminEnrollFace(_newWorkerId, _newWorkerName, 'admin');
+}
+function nwEnrollBio() {
+  if (_newWorkerId) adminRegBio(_newWorkerId, _newWorkerName);
+}
+function nwDone() {
+  document.getElementById('add-worker-panel').classList.add('hidden');
+  document.getElementById('nw-step1').classList.remove('hidden');
+  document.getElementById('nw-step2').classList.add('hidden');
+  _newWorkerId = null; _newWorkerName = '';
+  loadWorkers();
 }
 async function toggleWorker(id, cur) {
   var r = await withTimeout(db.from('workers').update({ is_active: !cur }).eq('id', id), 5000);
@@ -1175,11 +1195,15 @@ async function addCompany() {
   var code = (document.getElementById('nc-code').value || '').trim().toUpperCase().replace(/\s+/g, '');
   if (!name || !code) { showMsg('nc-msg', 'Name and Code required.', 'err'); return; }
   if (!/^[A-Z0-9_]+$/.test(code)) { showMsg('nc-msg', 'Code: letters, numbers, underscores only.', 'err'); return; }
+  var methods = ['pin'];
+  if (document.getElementById('nc-face').checked) methods.push('face');
+  if (document.getElementById('nc-bio').checked)  methods.push('biometric');
   try {
-    var r = await withTimeout(db.from('companies').insert({ name: name, code: code, is_active: true }), 5000);
+    var r = await withTimeout(db.from('companies').insert({ name: name, code: code, is_active: true, clock_methods: methods }), 5000);
     if (r.error) { showMsg('nc-msg', r.error.message.includes('unique') ? 'Code already exists.' : r.error.message, 'err'); return; }
     showMsg('nc-msg', '✅ Company "' + name + '" created!', 'ok');
     document.getElementById('nc-name').value = ''; document.getElementById('nc-code').value = '';
+    document.getElementById('nc-face').checked = false; document.getElementById('nc-bio').checked = false;
     setTimeout(function() { toggleAddCo(); loadDevCos(); }, 1400);
   } catch (e) { showMsg('nc-msg', 'Error: ' + e.message, 'err'); }
 }
@@ -1192,6 +1216,9 @@ function openEditCo(id) {
   document.getElementById('eco-id').value   = id;
   document.getElementById('eco-name').value = c.name || '';
   document.getElementById('eco-code').value = c.code || '';
+  var methods = c.clock_methods || ['pin'];
+  document.getElementById('eco-face').checked = methods.indexOf('face') !== -1;
+  document.getElementById('eco-bio').checked  = methods.indexOf('biometric') !== -1;
   document.getElementById('eco-msg').classList.add('hidden');
   document.getElementById('modal-edit-co').classList.remove('hidden');
 }
@@ -1201,8 +1228,11 @@ async function saveEditCo() {
   var code = (document.getElementById('eco-code').value || '').trim().toUpperCase().replace(/\s+/g, '');
   if (!name || !code) { showMsg('eco-msg', 'Name and Code required.', 'err'); return; }
   if (!/^[A-Z0-9_]+$/.test(code)) { showMsg('eco-msg', 'Code: letters, numbers, underscores only.', 'err'); return; }
+  var methods = ['pin'];
+  if (document.getElementById('eco-face').checked) methods.push('face');
+  if (document.getElementById('eco-bio').checked)  methods.push('biometric');
   try {
-    var r = await withTimeout(db.from('companies').update({ name: name, code: code }).eq('id', id), 5000);
+    var r = await withTimeout(db.from('companies').update({ name: name, code: code, clock_methods: methods }).eq('id', id), 5000);
     if (r.error) { showMsg('eco-msg', r.error.message.includes('unique') ? 'Code already exists.' : r.error.message, 'err'); return; }
     showMsg('eco-msg', '✅ Company updated!', 'ok');
     setTimeout(function() { closeModal('modal-edit-co'); loadDevCos(); }, 1200);

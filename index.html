@@ -294,16 +294,30 @@
         <button class="btn btn-primary btn-sm" onclick="toggleAddWorker()">+ Add Worker</button>
       </div>
       <div id="add-worker-panel" class="card hidden">
-        <h4>New Worker</h4>
-        <div class="field"><label>Employee ID *</label><input id="nw-id"   type="text"     class="input" placeholder="e.g. EMP001" autocapitalize="characters"></div>
-        <div class="field"><label>Full Name *</label>  <input id="nw-name" type="text"     class="input" placeholder="Full Name"></div>
-        <div class="field"><label>Job Title</label>    <input id="nw-job"  type="text"     class="input" placeholder="e.g. Driver, Security"></div>
-        <div class="field"><label>PIN (4–6 digits) *</label><input id="nw-pin" type="password" class="input" placeholder="Set PIN" maxlength="6" inputmode="numeric"></div>
-        <div class="btn-row">
-          <button class="btn btn-primary" onclick="addWorker()">Save Worker</button>
-          <button class="btn btn-outline" onclick="toggleAddWorker()">Cancel</button>
+        <!-- Step 1: Worker details -->
+        <div id="nw-step1">
+          <h4>New Worker</h4>
+          <div class="field"><label>Employee ID *</label><input id="nw-id"   type="text"     class="input" placeholder="e.g. EMP001" autocapitalize="characters"></div>
+          <div class="field"><label>Full Name *</label>  <input id="nw-name" type="text"     class="input" placeholder="Full Name"></div>
+          <div class="field"><label>Job Title</label>    <input id="nw-job"  type="text"     class="input" placeholder="e.g. Driver, Security"></div>
+          <div class="field"><label>PIN (4–6 digits) *</label><input id="nw-pin" type="password" class="input" placeholder="Set PIN" maxlength="6" inputmode="numeric"></div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="addWorker()">Save Worker</button>
+            <button class="btn btn-outline" onclick="toggleAddWorker()">Cancel</button>
+          </div>
+          <p class="msg hidden" id="nw-msg"></p>
         </div>
-        <p class="msg hidden" id="nw-msg"></p>
+        <!-- Step 2: Enrol clock-in methods -->
+        <div id="nw-step2" class="hidden">
+          <div style="text-align:center;margin-bottom:16px">
+            <div style="font-size:2.2rem;margin-bottom:4px">✅</div>
+            <div id="nw-s2-name" style="font-weight:700;font-size:1.05rem;margin-bottom:4px"></div>
+            <div style="font-size:.82rem;color:var(--muted)">Worker saved! Set up additional clock-in methods (optional):</div>
+          </div>
+          <button class="btn btn-outline btn-full" style="margin-bottom:10px" onclick="nwEnrollFace()">📷 Capture Face for Face Recognition</button>
+          <button class="btn btn-outline btn-full" style="margin-bottom:16px" onclick="nwEnrollBio()">🖐 Register Fingerprint / Face ID</button>
+          <button class="btn btn-primary btn-full" onclick="nwDone()">✓ Done</button>
+        </div>
       </div>
       <div id="workers-list"><div class="empty">Loading…</div></div>
     </div>
@@ -439,6 +453,14 @@
         <h4>New Company</h4>
         <div class="field"><label>Company Name *</label><input id="nc-name" type="text" class="input" placeholder="e.g. ACME Construction"></div>
         <div class="field"><label>Company Code * <small>(short, no spaces)</small></label><input id="nc-code" type="text" class="input" placeholder="e.g. ACME" autocapitalize="characters"></div>
+        <div class="field">
+          <label>Allowed Clock-In Methods</label>
+          <div class="methods-check">
+            <label class="chk-lbl"><input type="checkbox" checked disabled> PIN (always required)</label>
+            <label class="chk-lbl"><input type="checkbox" id="nc-face"> 📷 Facial Recognition</label>
+            <label class="chk-lbl"><input type="checkbox" id="nc-bio"> 🖐 Fingerprint / Face ID</label>
+          </div>
+        </div>
         <div class="btn-row">
           <button class="btn btn-primary" onclick="addCompany()">Create Company</button>
           <button class="btn btn-outline" onclick="toggleAddCo()">Cancel</button>
@@ -589,6 +611,14 @@
         <label>Company Code *</label>
         <input id="eco-code" type="text" class="input" autocapitalize="characters">
         <p class="sub" style="color:var(--red);margin-top:4px;font-size:.78rem">⚠️ Changing the code will break existing clock-in links.</p>
+      </div>
+      <div class="field">
+        <label>Allowed Clock-In Methods</label>
+        <div class="methods-check">
+          <label class="chk-lbl"><input type="checkbox" checked disabled> PIN (always required)</label>
+          <label class="chk-lbl"><input type="checkbox" id="eco-face"> 📷 Facial Recognition</label>
+          <label class="chk-lbl"><input type="checkbox" id="eco-bio"> 🖐 Fingerprint / Face ID</label>
+        </div>
       </div>
       <p class="msg hidden" id="eco-msg"></p>
     </div>

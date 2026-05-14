@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#1E40AF">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Clock In — WorkClock</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+
+    /* ── Screens ── */
+    .sc { display: none; position: fixed; inset: 0; flex-direction: column; overflow: hidden; }
+    .sc.on { display: flex; }
+
+    /* ── IDLE ── */
+    #sc-idle {
+      background: linear-gradient(160deg, #1E3A8A 0%, #2563EB 100%);
+      align-items: center; justify-content: center; text-align: center; padding: 24px 20px;
+    }
+    .idle-time { font-size: 5rem; font-weight: 800; color: #fff; letter-spacing: -3px; font-variant-numeric: tabular-nums; line-height: 1; }
+    .idle-date { color: rgba(255,255,255,.65); font-size: .95rem; margin: 6px 0 32px; }
+    .idle-co { background: rgba(255,255,255,.14); border-radius: 18px; padding: 14px 28px; margin-bottom: 28px; }
+    .idle-co-name { color: #fff; font-size: 1.1rem; font-weight: 700; }
+    .idle-co-wp { color: rgba(255,255,255,.65); font-size: .82rem; margin-top: 3px; }
+
+    /* remembered worker */
+    .wr-card {
+      display: flex; align-items: center; gap: 14px;
+      background: rgba(255,255,255,.18); border-radius: 18px;
+      padding: 14px 18px; margin-bottom: 22px; text-align: left;
+    }
+    .wr-av {
+      width: 54px; height: 54px; border-radius: 50%;
+      background: rgba(255,255,255,.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; font-weight: 800; color: #fff; flex-shrink: 0;
+    }
+    .wr-name { color: #fff; font-weight: 700; font-size: 1.05rem; }
+    .wr-sub  { color: rgba(255,255,255,.65); font-size: .82rem; margin-top: 2px; }
+    .wr-pill {
+      display: inline-block; margin-top: 5px; padding: 2px 10px; border-radius: 12px;
+      font-size: .75rem; font-weight: 700;
+    }
+    .pill-in  { background: #059669; color: #fff; }
+    .pill-out { background: rgba(255,255,255,.25); color: rgba(255,255,255,.9); }
+
+    /* big round button */
+    .big-btn {
+      width: 190px; height: 190px; border-radius: 50%; border: none; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.3); transition: transform .12s, opacity .12s;
+    }
+    .big-btn:active { transform: scale(.94); opacity: .9; }
+    .big-btn .ico { font-size: 3rem; line-height: 1; }
+    .big-btn .lbl { font-size: 1rem; font-weight: 800; color: #fff; letter-spacing: .5px; }
+    .btn-in  { background: linear-gradient(135deg,#059669,#10B981); }
+    .btn-out { background: linear-gradient(135deg,#7C3AED,#8B5CF6); }
+    .btn-idle { background: rgba(255,255,255,.22); border: 3px solid rgba(255,255,255,.5); }
+
+    .switch-btn {
+      margin-top: 18px; background: none; border: none; cursor: pointer;
+      color: rgba(255,255,255,.55); font-size: .83rem; text-decoration: underline;
+    }
+    .admin-corner {
+      position: fixed; bottom: 14px; right: 16px;
+      background: none; border: none; cursor: pointer;
+      color: rgba(255,255,255,.3); font-size: .72rem;
+    }
+    .no-co { text-align: center; }
+    .no-co h2 { color: #fff; font-size: 1.5rem; margin-bottom: 10px; }
+    .no-co p  { color: rgba(255,255,255,.7); font-size: .9rem; }
+
+    /* ── FIND ── */
+    #sc-find { background: #F3F4F6; }
+    .find-hd {
+      background: linear-gradient(135deg,#1E3A8A,#2563EB);
+      padding: 22px 20px 30px; text-align: center; position: relative;
+      border-radius: 0 0 24px 24px;
+    }
+    .find-hd h2 { color: #fff; font-size: 1.25rem; font-weight: 700; margin-bottom: 4px; }
+    .find-hd p  { color: rgba(255,255,255,.75); font-size: .88rem; }
+    .back-circle {
+      position: absolute; top: 16px; left: 16px;
+      background: rgba(255,255,255,.2); border: none; color: #fff;
+      width: 36px; height: 36px; border-radius: 50%; font-size: 1.1rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .find-body { flex: 1; padding: 26px 20px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+    .big-input {
+      width: 100%; padding: 18px 20px; border: 2px solid #D1D5DB; border-radius: 14px;
+      font-size: 1.8rem; font-weight: 700; text-align: center; letter-spacing: 4px;
+      text-transform: uppercase; outline: none; background: #fff;
+      transition: border-color .2s;
+    }
+    .big-input:focus { border-color: #2563EB; }
+    .hint { text-align: center; color: #9CA3AF; font-size: .83rem; }
+    .err-txt { color: #DC2626; font-size: .88rem; text-align: center; min-height: 1.2em; }
+    .btn-main {
+      width: 100%; padding: 17px; background: linear-gradient(135deg,#1E40AF,#2563EB);
+      color: #fff; font-size: 1.05rem; font-weight: 700; border: none; border-radius: 14px; cursor: pointer;
+    }
+    .btn-main:active { opacity: .85; }
+    .btn-main:disabled { opacity: .55; cursor: default; }
+    .or-line {
+      text-align: center; color: #9CA3AF; font-size: .83rem;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .or-line::before, .or-line::after { content: ''; flex: 1; height: 1px; background: #E5E7EB; }
+    .btn-face {
+      width: 100%; padding: 15px; background: linear-gradient(135deg,#065F46,#10B981);
+      color: #fff; font-size: .98rem; font-weight: 600; border: none; border-radius: 14px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    .btn-face:active { opacity: .85; }
+
+    /* ── PIN ── */
+    #sc-pin { background: #F3F4F6; }
+    .pin-hd {
+      background: linear-gradient(135deg,#1E3A8A,#2563EB);
+      padding: 18px 20px 22px; position: relative;
+      border-radius: 0 0 24px 24px;
+    }
+    .wchip { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,.18); border-radius: 14px; padding: 12px 14px; }
+    .wchip-av { width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,.3); display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 800; color: #fff; flex-shrink: 0; }
+    .wchip-name { color: #fff; font-weight: 700; font-size: .98rem; }
+    .wchip-sub  { color: rgba(255,255,255,.65); font-size: .78rem; margin-top: 2px; }
+    .pin-body { flex: 1; padding: 20px 20px 12px; display: flex; flex-direction: column; align-items: center; gap: 14px; overflow-y: auto; }
+    .pin-lbl { color: #6B7280; font-size: .9rem; }
+    .btn-bio {
+      width: 100%; padding: 14px; background: linear-gradient(135deg,#1E40AF,#4F46E5);
+      color: #fff; font-size: .95rem; font-weight: 600; border: none; border-radius: 14px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .dots { display: flex; gap: 14px; }
+    .dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #9CA3AF; background: transparent; transition: background .12s, border-color .12s; }
+    .dot.f { background: #1E40AF; border-color: #1E40AF; }
+    .numpad { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; width: 100%; max-width: 310px; }
+    .nk {
+      padding: 17px; background: #fff; border: 1px solid #E5E7EB; border-radius: 14px;
+      font-size: 1.4rem; font-weight: 700; cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0,0,0,.06); transition: background .1s, transform .1s;
+    }
+    .nk:active { background: #F3F4F6; transform: scale(.94); }
+    .nk-fn { font-size: .88rem; font-weight: 600; color: #6B7280; }
+    .pin-working { color: #6B7280; font-size: .88rem; min-height: 1.3em; text-align: center; }
+
+    /* ── DONE ── */
+    #sc-done { align-items: center; justify-content: center; text-align: center; padding: 24px; }
+    #sc-done.d-in  { background: linear-gradient(160deg,#065F46,#10B981); }
+    #sc-done.d-out { background: linear-gradient(160deg,#5B21B6,#7C3AED); }
+    .done-ico { width: 120px; height: 120px; border-radius: 50%; background: rgba(255,255,255,.22); display: flex; align-items: center; justify-content: center; font-size: 4rem; margin-bottom: 22px; }
+    .done-h   { font-size: 2.4rem; font-weight: 800; color: #fff; margin-bottom: 8px; }
+    .done-n   { font-size: 1.2rem; color: rgba(255,255,255,.9); margin-bottom: 5px; }
+    .done-t   { font-size: 1rem; color: rgba(255,255,255,.7); margin-bottom: 3px; }
+    .done-w   { font-size: .85rem; color: rgba(255,255,255,.5); margin-bottom: 28px; }
+    .done-bar { width: 200px; height: 6px; background: rgba(255,255,255,.3); border-radius: 3px; overflow: hidden; }
+    .done-fill { height: 100%; background: rgba(255,255,255,.8); border-radius: 3px; }
+    @keyframes shrink { from { width:100% } to { width:0% } }
+
+    /* ── FACE OVERLAY ── */
+    #face-ov { display: none; position: fixed; inset: 0; z-index: 200; background: #000; flex-direction: column; }
+    #face-ov.on { display: flex; }
+    #face-vid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .face-ui { position: absolute; inset: 0; display: flex; flex-direction: column; }
+    .face-top { background: linear-gradient(to bottom, rgba(0,0,0,.7), transparent); padding: 18px 20px; display: flex; align-items: center; gap: 12px; }
+    .face-top button { background: rgba(255,255,255,.2); border: none; color: #fff; padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: .9rem; }
+    .face-oval { width: 200px; height: 260px; border: 3px solid rgba(255,255,255,.65); border-radius: 50%; margin: auto; }
+    .face-oval.found { border-color: #10B981; box-shadow: 0 0 0 6px rgba(16,185,129,.35); }
+    .face-status { background: linear-gradient(to top, rgba(0,0,0,.7), transparent); padding: 24px; text-align: center; color: #fff; font-size: .9rem; }
+
+    /* ── Spinner ── */
+    .spin { width: 18px; height: 18px; border: 3px solid rgba(0,0,0,.12); border-top-color: #1E40AF; border-radius: 50%; animation: rot .65s linear infinite; display: inline-block; vertical-align: middle; margin-right: 6px; }
+    .spin-w { border-color: rgba(255,255,255,.25); border-top-color: #fff; }
+    @keyframes rot { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<!-- ══ IDLE ══════════════════════════════════════════════ -->
+<div id="sc-idle" class="sc on">
+  <div id="idle-no-co" class="no-co" style="display:none">
+    <div style="font-size:3rem;margin-bottom:16px">🔗</div>
+    <h2>No Company Linked</h2>
+    <p>Open the clock-in link your employer shared with you.</p>
+  </div>
+  <div id="idle-main">
+    <div class="idle-time" id="i-time">--:--</div>
+    <div class="idle-date" id="i-date"></div>
+    <div class="idle-co">
+      <div class="idle-co-name" id="i-co">Loading…</div>
+      <div class="idle-co-wp"  id="i-wp"></div>
+    </div>
+    <div id="idle-rem" style="display:none;flex-direction:column;align-items:center">
+      <div class="wr-card">
+        <div class="wr-av" id="i-av"></div>
+        <div>
+          <div class="wr-name" id="i-name"></div>
+          <div class="wr-sub"  id="i-id"></div>
+          <span class="wr-pill pill-out" id="i-pill">Checking…</span>
+        </div>
+      </div>
+      <button class="big-btn btn-idle" id="i-big" onclick="idleTap()">
+        <span class="ico" id="i-ico">⏳</span>
+        <span class="lbl" id="i-lbl">Loading…</span>
+      </button>
+      <button class="switch-btn" onclick="switchWorker()">Not you? Switch worker</button>
+    </div>
+    <div id="idle-new">
+      <button class="big-btn btn-idle" onclick="goFind()">
+        <span class="ico">👤</span>
+        <span class="lbl">TAP TO<br>CLOCK IN</span>
+      </button>
+    </div>
+  </div>
+  <button class="admin-corner" onclick="goAdmin()">⚙ Admin</button>
+</div>
+
+<!-- ══ FIND ═══════════════════════════════════════════════ -->
+<div id="sc-find" class="sc">
+  <div class="find-hd">
+    <button class="back-circle" onclick="goIdle()">←</button>
+    <h2>Who are you?</h2>
+    <p>Enter your Employee ID to clock in</p>
+  </div>
+  <div class="find-body">
+    <input id="find-inp" type="text" class="big-input" placeholder="EMP001"
+           autocomplete="off" autocapitalize="characters" inputmode="text"
+           oninput="this.value=this.value.toUpperCase()"
+           onkeydown="if(event.key==='Enter')doFind()">
+    <p class="hint">Check your ID card or ask your manager</p>
+    <p class="err-txt" id="find-err"></p>
+    <button class="btn-main" id="find-btn" onclick="doFind()">Continue →</button>
+    <div class="or-line">or</div>
+    <button class="btn-face" id="face-btn" onclick="startFace()">🤳 Use Face Recognition</button>
+  </div>
+</div>
+
+<!-- ══ PIN ════════════════════════════════════════════════ -->
+<div id="sc-pin" class="sc">
+  <div class="pin-hd">
+    <button class="back-circle" onclick="goFind()">←</button>
+    <div class="wchip">
+      <div class="wchip-av" id="p-av"></div>
+      <div>
+        <div class="wchip-name" id="p-name"></div>
+        <div class="wchip-sub"  id="p-sub"></div>
+      </div>
+    </div>
+  </div>
+  <div class="pin-body">
+    <button class="btn-bio" id="bio-btn" onclick="doBio()" style="display:none">
+      🔏 Use Fingerprint / Face ID
+    </button>
+    <div class="pin-lbl">Enter your PIN</div>
+    <div class="dots">
+      <span class="dot" id="d0"></span><span class="dot" id="d1"></span>
+      <span class="dot" id="d2"></span><span class="dot" id="d3"></span>
+      <span class="dot" id="d4"></span><span class="dot" id="d5"></span>
+    </div>
+    <p class="err-txt" id="pin-err"></p>
+    <div class="numpad">
+      <button class="nk" onclick="pk(1)">1</button>
+      <button class="nk" onclick="pk(2)">2</button>
+      <button class="nk" onclick="pk(3)">3</button>
+      <button class="nk" onclick="pk(4)">4</button>
+      <button class="nk" onclick="pk(5)">5</button>
+      <button class="nk" onclick="pk(6)">6</button>
+      <button class="nk" onclick="pk(7)">7</button>
+      <button class="nk" onclick="pk(8)">8</button>
+      <button class="nk" onclick="pk(9)">9</button>
+      <button class="nk nk-fn" onclick="pClear()">Clear</button>
+      <button class="nk" onclick="pk(0)">0</button>
+      <button class="nk nk-fn" onclick="pBack()">⌫</button>
+    </div>
+    <div class="pin-working" id="pin-work"></div>
+  </div>
+</div>
+
+<!-- ══ DONE ═══════════════════════════════════════════════ -->
+<div id="sc-done" class="sc">
+  <div class="done-ico" id="d-ico"></div>
+  <div class="done-h"   id="d-h"></div>
+  <div class="done-n"   id="d-n"></div>
+  <div class="done-t"   id="d-t"></div>
+  <div class="done-w"   id="d-w"></div>
+  <div class="done-bar"><div class="done-fill" id="d-bar"></div></div>
+</div>
+
+<!-- ══ FACE OVERLAY ═══════════════════════════════════════ -->
+<div id="face-ov">
+  <video id="face-vid" playsinline muted autoplay></video>
+  <div class="face-ui">
+    <div class="face-top">
+      <button onclick="stopFace()">← Back</button>
+      <span style="color:#fff;font-size:.95rem">Face Recognition</span>
+    </div>
+    <div style="flex:1;display:flex;align-items:center;justify-content:center">
+      <div class="face-oval" id="face-oval"></div>
+    </div>
+    <div class="face-status" id="face-st">Initialising…</div>
+  </div>
+</div>
+
+<script src="supabase.min.js"></script>
+<script src="config.js"></script>
+<script>
+'use strict';
+
+var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ── State ─────────────────────────────────────────────────
+var G = {
+  companyId:   null,
+  companyName: '',
+  workplace:   null,
+  worker:      null,  // identified for PIN
+  remembered:  null,  // saved worker (personal device)
+  clockedIn:   false,
+  attId:       null,
+  pin:         '',
+  pinBusy:     false
+};
+
+var FACE_CDN = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
+var _faceApiP = null, _faceModP = null, _faceMod = false, _faceStream = null, _faceRunning = false;
+
+// ── Helpers ───────────────────────────────────────────────
+function wt(p, ms) {
+  return Promise.race([p, new Promise(function(_,r){ setTimeout(function(){ r(new Error('timeout')); }, ms||5000); })]);
+}
+function ini(n) { return (n||'?').trim().split(/\s+/).slice(0,2).map(function(w){ return w[0].toUpperCase(); }).join(''); }
+function b64(buf) { return btoa(String.fromCharCode.apply(null, new Uint8Array(buf))); }
+function unb64(s) { var b=atob(s), a=new Uint8Array(b.length); for(var i=0;i<b.length;i++) a[i]=b.charCodeAt(i); return a.buffer; }
+function hav(a1,o1,a2,o2) { var R=6371000,r=function(d){return d*Math.PI/180;}; var a=Math.pow(Math.sin(r(a2-a1)/2),2)+Math.cos(r(a1))*Math.cos(r(a2))*Math.pow(Math.sin(r(o2-o1)/2),2); return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); }
+function vib(p){ if(navigator.vibrate) navigator.vibrate(p||50); }
+function ft(d){ return d ? new Date(d).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '--:--'; }
+
+// ── Screen ────────────────────────────────────────────────
+function sc(id) {
+  document.querySelectorAll('.sc').forEach(function(s){ s.classList.remove('on'); });
+  var el = document.getElementById('sc-'+id);
+  if (el) { el.classList.add('on'); window.scrollTo(0,0); }
+}
+function goIdle() { sc('idle'); }
+function goFind() {
+  document.getElementById('find-inp').value = '';
+  document.getElementById('find-err').textContent = '';
+  sc('find');
+  setTimeout(function(){ document.getElementById('find-inp').focus(); }, 120);
+}
+
+// ── Live clock ────────────────────────────────────────────
+function tickClock() {
+  var n = new Date();
+  document.getElementById('i-time').textContent = n.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('i-date').textContent = n.toLocaleDateString([],{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+}
+setInterval(tickClock, 1000);
+tickClock();
+
+// ── Company init ──────────────────────────────────────────
+function coParam() { return new URLSearchParams(window.location.search).get('c') || new URLSearchParams(window.location.search).get('company') || null; }
+
+async function initCo() {
+  var code = coParam();
+  if (code) {
+    try {
+      var r = await wt(db.from('companies').select('id,name,code').eq('code',code.toUpperCase()).eq('is_active',true).maybeSingle());
+      if (r.data) { setCo(r.data); return; }
+    } catch(e) {}
+  }
+  try {
+    var saved = JSON.parse(localStorage.getItem('wc_company')||'null');
+    if (saved && saved.id) { setCo(saved); return; }
+  } catch(e) {}
+  document.getElementById('idle-main').style.display = 'none';
+  document.getElementById('idle-no-co').style.display = 'block';
+}
+
+function setCo(co) {
+  G.companyId = co.id; G.companyName = co.name;
+  localStorage.setItem('wc_company', JSON.stringify(co));
+  document.getElementById('i-co').textContent = co.name;
+  loadWP();
+}
+
+async function loadWP() {
+  try {
+    var r = await wt(db.from('workplaces').select('*').eq('company_id',G.companyId).eq('is_active',true).maybeSingle());
+    if (r.data) { G.workplace = r.data; document.getElementById('i-wp').textContent = '📍 '+r.data.name; }
+  } catch(e) {}
+  loadRemembered();
+}
+
+// ── Remembered worker ─────────────────────────────────────
+async function loadRemembered() {
+  var sid = localStorage.getItem('wc_kiosk_worker');
+  if (!sid) { showIdleNew(); return; }
+  try {
+    var r = await wt(db.from('workers').select('id,name,employee_id,job_title,biometric_enabled,biometric_credential_id').eq('id',sid).eq('company_id',G.companyId).eq('is_active',true).maybeSingle());
+    if (!r.data) { localStorage.removeItem('wc_kiosk_worker'); showIdleNew(); return; }
+    G.remembered = r.data;
+    showIdleRem(r.data);
+    checkStatus(r.data.id);
+  } catch(e) { showIdleNew(); }
+}
+
+async function checkStatus(wid) {
+  try {
+    var today = new Date().toISOString().slice(0,10);
+    var r = await wt(db.from('attendance').select('id,status').eq('worker_id',wid).gte('clock_in_time',today+'T00:00:00').eq('status','active').order('clock_in_time',{ascending:false}).limit(1).maybeSingle());
+    var inNow = !!(r.data);
+    G.clockedIn = inNow;
+    if (r.data) G.attId = r.data.id;
+    updateIdleBtn(inNow);
+  } catch(e) { updateIdleBtn(false); }
+}
+
+function showIdleNew() {
+  document.getElementById('idle-rem').style.display = 'none';
+  document.getElementById('idle-new').style.display = 'block';
+}
+function showIdleRem(w) {
+  document.getElementById('idle-new').style.display = 'none';
+  var el = document.getElementById('idle-rem');
+  el.style.display = 'flex';
+  document.getElementById('i-av').textContent   = ini(w.name);
+  document.getElementById('i-name').textContent = w.name;
+  document.getElementById('i-id').textContent   = w.employee_id + (w.job_title ? ' · '+w.job_title : '');
+}
+function updateIdleBtn(isIn) {
+  var btn  = document.getElementById('i-big');
+  var ico  = document.getElementById('i-ico');
+  var lbl  = document.getElementById('i-lbl');
+  var pill = document.getElementById('i-pill');
+  if (isIn) {
+    btn.className = 'big-btn btn-out';
+    ico.textContent = '⏹'; lbl.textContent = 'CLOCK OUT';
+    pill.className = 'wr-pill pill-in'; pill.textContent = 'Currently In';
+  } else {
+    btn.className = 'big-btn btn-in';
+    ico.textContent = '▶'; lbl.textContent = 'CLOCK IN';
+    pill.className = 'wr-pill pill-out'; pill.textContent = 'Not clocked in';
+  }
+}
+function idleTap() {
+  if (!G.remembered) return;
+  G.worker = G.remembered;
+  openPin(G.worker);
+}
+function switchWorker() {
+  localStorage.removeItem('wc_kiosk_worker');
+  G.remembered = null; G.worker = null; G.clockedIn = false; G.attId = null;
+  showIdleNew();
+}
+
+// ── Find Worker ───────────────────────────────────────────
+async function doFind() {
+  var eid = document.getElementById('find-inp').value.trim().toUpperCase();
+  if (!eid) { document.getElementById('find-err').textContent = 'Please enter your Employee ID.'; return; }
+  var btn = document.getElementById('find-btn');
+  btn.disabled = true; btn.textContent = 'Searching…';
+  document.getElementById('find-err').textContent = '';
+  try {
+    var q = db.from('workers').select('id,name,employee_id,job_title,pin,biometric_enabled,biometric_credential_id').eq('employee_id',eid).eq('is_active',true);
+    if (G.companyId) q = q.eq('company_id',G.companyId);
+    var r = await wt(q.maybeSingle());
+    if (!r.data) {
+      document.getElementById('find-err').textContent = 'Employee ID not found. Check your ID card or ask your manager.';
+      btn.disabled = false; btn.textContent = 'Continue →'; return;
+    }
+    G.worker = r.data;
+    openPin(r.data);
+  } catch(e) {
+    document.getElementById('find-err').textContent = 'Connection error — please try again.';
+  }
+  btn.disabled = false; btn.textContent = 'Continue →';
+}
+
+// ── PIN ───────────────────────────────────────────────────
+function openPin(w) {
+  G.pin = ''; G.pinBusy = false;
+  renderDots();
+  document.getElementById('pin-err').textContent  = '';
+  document.getElementById('pin-work').textContent = '';
+  document.getElementById('p-av').textContent   = ini(w.name);
+  document.getElementById('p-name').textContent = w.name;
+  document.getElementById('p-sub').textContent  = w.employee_id + (w.job_title ? ' · '+w.job_title : '');
+  var bioBtn = document.getElementById('bio-btn');
+  bioBtn.style.display = (w.biometric_enabled && w.biometric_credential_id && window.PublicKeyCredential) ? '' : 'none';
+  sc('pin');
+}
+function pk(n) {
+  if (G.pin.length >= 6 || G.pinBusy) return;
+  G.pin += String(n); renderDots(); vib(20);
+  if (G.pin.length >= 4) setTimeout(trySubmitPin, 350);
+}
+function pBack()  { if (!G.pinBusy) { G.pin = G.pin.slice(0,-1); renderDots(); } }
+function pClear() { if (!G.pinBusy) { G.pin = ''; renderDots(); document.getElementById('pin-err').textContent=''; } }
+function renderDots() {
+  for (var i=0;i<6;i++) {
+    var d = document.getElementById('d'+i);
+    if (d) d.classList.toggle('f', i < G.pin.length);
+  }
+}
+function trySubmitPin() {
+  if (G.pinBusy) return;
+  if (G.pin.length < 4) return;
+  G.pinBusy = true;
+  verifyAndClock('pin');
+}
+
+// ── Biometric ─────────────────────────────────────────────
+async function doBio() {
+  document.getElementById('bio-btn').textContent = '🔏 Authenticating…';
+  document.getElementById('pin-err').textContent = '';
+  try {
+    var cred = await navigator.credentials.get({ publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials: [{ id: unb64(G.worker.biometric_credential_id), type: 'public-key' }],
+      userVerification: 'required', timeout: 60000
+    }});
+    if (cred) { G.pinBusy = true; verifyAndClock('biometric'); }
+  } catch(e) {
+    if (e.name !== 'NotAllowedError') document.getElementById('pin-err').textContent = 'Biometric failed — use PIN instead.';
+  }
+  document.getElementById('bio-btn').textContent = '🔏 Use Fingerprint / Face ID';
+}
+
+// ── Verify PIN & Clock ─────────────────────────────────────
+async function verifyAndClock(method) {
+  if (method === 'pin') {
+    if (String(G.worker.pin) !== G.pin) {
+      vib([50,30,50]);
+      document.getElementById('pin-err').textContent = 'Incorrect PIN — try again';
+      document.getElementById('pin-work').textContent = '';
+      G.pin = ''; renderDots(); G.pinBusy = false;
+      return;
+    }
+  }
+  document.getElementById('pin-work').innerHTML = '<span class="spin"></span> Clocking…';
+  document.getElementById('pin-err').textContent = '';
+  try {
+    var loc = await getLoc();
+    var today = new Date().toISOString().slice(0,10);
+    // Check open record
+    var ex = await wt(db.from('attendance').select('id,status').eq('worker_id',G.worker.id).gte('clock_in_time',today+'T00:00:00').eq('status','active').order('clock_in_time',{ascending:false}).limit(1).maybeSingle());
+    var action;
+    if (ex.data) {
+      // Clock out
+      await wt(db.from('attendance').update({
+        clock_out_time: new Date().toISOString(), status: 'completed',
+        clock_out_latitude:  loc ? loc.lat : null,
+        clock_out_longitude: loc ? loc.lng : null
+      }).eq('id',ex.data.id));
+      action = 'out';
+    } else {
+      // Enforce location
+      if (G.workplace && G.workplace.latitude && loc) {
+        var dist = Math.round(hav(loc.lat,loc.lng,G.workplace.latitude,G.workplace.longitude));
+        var rad  = G.workplace.radius_meters || 100;
+        if (dist > rad) {
+          document.getElementById('pin-work').textContent = '';
+          document.getElementById('pin-err').textContent = 'You are '+dist+'m away from '+G.workplace.name+'. Must be within '+rad+'m to clock in.';
+          G.pin=''; renderDots(); G.pinBusy=false; return;
+        }
+      }
+      // Clock in
+      var ins = await wt(db.from('attendance').insert({
+        worker_id: G.worker.id, company_id: G.companyId,
+        clock_in_time: new Date().toISOString(), auth_method: method, status: 'active',
+        workplace_id: G.workplace ? G.workplace.id : null,
+        clock_in_latitude:  loc ? loc.lat : null,
+        clock_in_longitude: loc ? loc.lng : null
+      }).select('id').single());
+      if (ins.data) G.attId = ins.data.id;
+      action = 'in';
+    }
+    // Remember worker on this device
+    localStorage.setItem('wc_kiosk_worker', G.worker.id);
+    G.remembered = G.worker;
+    vib([50,30,100]);
+    showDone(action, G.worker.name);
+  } catch(e) {
+    document.getElementById('pin-work').textContent = '';
+    document.getElementById('pin-err').textContent = 'Network error — please try again.';
+    G.pin=''; renderDots(); G.pinBusy=false;
+  }
+}
+
+// ── Done screen ───────────────────────────────────────────
+function showDone(action, name) {
+  var sc2 = document.getElementById('sc-done');
+  sc2.className = 'sc on d-'+(action==='in'?'in':'out');
+  document.getElementById('d-ico').textContent = action==='in' ? '✓' : '👋';
+  document.getElementById('d-h').textContent   = action==='in' ? 'Clocked In!' : 'Clocked Out!';
+  document.getElementById('d-n').textContent   = name;
+  document.getElementById('d-t').textContent   = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('d-w').textContent   = G.workplace ? G.workplace.name : '';
+  // Restart countdown bar
+  var bar = document.getElementById('d-bar');
+  bar.style.animation = 'none'; bar.offsetHeight;
+  bar.style.cssText += 'animation:shrink 3s linear forwards;';
+  // Return to idle after 3.2s
+  setTimeout(function(){
+    G.clockedIn = action==='in';
+    if (G.remembered) {
+      showIdleRem(G.remembered);
+      updateIdleBtn(G.clockedIn);
+    }
+    sc('idle');
+    // Reset find button
+    var fb = document.getElementById('find-btn');
+    if (fb) { fb.textContent='Continue →'; fb.disabled=false; }
+  }, 3200);
+}
+
+// ── Geolocation ───────────────────────────────────────────
+function getLoc() {
+  if (!navigator.geolocation) return Promise.resolve(null);
+  return new Promise(function(res){
+    navigator.geolocation.getCurrentPosition(
+      function(p){ res({lat:p.coords.latitude,lng:p.coords.longitude}); },
+      function(){  res(null); },
+      {timeout:5000,maximumAge:30000}
+    );
+  });
+}
+
+// ── Face Recognition ──────────────────────────────────────
+function ensureFaceApi() {
+  if (typeof faceapi !== 'undefined') return Promise.resolve();
+  if (_faceApiP) return _faceApiP;
+  _faceApiP = new Promise(function(res,rej){
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js';
+    s.onload = res;
+    s.onerror = function(){ _faceApiP=null; rej(new Error('Could not load face library')); };
+    document.head.appendChild(s);
+  });
+  return _faceApiP;
+}
+async function loadFaceMods() {
+  await ensureFaceApi();
+  if (_faceMod) return;
+  if (_faceModP) return _faceModP;
+  _faceModP = Promise.all([
+    faceapi.nets.tinyFaceDetector.loadFromUri(FACE_CDN),
+    faceapi.nets.faceLandmark68TinyNet.loadFromUri(FACE_CDN),
+    faceapi.nets.faceRecognitionNet.loadFromUri(FACE_CDN)
+  ]).then(function(){ _faceMod=true; })
+    .catch(function(e){ _faceModP=null; throw e; });
+  return _faceModP;
+}
+
+async function startFace() {
+  var btn = document.getElementById('face-btn');
+  btn.textContent = '⏳ Loading…'; btn.disabled = true;
+  document.getElementById('face-st').textContent = 'Loading face models…';
+  document.getElementById('face-oval').classList.remove('found');
+  document.getElementById('face-ov').classList.add('on');
+  try {
+    await wt(loadFaceMods(), 30000);
+    document.getElementById('face-st').textContent = 'Loading enrolled faces…';
+    var r = await wt(db.from('workers').select('id,name,employee_id,job_title,pin,biometric_enabled,biometric_credential_id,face_descriptor').eq('company_id',G.companyId).eq('is_active',true).not('face_descriptor','is',null));
+    var workers = (r.data||[]).filter(function(w){ return w.face_descriptor; });
+    if (!workers.length) { document.getElementById('face-st').textContent = '⚠️ No faces enrolled. Use Employee ID instead.'; btn.textContent='🤳 Use Face Recognition'; btn.disabled=false; return; }
+    var labeled = [], wmap = {};
+    workers.forEach(function(w){
+      try {
+        var desc = new Float32Array(JSON.parse(w.face_descriptor));
+        labeled.push(new faceapi.LabeledFaceDescriptors(w.id,[desc]));
+        wmap[w.id] = w;
+      } catch(e) {}
+    });
+    if (!labeled.length) { document.getElementById('face-st').textContent = '⚠️ Face data invalid.'; btn.textContent='🤳 Use Face Recognition'; btn.disabled=false; return; }
+    var matcher = new faceapi.FaceMatcher(labeled, 0.50);
+    var stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user', width:{ideal:640}, height:{ideal:480} }, audio:false });
+    _faceStream = stream;
+    var vid = document.getElementById('face-vid');
+    vid.srcObject = stream; await vid.play();
+    _faceRunning = true;
+    document.getElementById('face-st').textContent = 'Look at the camera…';
+    (function detect(){
+      if (!_faceRunning) return;
+      var opts = new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.5});
+      faceapi.detectSingleFace(vid,opts).withFaceLandmarks(true).withFaceDescriptor().then(function(det){
+        if (!_faceRunning) return;
+        if (!det) { requestAnimationFrame(detect); return; }
+        var match = matcher.findBestMatch(det.descriptor);
+        if (match.label === 'unknown') { requestAnimationFrame(detect); return; }
+        var found = wmap[match.label];
+        if (!found) { requestAnimationFrame(detect); return; }
+        _faceRunning = false;
+        document.getElementById('face-oval').classList.add('found');
+        document.getElementById('face-st').textContent = '✅ Recognised: '+found.name;
+        vib([50,30,100]);
+        stopFace();
+        G.worker = found; G.pinBusy = true;
+        setTimeout(function(){ verifyAndClock('face'); }, 600);
+      }).catch(function(){ if (_faceRunning) requestAnimationFrame(detect); });
+    })();
+  } catch(e) {
+    document.getElementById('face-st').textContent = '❌ '+(e.message||'Error');
+    stopFace();
+  }
+  btn.textContent='🤳 Use Face Recognition'; btn.disabled=false;
+}
+function stopFace() {
+  _faceRunning = false;
+  if (_faceStream) { _faceStream.getTracks().forEach(function(t){ t.stop(); }); _faceStream=null; }
+  document.getElementById('face-ov').classList.remove('on');
+}
+
+// ── Admin link ────────────────────────────────────────────
+function goAdmin() {
+  var code = coParam();
+  window.location.href = 'index.html'+(code?'?c='+code:'');
+}
+
+// ── Boot ──────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function(){
+  sc('idle');
+  // Sync company name from cache immediately
+  try {
+    var saved = JSON.parse(localStorage.getItem('wc_company')||'null');
+    if (saved && saved.name) document.getElementById('i-co').textContent = saved.name;
+  } catch(e) {}
+  initCo().catch(function(){});
+  // Clear any stale SW
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function(r){ r.forEach(function(x){ x.unregister(); }); });
+    caches.keys().then(function(k){ k.forEach(function(x){ caches.delete(x); }); });
+  }
+});
+</script>
+</body>
+</html>

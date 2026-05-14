@@ -817,8 +817,11 @@ async function loadSetup() {
     }
   } catch (e) {}
   var code   = S.admin.co && S.admin.co.code;
+  var base   = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
   var linkEl = document.getElementById('clockin-link');
-  if (linkEl) linkEl.textContent = code ? (window.location.origin + window.location.pathname + '?c=' + code) : 'Company code not found.';
+  if (linkEl) linkEl.textContent = code ? (base + 'index.html?c=' + code) : 'Company code not found.';
+  var kioskEl = document.getElementById('kiosk-link');
+  if (kioskEl) kioskEl.textContent = code ? (base + 'clockin.html?c=' + code) : 'Company code not found.';
   document.getElementById('my-name').value  = S.admin.full_name || '';
   document.getElementById('my-email').value = S.admin.email     || '';
 }
@@ -860,10 +863,20 @@ function detectLocation() {
 function copyClockInLink() {
   var code = S.admin.co && S.admin.co.code;
   if (!code) { showMsg('link-msg', 'Company code not found.', 'err'); return; }
-  var link = window.location.origin + window.location.pathname + '?c=' + code;
+  var base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+  var link = base + 'index.html?c=' + code;
   navigator.clipboard.writeText(link)
-    .then(function() { showMsg('link-msg', '✅ Link copied!', 'ok'); })
+    .then(function() { showMsg('link-msg', '✅ Full app link copied!', 'ok'); })
     .catch(function() { document.getElementById('clockin-link').textContent = link; showMsg('link-msg', 'Copy the link above manually.', 'ok'); });
+}
+function copyKioskLink() {
+  var code = S.admin.co && S.admin.co.code;
+  if (!code) { showMsg('link-msg', 'Company code not found.', 'err'); return; }
+  var base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+  var link = base + 'clockin.html?c=' + code;
+  navigator.clipboard.writeText(link)
+    .then(function() { showMsg('link-msg', '✅ Kiosk link copied!', 'ok'); })
+    .catch(function() { document.getElementById('kiosk-link').textContent = link; showMsg('link-msg', 'Copy the link above manually.', 'ok'); });
 }
 async function saveProfile() {
   var name  = (document.getElementById('my-name').value  || '').trim();

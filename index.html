@@ -348,10 +348,14 @@
         <p class="msg hidden" id="wp-msg"></p>
       </div>
       <div class="card">
-        <h4>📎 Worker Clock-In Link</h4>
-        <p class="sub" style="margin-bottom:12px">Share this link with workers so the company loads automatically.</p>
+        <h4>📎 Worker Clock-In Links</h4>
+        <p class="sub" style="margin-bottom:10px">Share the <strong>Kiosk link</strong> for a clean, simple worker experience (recommended). Or share the full app link.</p>
+        <label style="font-size:.8rem;color:var(--muted);font-weight:600;display:block;margin-bottom:4px">KIOSK (Simple — for workers)</label>
+        <div class="link-box" id="kiosk-link">Loading…</div>
+        <button class="btn btn-primary btn-full" style="margin-top:8px" onclick="copyKioskLink()">📋 Copy Kiosk Link</button>
+        <label style="font-size:.8rem;color:var(--muted);font-weight:600;display:block;margin:14px 0 4px">FULL APP (Admin + Worker)</label>
         <div class="link-box" id="clockin-link">Loading…</div>
-        <button class="btn btn-primary btn-full" style="margin-top:10px" onclick="copyClockInLink()">📋 Copy Link</button>
+        <button class="btn btn-outline btn-full" style="margin-top:8px" onclick="copyClockInLink()">📋 Copy Full App Link</button>
         <p class="msg hidden" id="link-msg"></p>
       </div>
       <div class="card">

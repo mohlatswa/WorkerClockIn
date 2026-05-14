@@ -3,11 +3,12 @@
 // ── State ─────────────────────────────────────────────────
 var S = {
   worker: null, admin: null,
-  companyId: null, companyName: null, fromUrl: false,
+  companyId: null, companyName: null, companyCode: null, fromUrl: false,
   clockStatus: 'out', attendanceId: null,
   authMethod: 'pin',
   userLoc: null, geoWatcher: null,
-  npPin: [], npTimer: null
+  npPin: [], npTimer: null,
+  homeClock: null
 };
 var _wCache = {};
 var _cCache = {};
@@ -35,6 +36,10 @@ function unb64(s) { var b = atob(s), a = new Uint8Array(b.length); for (var i = 
 function initials(n) { return (n || '??').split(' ').map(function(w) { return w[0]; }).join('').toUpperCase().slice(0, 2); }
 function fmtTime(iso) { return iso ? new Date(iso).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' }) : '--:--'; }
 function fmtDate(iso) { return iso ? new Date(iso).toLocaleDateString('en-ZA') : ''; }
+function fmtDateShort(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short' });
+}
 function vibrate(p) { if (navigator.vibrate) navigator.vibrate(p || 50); }
 function escQ(s) { return (s || '').replace(/'/g, "\\'"); }
 
@@ -58,39 +63,60 @@ function closeModal(id) { var el = document.getElementById(id); if (el) el.class
 
 // ── Company ───────────────────────────────────────────────
 function setCompany(co, fromUrl) {
-  S.companyId = co.id; S.companyName = co.name; S.fromUrl = !!fromUrl;
+  S.companyId   = co.id;
+  S.companyName = co.name;
+  S.companyCode = co.code;
+  S.fromUrl     = !!fromUrl;
   localStorage.setItem('wc_company', JSON.stringify(co));
   updateHomeUI();
 }
 function updateHomeUI() {
-  var nameEl = document.getElementById('home-co-name');
-  var noCard = document.getElementById('no-co-card');
-  var methods = document.getElementById('clock-methods');
+  var pillEl   = document.getElementById('home-co-pill');
+  var noCard   = document.getElementById('no-co-card');
+  var actions  = document.getElementById('home-actions');
   if (S.companyId) {
-    if (nameEl) nameEl.textContent = S.companyName;
-    if (noCard) noCard.classList.add('hidden');
-    if (methods) methods.classList.remove('hidden');
+    if (pillEl) { pillEl.textContent = S.companyName || ''; pillEl.classList.remove('hidden'); }
+    if (noCard)  noCard.classList.add('hidden');
+    if (actions) actions.classList.remove('hidden');
   } else {
-    if (nameEl) nameEl.textContent = '';
-    if (noCard) noCard.classList.remove('hidden');
-    if (methods) methods.classList.add('hidden');
+    if (pillEl) pillEl.classList.add('hidden');
+    if (noCard)  noCard.classList.remove('hidden');
+    if (actions) actions.classList.add('hidden');
   }
 }
 async function initCompany() {
   var params = new URLSearchParams(window.location.search);
-  var code = params.get('c') || params.get('company');
+  var code   = params.get('c') || params.get('company');
   if (code) {
     try {
-      var r = await withTimeout(db.from('companies').select('*').eq('code', code.toUpperCase()).eq('is_active', true).maybeSingle(), 4000);
+      var r = await withTimeout(
+        db.from('companies').select('*').eq('code', code.toUpperCase()).eq('is_active', true).maybeSingle(),
+        4000
+      );
       if (r.data) { setCompany(r.data, true); return; }
     } catch (e) {}
   }
   var saved = localStorage.getItem('wc_company');
-  if (saved) { try { setCompany(JSON.parse(saved), false); return; } catch (e) {} }
+  if (saved) {
+    try { setCompany(JSON.parse(saved), false); return; } catch (e) {}
+  }
   updateHomeUI();
 }
 
-// ── Live Clock ────────────────────────────────────────────
+// ── Home Live Clock ───────────────────────────────────────
+function startHomeClock() {
+  function tick() {
+    var el = document.getElementById('home-live-clock');
+    if (!el) return;
+    var n = new Date();
+    el.textContent = n.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
+  }
+  tick();
+  if (S.homeClock) clearInterval(S.homeClock);
+  S.homeClock = setInterval(tick, 1000);
+}
+
+// ── Worker Live Clock (dashboard) ────────────────────────
 function startClock() {
   var tick = function() {
     var n = new Date();
@@ -111,7 +137,9 @@ async function findWorker() {
     var q = db.from('workers').select('*, workplace:workplaces(*)').eq('employee_id', id).eq('is_active', true);
     if (S.companyId && S.fromUrl) q = q.eq('company_id', S.companyId);
     var r = await withTimeout(q.maybeSingle(), 5000);
-    if (r.error && r.error.code === 'PGRST116') { showErr('err-empid', 'Multiple accounts found — open your employer\'s link.'); return; }
+    if (r.error && r.error.code === 'PGRST116') {
+      showErr('err-empid', 'Multiple accounts found — open your employer\'s link.'); return;
+    }
     if (!r.data) { showErr('err-empid', 'Employee ID not found. Check with your manager.'); return; }
     S.worker = r.data; goToAuth(r.data);
   } catch (e) { showErr('err-empid', 'Connection error. Check internet and try again.'); }
@@ -124,10 +152,12 @@ function goToAuth(w) {
   var bioWrap = document.getElementById('bio-auth-wrap');
   if (w.biometric_enabled && w.biometric_credential_id && window.PublicKeyCredential) {
     bioWrap.classList.remove('hidden');
-  } else { bioWrap.classList.add('hidden'); }
+  } else {
+    bioWrap.classList.add('hidden');
+  }
   showPg('auth'); npReset();
 }
-function backFromAuth() { S.worker = null; showPg('home'); }
+function backFromAuth() { S.worker = null; showPg('wlogin'); }
 
 // ── PIN Numpad ────────────────────────────────────────────
 function npReset() { S.npPin = []; clearTimeout(S.npTimer); renderDots(); showErr('err-pin', ''); }
@@ -149,7 +179,7 @@ function verifyPin() {
   if (S.npPin.join('') !== String(S.worker.pin)) {
     vibrate([50, 30, 50]); showErr('err-pin', 'Incorrect PIN — try again'); npReset(); return;
   }
-  S.authMethod = 'pin'; enterClockScreen();
+  S.authMethod = 'pin'; enterWorkerDashboard();
 }
 
 // ── Biometric ─────────────────────────────────────────────
@@ -163,9 +193,12 @@ async function homeBiometric() {
     if (!cred) return;
     var workerId = new TextDecoder().decode(cred.response.userHandle);
     if (!workerId) { toast('Biometric not linked to an account. Use Employee ID.'); return; }
-    var r = await withTimeout(db.from('workers').select('*, workplace:workplaces(*)').eq('id', workerId).eq('is_active', true).maybeSingle(), 5000);
+    var r = await withTimeout(
+      db.from('workers').select('*, workplace:workplaces(*)').eq('id', workerId).eq('is_active', true).maybeSingle(),
+      5000
+    );
     if (!r.data) { toast('Account not found.'); return; }
-    S.worker = r.data; S.authMethod = 'biometric'; enterClockScreen();
+    S.worker = r.data; S.authMethod = 'biometric'; enterWorkerDashboard();
   } catch (e) { if (e.name !== 'NotAllowedError') toast('Biometric error: ' + e.message); }
 }
 async function authBiometric() {
@@ -177,7 +210,7 @@ async function authBiometric() {
       allowCredentials: [{ id: unb64(S.worker.biometric_credential_id), type: 'public-key' }],
       userVerification: 'required', timeout: 60000
     }});
-    if (cred) { S.authMethod = 'biometric'; enterClockScreen(); }
+    if (cred) { S.authMethod = 'biometric'; enterWorkerDashboard(); }
   } catch (e) { if (e.name !== 'NotAllowedError') showErr('err-pin', 'Error: ' + e.message); }
 }
 async function workerRegBio() {
@@ -200,31 +233,47 @@ async function workerRegBio() {
   } catch (e) { if (e.name !== 'NotAllowedError') showMsg('bio-reg-msg', 'Error: ' + e.message, 'err'); }
 }
 
-// ── Clock Screen ──────────────────────────────────────────
-async function enterClockScreen() {
+// ── Worker Dashboard ──────────────────────────────────────
+async function enterWorkerDashboard() {
   var w = S.worker;
   localStorage.setItem('wc_worker_id', w.id);
-  document.getElementById('clk-av').textContent    = initials(w.name);
-  document.getElementById('clk-name').textContent  = w.name;
-  document.getElementById('clk-empid').textContent = w.employee_id;
-  document.getElementById('clk-job').textContent   = w.job_title || '';
+
+  // Populate header
+  document.getElementById('wk-av').textContent    = initials(w.name);
+  document.getElementById('wk-name').textContent  = w.name;
+  document.getElementById('wk-empid').textContent = w.employee_id;
+  document.getElementById('wk-job').textContent   = w.job_title || '';
+  document.getElementById('wk-co-name').textContent = S.companyName || '';
+
   var hr = new Date().getHours();
-  document.getElementById('clock-greeting').textContent =
+  document.getElementById('wk-greeting').textContent =
     (hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening') + ', ' + w.name.split(' ')[0] + '!';
-  showPg('clock'); startClock();
-  document.getElementById('bio-reg-card').style.display = (!w.biometric_enabled && window.PublicKeyCredential) ? '' : 'none';
+
+  showPg('worker');
+  startClock();
+
+  // Optional cards
+  document.getElementById('bio-reg-card').style.display  = (!w.biometric_enabled && window.PublicKeyCredential) ? '' : 'none';
   document.getElementById('face-reg-card').style.display = !w.face_descriptor ? '' : 'none';
+
   await loadTodayRecord();
+  await loadAttendanceHistory();
   startLocationWatch();
 }
+
+// ── Today's Record ────────────────────────────────────────
 async function loadTodayRecord() {
   var today = new Date(); today.setHours(0, 0, 0, 0);
   try {
-    var r = await withTimeout(db.from('attendance').select('*').eq('worker_id', S.worker.id)
-      .gte('clock_in_time', today.toISOString()).order('clock_in_time', { ascending: false }).limit(1), 5000);
-    var rec = r.data && r.data[0];
-    var card  = document.getElementById('today-card');
-    var badge = document.getElementById('clk-badge');
+    var r = await withTimeout(
+      db.from('attendance').select('*').eq('worker_id', S.worker.id)
+        .gte('clock_in_time', today.toISOString())
+        .order('clock_in_time', { ascending: false }).limit(1),
+      5000
+    );
+    var rec    = r.data && r.data[0];
+    var card   = document.getElementById('today-card');
+    var badge  = document.getElementById('wk-badge');
     if (rec) {
       card.style.display = '';
       document.getElementById('rec-in').textContent  = fmtTime(rec.clock_in_time);
@@ -232,6 +281,8 @@ async function loadTodayRecord() {
       if (rec.clock_in_time && rec.clock_out_time) {
         var hrs = ((new Date(rec.clock_out_time) - new Date(rec.clock_in_time)) / 3600000).toFixed(1);
         document.getElementById('rec-hrs').textContent = hrs + 'h';
+      } else {
+        document.getElementById('rec-hrs').textContent = '--';
       }
       if (rec.status === 'active') {
         S.clockStatus = 'in'; S.attendanceId = rec.id;
@@ -246,22 +297,80 @@ async function loadTodayRecord() {
     }
   } catch (e) {}
 }
+
+// ── 14-Day Attendance History ─────────────────────────────
+async function loadAttendanceHistory() {
+  var histCard = document.getElementById('history-card');
+  var histList = document.getElementById('history-list');
+  if (!histCard || !histList) return;
+
+  var cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 14);
+  cutoff.setHours(0, 0, 0, 0);
+
+  try {
+    var r = await withTimeout(
+      db.from('attendance').select('*').eq('worker_id', S.worker.id)
+        .gte('clock_in_time', cutoff.toISOString())
+        .order('clock_in_time', { ascending: false })
+        .limit(30),
+      6000
+    );
+    var recs = r.data || [];
+    if (!recs.length) {
+      histCard.style.display = 'none';
+      return;
+    }
+    histCard.style.display = '';
+    histList.innerHTML = recs.map(function(rec) {
+      var cin   = rec.clock_in_time  ? new Date(rec.clock_in_time)  : null;
+      var cout  = rec.clock_out_time ? new Date(rec.clock_out_time) : null;
+      var hrs   = (cin && cout) ? ((cout - cin) / 3600000).toFixed(1) + 'h' : '--';
+      var inStr  = cin  ? cin.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })  : '--:--';
+      var outStr = cout ? cout.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' }) : 'In';
+      var dateStr = cin ? fmtDateShort(rec.clock_in_time) : '--';
+      var isActive  = rec.status === 'active';
+      var chipClass = isActive ? 'hist-chip hist-chip-active' : 'hist-chip hist-chip-done';
+      var chipLabel = isActive ? 'Active' : 'Done';
+      var meth = rec.auth_method ? (rec.auth_method.charAt(0).toUpperCase() + rec.auth_method.slice(1)) : '';
+      return '<div class="hist-row">' +
+        '<div class="hist-left">' +
+          '<div class="hist-date">' + dateStr + '</div>' +
+          '<div class="hist-times">' + inStr + ' → ' + outStr + '</div>' +
+        '</div>' +
+        '<div class="hist-right">' +
+          '<div class="hist-hrs">' + hrs + '</div>' +
+          '<div class="hist-method">' + meth + '</div>' +
+          '<span class="' + chipClass + '">' + chipLabel + '</span>' +
+        '</div>' +
+        '</div>';
+    }).join('');
+  } catch (e) {
+    histCard.style.display = 'none';
+  }
+}
+
+// ── Location Watch ────────────────────────────────────────
 function startLocationWatch() {
   var locCard = document.getElementById('loc-card');
   var locBlk  = document.getElementById('loc-blocked-card');
   locCard.style.display = ''; locBlk.classList.add('hidden');
   document.getElementById('loc-status').innerHTML = '<div class="checking"><div class="spin"></div> Getting your location…</div>';
-  if (!navigator.geolocation) { document.getElementById('loc-status').textContent = '⚠️ Location not supported on this device'; setClockBtn(true); return; }
+  if (!navigator.geolocation) {
+    document.getElementById('loc-status').textContent = '⚠️ Location not supported on this device';
+    setClockBtn(true); return;
+  }
   if (S.geoWatcher) navigator.geolocation.clearWatch(S.geoWatcher);
   S.geoWatcher = navigator.geolocation.watchPosition(
     function(pos) {
       S.userLoc = pos.coords;
       var wp = S.worker && S.worker.workplace;
       if (!wp || !wp.latitude || !wp.longitude) {
-        document.getElementById('loc-status').innerHTML = '⚠️ <span style="color:var(--amber)">Workplace not configured — ask your admin to set it up</span>';
+        document.getElementById('loc-status').innerHTML =
+          '⚠️ <span style="color:var(--amber)">Workplace not configured — ask your admin to set it up</span>';
         setClockBtn(true); return;
       }
-      var dist  = Math.round(haversineM(pos.coords.latitude, pos.coords.longitude, wp.latitude, wp.longitude));
+      var dist   = Math.round(haversineM(pos.coords.latitude, pos.coords.longitude, wp.latitude, wp.longitude));
       var radius = wp.radius_meters || 100;
       var inside = dist <= radius;
       document.getElementById('loc-status').innerHTML = inside
@@ -283,23 +392,26 @@ function retryLocation() {
 }
 function setClockBtn(enabled) {
   var btn = document.getElementById('clk-btn');
+  if (!btn) return;
   if (enabled) {
     btn.disabled = false;
     if (S.clockStatus === 'in') {
       btn.className = 'clock-btn clk-out';
-      document.getElementById('clk-icon').textContent = '⏹';
+      document.getElementById('clk-icon').textContent  = '⏹';
       document.getElementById('clk-label').textContent = 'Clock Out';
     } else {
       btn.className = 'clock-btn clk-in';
-      document.getElementById('clk-icon').textContent = '▶';
+      document.getElementById('clk-icon').textContent  = '▶';
       document.getElementById('clk-label').textContent = 'Clock In';
     }
   } else {
     btn.disabled = true; btn.className = 'clock-btn clk-wait';
-    document.getElementById('clk-icon').textContent = '⏳';
+    document.getElementById('clk-icon').textContent  = '⏳';
     document.getElementById('clk-label').textContent = 'Checking Location…';
   }
 }
+
+// ── Clock In / Out ────────────────────────────────────────
 async function clockAction() {
   var btn = document.getElementById('clk-btn');
   btn.disabled = true;
@@ -307,33 +419,38 @@ async function clockAction() {
   try {
     if (action === 'in') {
       var ins = await withTimeout(db.from('attendance').insert({
-        worker_id: S.worker.id,
-        clock_in_time: new Date().toISOString(),
-        auth_method: S.authMethod,
-        status: 'active',
-        clock_in_latitude:  S.userLoc ? S.userLoc.latitude  : null,
-        clock_in_longitude: S.userLoc ? S.userLoc.longitude : null
+        worker_id:           S.worker.id,
+        company_id:          S.worker.company_id,
+        clock_in_time:       new Date().toISOString(),
+        auth_method:         S.authMethod,
+        status:              'active',
+        workplace_id:        S.worker.workplace_id || null,
+        clock_in_latitude:   S.userLoc ? S.userLoc.latitude  : null,
+        clock_in_longitude:  S.userLoc ? S.userLoc.longitude : null
       }).select().single(), 8000);
       if (ins.error) throw ins.error;
       S.attendanceId = ins.data.id; S.clockStatus = 'in';
     } else {
       var upd = await withTimeout(db.from('attendance').update({
-        clock_out_time: new Date().toISOString(),
-        status: 'completed',
+        clock_out_time:      new Date().toISOString(),
+        status:              'completed',
         clock_out_latitude:  S.userLoc ? S.userLoc.latitude  : null,
         clock_out_longitude: S.userLoc ? S.userLoc.longitude : null
       }).eq('id', S.attendanceId), 8000);
       if (upd.error) throw upd.error;
       S.clockStatus = 'out';
     }
-    vibrate([50, 30, 100]); showSuccess(action); await loadTodayRecord();
+    vibrate([50, 30, 100]);
+    showSuccess(action);
+    await loadTodayRecord();
+    await loadAttendanceHistory();
   } catch (e) { toast('❌ ' + e.message); }
   btn.disabled = false; setClockBtn(true);
 }
 function showSuccess(action) {
   var overlay = document.getElementById('success-overlay');
   var icon    = document.getElementById('succ-icon');
-  icon.className = 'succ-icon' + (action === 'out' ? ' out' : '');
+  icon.className  = 'succ-icon' + (action === 'out' ? ' out' : '');
   icon.textContent = action === 'in' ? '✓' : '⏹';
   document.getElementById('succ-action').textContent = action === 'in' ? 'Clocked In!'  : 'Clocked Out!';
   document.getElementById('succ-name').textContent   = S.worker.name;
@@ -342,16 +459,19 @@ function showSuccess(action) {
   overlay.classList.remove('hidden');
   setTimeout(function() { overlay.classList.add('hidden'); }, 2500);
 }
+
+// ── Worker Sign Out ───────────────────────────────────────
 function logoutWorker() {
   if (S.geoWatcher) { navigator.geolocation.clearWatch(S.geoWatcher); S.geoWatcher = null; }
   S.worker = null; S.userLoc = null; S.clockStatus = 'out'; S.attendanceId = null;
   localStorage.removeItem('wc_worker_id');
-  document.getElementById('inp-empid').value = '';
+  var inp = document.getElementById('inp-empid');
+  if (inp) inp.value = '';
   showPg('home');
 }
 
-// ── Face Recognition (lazy loads face-api.js) ─────────────
-var FACE_CDN   = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
+// ── Face Recognition ──────────────────────────────────────
+var FACE_CDN = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
 var _faceApiPromise = null, _faceModelsLoaded = false, _faceModelsPromise = null;
 var _faceStream = null, _faceRunning = false, _faceMatcher = null, _faceWorkerMap = {};
 
@@ -384,7 +504,7 @@ function faceDetectOpts() { return new faceapi.TinyFaceDetectorOptions({ inputSi
 async function openFaceRecog() {
   showPg('face-scan');
   var statusEl = document.getElementById('face-status');
-  var oval = document.getElementById('face-oval');
+  var oval     = document.getElementById('face-oval');
   oval.classList.remove('found');
   if (!S.companyId) { statusEl.textContent = '⚠️ No company linked — open your employer\'s clock-in link first.'; return; }
   statusEl.textContent = '⏳ Loading face recognition…';
@@ -393,7 +513,8 @@ async function openFaceRecog() {
   statusEl.textContent = 'Loading enrolled faces…';
   try {
     var r = await withTimeout(
-      db.from('workers').select('id,name,employee_id,face_descriptor').eq('company_id', S.companyId).eq('is_active', true).not('face_descriptor', 'is', null),
+      db.from('workers').select('id,name,employee_id,face_descriptor')
+        .eq('company_id', S.companyId).eq('is_active', true).not('face_descriptor', 'is', null),
       5000
     );
     if (!r.data || !r.data.length) { statusEl.textContent = '⚠️ No faces enrolled — ask your admin to enrol worker faces first.'; return; }
@@ -437,10 +558,13 @@ async function faceFrame() {
     vibrate([50, 30, 100]);
     if (_faceStream) { _faceStream.getTracks().forEach(function(t) { t.stop(); }); _faceStream = null; }
     try {
-      var r = await withTimeout(db.from('workers').select('*, workplace:workplaces(*)').eq('id', match.label).eq('is_active', true).maybeSingle(), 5000);
+      var r = await withTimeout(
+        db.from('workers').select('*, workplace:workplaces(*)').eq('id', match.label).eq('is_active', true).maybeSingle(),
+        5000
+      );
       if (!r.data) { statusEl.textContent = '❌ Account not found.'; setTimeout(function() { showPg('home'); }, 2000); return; }
       S.worker = r.data; S.authMethod = 'face';
-      setTimeout(function() { enterClockScreen(); }, 900);
+      setTimeout(function() { enterWorkerDashboard(); }, 900);
     } catch (e) { statusEl.textContent = '❌ Connection error'; setTimeout(function() { showPg('home'); }, 2000); }
   } catch (e) { requestAnimationFrame(faceFrame); }
 }
@@ -454,9 +578,9 @@ function stopFaceRecog() {
 var _enrollStream = null, _enrollTarget = null;
 async function adminEnrollFace(workerId, workerName, ctx) {
   _enrollTarget = { id: workerId, name: workerName, ctx: ctx || 'admin' };
-  document.getElementById('enroll-title').textContent = 'Enrol Face — ' + workerName;
-  document.getElementById('enroll-status').textContent = '⏳ Loading models…';
-  document.getElementById('enroll-snap-btn').disabled = true;
+  document.getElementById('enroll-title').textContent   = 'Enrol Face — ' + workerName;
+  document.getElementById('enroll-status').textContent  = '⏳ Loading models…';
+  document.getElementById('enroll-snap-btn').disabled   = true;
   document.getElementById('modal-face-enroll').classList.remove('hidden');
   try { await withTimeout(loadFaceModels(), 30000); }
   catch (e) { document.getElementById('enroll-status').textContent = '❌ Could not load models: ' + e.message; return; }
@@ -472,7 +596,7 @@ async function adminEnrollFace(workerId, workerName, ctx) {
 function workerEnrollFace() { if (S.worker) adminEnrollFace(S.worker.id, S.worker.name, 'worker'); }
 async function captureEnroll() {
   var statusEl = document.getElementById('enroll-status');
-  var btn = document.getElementById('enroll-snap-btn');
+  var btn      = document.getElementById('enroll-snap-btn');
   btn.disabled = true; statusEl.textContent = 'Detecting face…';
   var video = document.getElementById('enroll-video');
   try {
@@ -482,7 +606,10 @@ async function captureEnroll() {
     var r = await withTimeout(db.from('workers').update({ face_descriptor: descriptor }).eq('id', _enrollTarget.id), 5000);
     if (r.error) throw r.error;
     vibrate([50, 30, 100]); statusEl.textContent = '✅ Face enrolled for ' + _enrollTarget.name + '!';
-    if (_enrollTarget.ctx === 'worker') { S.worker.face_descriptor = descriptor; document.getElementById('face-reg-card').style.display = 'none'; }
+    if (_enrollTarget.ctx === 'worker') {
+      S.worker.face_descriptor = descriptor;
+      document.getElementById('face-reg-card').style.display = 'none';
+    }
     setTimeout(function() {
       closeFaceEnroll();
       if (_enrollTarget.ctx === 'dev') loadDevWorkers();
@@ -505,7 +632,8 @@ async function adminLogin() {
   btn.disabled = true; btn.textContent = 'Logging in…';
   try {
     var r = await withTimeout(
-      db.from('admin_users').select('*, co:companies(name,code)').eq('username', user).eq('password_hash', pass).eq('is_active', true).maybeSingle(),
+      db.from('admin_users').select('*, co:companies(name,code)')
+        .eq('username', user).eq('password_hash', pass).eq('is_active', true).maybeSingle(),
       8000
     );
     if (r.error) { showErr('err-admin', 'Database error: ' + r.error.message); return; }
@@ -538,7 +666,7 @@ function switchTab(btn, name) {
   if (name === 'a-setup')   loadSetup();
   if (name === 'a-att') {
     var today = new Date().toISOString().slice(0, 10);
-    var ago = new Date(); ago.setMonth(ago.getMonth() - 1);
+    var ago   = new Date(); ago.setMonth(ago.getMonth() - 1);
     document.getElementById('att-from').value = ago.toISOString().slice(0, 10);
     document.getElementById('att-to').value   = today;
     loadWorkerOptions();
@@ -551,10 +679,10 @@ async function loadDashboard() {
   var tmrw  = new Date(today); tmrw.setDate(tmrw.getDate() + 1);
   var cid   = S.admin && S.admin.company_id;
   try {
-    var totR  = await withTimeout(db.from('workers').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('company_id', cid), 5000);
-    var wkrR  = await withTimeout(db.from('workers').select('id').eq('company_id', cid), 5000);
-    var ids   = (wkrR.data || []).map(function(w) { return w.id; });
-    var recs  = [];
+    var totR = await withTimeout(db.from('workers').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('company_id', cid), 5000);
+    var wkrR = await withTimeout(db.from('workers').select('id').eq('company_id', cid), 5000);
+    var ids  = (wkrR.data || []).map(function(w) { return w.id; });
+    var recs = [];
     if (ids.length) {
       var attR = await withTimeout(
         db.from('attendance').select('*, w:workers(name,employee_id)').in('worker_id', ids)
@@ -597,7 +725,9 @@ async function loadWorkers() {
       return '<div class="list-row">' +
         '<div class="row-info"><div class="av av-sm">' + initials(w.name) + '</div>' +
         '<div><div class="row-name">' + w.name + '</div>' +
-        '<div class="row-meta">' + w.employee_id + (w.job_title ? ' · ' + w.job_title : '') + (w.biometric_enabled ? ' · 🔏' : '') + (w.face_descriptor ? ' · 🤳' : '') + (!w.is_active ? ' · <em>Inactive</em>' : '') + '</div></div></div>' +
+        '<div class="row-meta">' + w.employee_id + (w.job_title ? ' · ' + w.job_title : '') +
+          (w.biometric_enabled ? ' · 🔏' : '') + (w.face_descriptor ? ' · 🤳' : '') +
+          (!w.is_active ? ' · <em>Inactive</em>' : '') + '</div></div></div>' +
         '<div class="row-btns">' +
         '<button class="icon-btn" onclick="openEditWorker(\'' + w.id + '\')">✏️</button>' +
         '<button class="icon-btn" onclick="adminEnrollFace(\'' + w.id + '\',\'' + escQ(w.name) + '\',\'admin\')">🤳</button>' +
@@ -612,21 +742,27 @@ function toggleAddWorker() {
   if (!p.classList.contains('hidden')) document.getElementById('nw-id').focus();
 }
 async function addWorker() {
-  var empId = (document.getElementById('nw-id').value || '').trim().toUpperCase();
+  var empId = (document.getElementById('nw-id').value   || '').trim().toUpperCase();
   var name  = (document.getElementById('nw-name').value || '').trim();
   var job   = (document.getElementById('nw-job').value  || '').trim();
   var pin   = (document.getElementById('nw-pin').value  || '').trim();
   if (!empId || !name || !pin) { showMsg('nw-msg', 'Employee ID, Name and PIN are required.', 'err'); return; }
-  if (pin.length < 4)          { showMsg('nw-msg', 'PIN must be at least 4 digits.', 'err'); return; }
+  if (pin.length < 4) { showMsg('nw-msg', 'PIN must be at least 4 digits.', 'err'); return; }
   var cid = S.admin.company_id;
   try {
     var wpR = await withTimeout(db.from('workplaces').select('id').eq('company_id', cid).limit(1), 5000);
     var r   = await withTimeout(db.from('workers').insert({
-      employee_id: empId, name: name, job_title: job || null, pin: pin,
+      employee_id:  empId,
+      name:         name,
+      job_title:    job || null,
+      pin:          pin,
       workplace_id: (wpR.data && wpR.data[0]) ? wpR.data[0].id : null,
-      company_id: cid, is_active: true
+      company_id:   cid,
+      is_active:    true
     }), 5000);
-    if (r.error) { showMsg('nw-msg', r.error.message.includes('unique') ? 'Employee ID already exists.' : r.error.message, 'err'); return; }
+    if (r.error) {
+      showMsg('nw-msg', r.error.message.includes('unique') ? 'Employee ID already exists.' : r.error.message, 'err'); return;
+    }
     showMsg('nw-msg', '✅ Worker added!', 'ok');
     setTimeout(function() {
       toggleAddWorker(); loadWorkers();
@@ -661,7 +797,10 @@ async function adminRegBio(workerId, workerName) {
 async function loadWorkerOptions() {
   var sel = document.getElementById('att-worker');
   try {
-    var r = await withTimeout(db.from('workers').select('id,name,employee_id,job_title').eq('company_id', S.admin.company_id).order('name'), 5000);
+    var r = await withTimeout(
+      db.from('workers').select('id,name,employee_id,job_title').eq('company_id', S.admin.company_id).order('name'),
+      5000
+    );
     sel.innerHTML = '<option value="">All Workers</option>' + (r.data || []).map(function(w) {
       return '<option value="' + w.id + '">' + w.name + (w.job_title ? ' · ' + w.job_title : '') + ' (' + w.employee_id + ')</option>';
     }).join('');
@@ -679,7 +818,7 @@ async function loadAttendance() {
   var start = new Date(from); start.setHours(0, 0, 0, 0);
   var end   = new Date(to);   end.setHours(23, 59, 59, 999);
   try {
-    var cWks = await withTimeout(db.from('workers').select('id').eq('company_id', S.admin.company_id), 5000);
+    var cWks    = await withTimeout(db.from('workers').select('id').eq('company_id', S.admin.company_id), 5000);
     var allowed = wkr ? [wkr] : (cWks.data || []).map(function(w) { return w.id; });
     if (!allowed.length) { el.innerHTML = '<div class="empty">No workers found</div>'; return; }
     var q = db.from('attendance').select('*, w:workers(name,employee_id,job_title)')
@@ -697,13 +836,16 @@ async function loadAttendance() {
     el.innerHTML = '<div class="card" style="padding:0 18px">' + r.data.map(function(rec) {
       var hrs = (rec.clock_in_time && rec.clock_out_time) ? ((new Date(rec.clock_out_time) - new Date(rec.clock_in_time)) / 3600000).toFixed(1) + 'h' : '--';
       return '<div class="att-row">' +
-        '<div class="att-name">' + (rec.w ? rec.w.name : 'Unknown') + (rec.w && rec.w.employee_id ? ' <small style="color:var(--muted)">(' + rec.w.employee_id + ')</small>' : '') + (rec.w && rec.w.job_title ? ' <small style="color:var(--blue)">· ' + rec.w.job_title + '</small>' : '') + '</div>' +
+        '<div class="att-name">' + (rec.w ? rec.w.name : 'Unknown') +
+          (rec.w && rec.w.employee_id ? ' <small style="color:var(--muted)">(' + rec.w.employee_id + ')</small>' : '') +
+          (rec.w && rec.w.job_title   ? ' <small style="color:var(--blue)">· ' + rec.w.job_title + '</small>' : '') +
+        '</div>' +
         '<div class="att-date">' + fmtDate(rec.clock_in_time) + '</div>' +
         '<div class="att-chips">' +
-        '<span class="chip chip-in">▶ ' + fmtTime(rec.clock_in_time) + '</span>' +
-        '<span class="chip chip-out">⏹ ' + (rec.clock_out_time ? fmtTime(rec.clock_out_time) : 'Still in') + '</span>' +
-        '<span class="chip chip-hrs">⏱ ' + hrs + '</span>' +
-        '<span class="chip chip-mth">' + (rec.auth_method || '') + '</span>' +
+          '<span class="chip chip-in">▶ '  + fmtTime(rec.clock_in_time) + '</span>' +
+          '<span class="chip chip-out">⏹ ' + (rec.clock_out_time ? fmtTime(rec.clock_out_time) : 'Still in') + '</span>' +
+          '<span class="chip chip-hrs">⏱ ' + hrs + '</span>' +
+          '<span class="chip chip-mth">'   + (rec.auth_method || '') + '</span>' +
         '</div></div>';
     }).join('') + '</div>';
   } catch (e) { el.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
@@ -716,24 +858,26 @@ async function downloadCSV() {
   var start = new Date(from); start.setHours(0, 0, 0, 0);
   var end   = new Date(to);   end.setHours(23, 59, 59, 999);
   try {
-    var cWks = await withTimeout(db.from('workers').select('id').eq('company_id', S.admin.company_id), 5000);
-    var wkr  = document.getElementById('att-worker').value;
-    var mth  = document.getElementById('att-method').value;
+    var cWks    = await withTimeout(db.from('workers').select('id').eq('company_id', S.admin.company_id), 5000);
+    var wkr     = document.getElementById('att-worker').value;
+    var mth     = document.getElementById('att-method').value;
     var allowed = wkr ? [wkr] : (cWks.data || []).map(function(w) { return w.id; });
     var q = db.from('attendance').select('*, w:workers(name,employee_id,job_title)')
       .in('worker_id', allowed).gte('clock_in_time', start.toISOString()).lte('clock_in_time', end.toISOString()).order('clock_in_time');
     if (mth) q = q.eq('auth_method', mth);
     var r = await withTimeout(q, 10000);
     if (!r.data || !r.data.length) { showMsg('csv-msg', 'No records found.', 'err'); return; }
-    var hdr = ['Worker Name', 'Employee ID', 'Job Title', 'Date', 'Clock In', 'Clock Out', 'Hours', 'Auth Method', 'Status'];
+    var hdr  = ['Worker Name', 'Employee ID', 'Job Title', 'Date', 'Clock In', 'Clock Out', 'Hours', 'Auth Method', 'Status'];
     var rows = r.data.map(function(rec) {
       var cin  = rec.clock_in_time  ? new Date(rec.clock_in_time)  : null;
       var cout = rec.clock_out_time ? new Date(rec.clock_out_time) : null;
       var hrs  = (cin && cout) ? ((cout - cin) / 3600000).toFixed(2) : '';
       return [
         rec.w ? rec.w.name : '', rec.w ? rec.w.employee_id : '', rec.w ? rec.w.job_title || '' : '',
-        cin ? fmtDate(rec.clock_in_time) : '', cin ? fmtTime(rec.clock_in_time) : '',
-        cout ? fmtTime(rec.clock_out_time) : 'Still In', hrs ? hrs + 'h' : '', rec.auth_method || '', rec.status || ''
+        cin  ? fmtDate(rec.clock_in_time) : '',
+        cin  ? fmtTime(rec.clock_in_time) : '',
+        cout ? fmtTime(rec.clock_out_time) : 'Still In',
+        hrs ? hrs + 'h' : '', rec.auth_method || '', rec.status || ''
       ].map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
     });
     var csv  = '﻿' + [hdr.join(',')].concat(rows).join('\r\n');
@@ -751,7 +895,10 @@ async function loadCoAdmins() {
   var el = document.getElementById('co-admins-list');
   el.innerHTML = '<div class="empty">Loading…</div>';
   try {
-    var r = await withTimeout(db.from('admin_users').select('*').eq('company_id', S.admin.company_id).neq('role', 'developer').order('full_name'), 5000);
+    var r = await withTimeout(
+      db.from('admin_users').select('*').eq('company_id', S.admin.company_id).neq('role', 'developer').order('full_name'),
+      5000
+    );
     if (r.error || !r.data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
     if (!r.data.length) { el.innerHTML = '<div class="empty">No admins yet — create one above</div>'; return; }
     el.innerHTML = '<div class="card" style="padding:0 18px">' + r.data.map(function(a) {
@@ -759,7 +906,10 @@ async function loadCoAdmins() {
       return '<div class="list-row">' +
         '<div class="row-info"><div class="av av-sm" style="background:' + col + '">' + initials(a.full_name || a.username) + '</div>' +
         '<div><div class="row-name">' + (a.full_name || a.username) + ' <small style="color:var(--muted)">@' + a.username + '</small></div>' +
-        '<div class="row-meta"><span class="role-pill" style="background:' + col + '22;color:' + col + '">' + (ROLE_LABELS[a.role] || a.role) + '</span>' + (a.email ? ' · ' + a.email : '') + (!a.is_active ? ' · <em>Inactive</em>' : '') + '</div></div></div>' +
+        '<div class="row-meta"><span class="role-pill" style="background:' + col + '22;color:' + col + '">' +
+          (ROLE_LABELS[a.role] || a.role) + '</span>' +
+          (a.email ? ' · ' + a.email : '') + (!a.is_active ? ' · <em>Inactive</em>' : '') +
+        '</div></div></div>' +
         '<div class="row-btns">' +
         '<button class="icon-btn" onclick="openEditAcct(\'' + a.id + '\',\'' + escQ(a.full_name || '') + '\',\'' + escQ(a.email || '') + '\',\'' + a.role + '\',\'sa\')">✏️</button>' +
         '<button class="icon-btn" onclick="resetPw(\'' + a.id + '\',\'' + escQ(a.username) + '\')">🔑</button>' +
@@ -779,10 +929,13 @@ async function addAdmin() {
   var email = (document.getElementById('ca-email').value || '').trim();
   var role  = document.getElementById('ca-role').value || 'admin';
   if (!name || !user || !pass) { showMsg('ca-msg', 'Name, username and password required.', 'err'); return; }
-  if (pass.length < 6)         { showMsg('ca-msg', 'Password must be at least 6 characters.', 'err'); return; }
+  if (pass.length < 6) { showMsg('ca-msg', 'Password must be at least 6 characters.', 'err'); return; }
   if (!/^[a-z0-9_]+$/.test(user)) { showMsg('ca-msg', 'Username: letters, numbers and underscores only.', 'err'); return; }
   try {
-    var r = await withTimeout(db.from('admin_users').insert({ username: user, password_hash: pass, full_name: name, email: email || null, role: role, company_id: S.admin.company_id, is_active: true }), 5000);
+    var r = await withTimeout(db.from('admin_users').insert({
+      username: user, password_hash: pass, full_name: name, email: email || null,
+      role: role, company_id: S.admin.company_id, is_active: true
+    }), 5000);
     if (r.error) { showMsg('ca-msg', r.error.message.includes('unique') ? 'Username already exists.' : r.error.message, 'err'); return; }
     showMsg('ca-msg', '✅ ' + (ROLE_LABELS[role] || role) + ' "@' + user + '" created!', 'ok');
     ['ca-name', 'ca-user', 'ca-pass', 'ca-email'].forEach(function(id) { document.getElementById(id).value = ''; });
@@ -809,21 +962,20 @@ async function loadSetup() {
     var wpR = await withTimeout(db.from('workplaces').select('*').eq('company_id', cid).limit(1), 5000);
     if (wpR.data && wpR.data[0]) {
       var w = wpR.data[0];
-      document.getElementById('wp-name').value   = w.name   || '';
-      document.getElementById('wp-addr').value   = w.address|| '';
+      document.getElementById('wp-name').value   = w.name      || '';
+      document.getElementById('wp-addr').value   = w.address   || '';
       document.getElementById('wp-lat').value    = w.latitude  || '';
       document.getElementById('wp-lng').value    = w.longitude || '';
       document.getElementById('wp-radius').value = w.radius_meters || 100;
     }
   } catch (e) {}
-  var code   = S.admin.co && S.admin.co.code;
-  var base   = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
-  var linkEl = document.getElementById('clockin-link');
-  if (linkEl) linkEl.textContent = code ? (base + 'index.html?c=' + code) : 'Company code not found.';
-  var kioskEl = document.getElementById('kiosk-link');
-  if (kioskEl) kioskEl.textContent = code ? (base + 'clockin.html?c=' + code) : 'Company code not found.';
+
+  // Worker Portal Link — single unified link: index.html?c=CODE
+  var code = S.admin.co && S.admin.co.code;
+  var base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
   var portalEl = document.getElementById('portal-link');
-  if (portalEl) portalEl.textContent = code ? (base + 'worker.html?c=' + code) : 'Company code not found.';
+  if (portalEl) portalEl.textContent = code ? (base + 'index.html?c=' + code) : 'Company code not found.';
+
   document.getElementById('my-name').value  = S.admin.full_name || '';
   document.getElementById('my-email').value = S.admin.email     || '';
 }
@@ -836,7 +988,7 @@ async function saveWorkplace() {
   if (!name || isNaN(lat) || isNaN(lng)) { showMsg('wp-msg', 'Name, Latitude and Longitude are required.', 'err'); return; }
   var cid = S.admin.company_id;
   try {
-    var exR = await withTimeout(db.from('workplaces').select('id').eq('company_id', cid).limit(1), 5000);
+    var exR     = await withTimeout(db.from('workplaces').select('id').eq('company_id', cid).limit(1), 5000);
     var payload = { name: name, address: addr, latitude: lat, longitude: lng, radius_meters: radius, company_id: cid };
     var r = exR.data && exR.data.length
       ? await withTimeout(db.from('workplaces').update(payload).eq('id', exR.data[0].id), 5000)
@@ -844,7 +996,9 @@ async function saveWorkplace() {
     if (r.error) { showMsg('wp-msg', 'Save failed: ' + r.error.message, 'err'); return; }
     showMsg('wp-msg', '✅ Workplace saved!', 'ok');
     var wpR = await withTimeout(db.from('workplaces').select('id').eq('company_id', cid).limit(1), 5000);
-    if (wpR.data && wpR.data[0]) await withTimeout(db.from('workers').update({ workplace_id: wpR.data[0].id }).eq('company_id', cid).is('workplace_id', null), 5000);
+    if (wpR.data && wpR.data[0]) {
+      await withTimeout(db.from('workers').update({ workplace_id: wpR.data[0].id }).eq('company_id', cid).is('workplace_id', null), 5000);
+    }
   } catch (e) { showMsg('wp-msg', 'Error: ' + e.message, 'err'); }
 }
 function detectLocation() {
@@ -862,32 +1016,18 @@ function detectLocation() {
       .catch(function() {});
   }, function() { toast('Could not get location — enter coordinates manually.'); });
 }
-function copyClockInLink() {
+function copyPortalLink() {
   var code = S.admin.co && S.admin.co.code;
   if (!code) { showMsg('link-msg', 'Company code not found.', 'err'); return; }
   var base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
   var link = base + 'index.html?c=' + code;
   navigator.clipboard.writeText(link)
-    .then(function() { showMsg('link-msg', '✅ Full app link copied!', 'ok'); })
-    .catch(function() { document.getElementById('clockin-link').textContent = link; showMsg('link-msg', 'Copy the link above manually.', 'ok'); });
-}
-function copyKioskLink() {
-  var code = S.admin.co && S.admin.co.code;
-  if (!code) { showMsg('link-msg', 'Company code not found.', 'err'); return; }
-  var base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
-  var link = base + 'clockin.html?c=' + code;
-  navigator.clipboard.writeText(link)
-    .then(function() { showMsg('link-msg', '✅ Kiosk link copied!', 'ok'); })
-    .catch(function() { document.getElementById('kiosk-link').textContent = link; showMsg('link-msg', 'Copy the link above manually.', 'ok'); });
-}
-function copyPortalLink() {
-  var code = S.admin.co && S.admin.co.code;
-  if (!code) { showMsg('link-msg', 'Company code not found.', 'err'); return; }
-  var base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
-  var link = base + 'worker.html?c=' + code;
-  navigator.clipboard.writeText(link)
     .then(function() { showMsg('link-msg', '✅ Worker Portal link copied!', 'ok'); })
-    .catch(function() { document.getElementById('portal-link').textContent = link; showMsg('link-msg', 'Copy the link above manually.', 'ok'); });
+    .catch(function() {
+      var el = document.getElementById('portal-link');
+      if (el) el.textContent = link;
+      showMsg('link-msg', 'Copy the link above manually.', 'ok');
+    });
 }
 async function saveProfile() {
   var name  = (document.getElementById('my-name').value  || '').trim();
@@ -1050,17 +1190,19 @@ async function saveEditCo() {
   } catch (e) { showMsg('eco-msg', 'Error: ' + e.message, 'err'); }
 }
 async function loadDevAccounts() {
-  var el = document.getElementById('dev-accounts-list');
+  var el        = document.getElementById('dev-accounts-list');
   var filterSel = document.getElementById('dev-filter-co');
-  el.innerHTML = '<div class="empty">Loading…</div>';
+  el.innerHTML  = '<div class="empty">Loading…</div>';
   if (filterSel.options.length <= 1) {
     try {
       var cosR = await withTimeout(db.from('companies').select('id,name').eq('is_active', true).order('name'), 5000);
-      filterSel.innerHTML = '<option value="">All Companies</option>' + (cosR.data || []).map(function(c) { return '<option value="' + c.id + '">' + c.name + '</option>'; }).join('');
+      filterSel.innerHTML = '<option value="">All Companies</option>' + (cosR.data || []).map(function(c) {
+        return '<option value="' + c.id + '">' + c.name + '</option>';
+      }).join('');
     } catch (e) {}
   }
   try {
-    var q = db.from('admin_users').select('*, co:companies(name,code)').neq('role', 'developer').order('full_name');
+    var q   = db.from('admin_users').select('*, co:companies(name,code)').neq('role', 'developer').order('full_name');
     var fco = filterSel.value;
     if (fco) q = q.eq('company_id', fco);
     var r = await withTimeout(q, 5000);
@@ -1071,7 +1213,10 @@ async function loadDevAccounts() {
       return '<div class="list-row">' +
         '<div class="row-info"><div class="av av-sm" style="background:' + col + '">' + initials(a.full_name || a.username) + '</div>' +
         '<div><div class="row-name">' + (a.full_name || a.username) + ' <small style="color:var(--muted)">@' + a.username + '</small></div>' +
-        '<div class="row-meta"><span class="role-pill" style="background:' + col + '22;color:' + col + '">' + (ROLE_LABELS[a.role] || a.role) + '</span> 🏢 ' + (a.co ? a.co.name : '—') + (!a.is_active ? ' · <em>Inactive</em>' : '') + '</div></div></div>' +
+        '<div class="row-meta"><span class="role-pill" style="background:' + col + '22;color:' + col + '">' +
+          (ROLE_LABELS[a.role] || a.role) + '</span> 🏢 ' + (a.co ? a.co.name : '—') +
+          (!a.is_active ? ' · <em>Inactive</em>' : '') +
+        '</div></div></div>' +
         '<div class="row-btns">' +
         '<button class="icon-btn" onclick="openEditAcct(\'' + a.id + '\',\'' + escQ(a.full_name || '') + '\',\'' + escQ(a.email || '') + '\',\'' + a.role + '\',\'dev\')">✏️</button>' +
         '<button class="icon-btn" onclick="resetPw(\'' + a.id + '\',\'' + escQ(a.username) + '\')">🔑</button>' +
@@ -1085,7 +1230,8 @@ function toggleAddDevAcct() {
   if (!p.classList.contains('hidden')) {
     withTimeout(db.from('companies').select('id,name').eq('is_active', true).order('name'), 5000)
       .then(function(r) {
-        document.getElementById('da-company').innerHTML = '<option value="">Select Company…</option>' + (r.data || []).map(function(c) { return '<option value="' + c.id + '">' + c.name + '</option>'; }).join('');
+        document.getElementById('da-company').innerHTML = '<option value="">Select Company…</option>' +
+          (r.data || []).map(function(c) { return '<option value="' + c.id + '">' + c.name + '</option>'; }).join('');
       }).catch(function() {});
     document.getElementById('da-name').focus();
   }
@@ -1097,12 +1243,15 @@ async function addDevAcct() {
   var user  = (document.getElementById('da-user').value  || '').trim().toLowerCase();
   var pass  = (document.getElementById('da-pass').value  || '').trim();
   var email = (document.getElementById('da-email').value || '').trim();
-  if (!cid)              { showMsg('da-msg', 'Select a company.', 'err'); return; }
+  if (!cid) { showMsg('da-msg', 'Select a company.', 'err'); return; }
   if (!name || !user || !pass) { showMsg('da-msg', 'Name, username and password required.', 'err'); return; }
-  if (pass.length < 6)   { showMsg('da-msg', 'Password must be at least 6 characters.', 'err'); return; }
+  if (pass.length < 6) { showMsg('da-msg', 'Password must be at least 6 characters.', 'err'); return; }
   if (!/^[a-z0-9_]+$/.test(user)) { showMsg('da-msg', 'Username: letters, numbers and underscores only.', 'err'); return; }
   try {
-    var r = await withTimeout(db.from('admin_users').insert({ username: user, password_hash: pass, full_name: name, email: email || null, role: role, company_id: cid, is_active: true }), 5000);
+    var r = await withTimeout(db.from('admin_users').insert({
+      username: user, password_hash: pass, full_name: name, email: email || null,
+      role: role, company_id: cid, is_active: true
+    }), 5000);
     if (r.error) { showMsg('da-msg', r.error.message.includes('unique') ? 'Username already exists.' : r.error.message, 'err'); return; }
     showMsg('da-msg', '✅ ' + (ROLE_LABELS[role] || role) + ' "@' + user + '" created!', 'ok');
     ['da-name', 'da-user', 'da-pass', 'da-email'].forEach(function(id) { document.getElementById(id).value = ''; });
@@ -1119,7 +1268,9 @@ async function loadDevWorkers() {
   if (sel.options.length <= 1) {
     try {
       var cosR = await withTimeout(db.from('companies').select('id,name').eq('is_active', true).order('name'), 5000);
-      sel.innerHTML = '<option value="">Select a company…</option>' + (cosR.data || []).map(function(c) { return '<option value="' + c.id + '">' + c.name + '</option>'; }).join('');
+      sel.innerHTML = '<option value="">Select a company…</option>' + (cosR.data || []).map(function(c) {
+        return '<option value="' + c.id + '">' + c.name + '</option>';
+      }).join('');
     } catch (e) {}
   }
   var cid = sel.value;
@@ -1134,7 +1285,10 @@ async function loadDevWorkers() {
       return '<div class="list-row">' +
         '<div class="row-info"><div class="av av-sm">' + initials(w.name) + '</div>' +
         '<div><div class="row-name">' + w.name + '</div>' +
-        '<div class="row-meta">' + w.employee_id + (w.job_title ? ' · ' + w.job_title : '') + (w.biometric_enabled ? ' · 🔏' : '') + (w.face_descriptor ? ' · 🤳' : '') + (!w.is_active ? ' · <em>Inactive</em>' : '') + '</div></div></div>' +
+        '<div class="row-meta">' + w.employee_id + (w.job_title ? ' · ' + w.job_title : '') +
+          (w.biometric_enabled ? ' · 🔏' : '') + (w.face_descriptor ? ' · 🤳' : '') +
+          (!w.is_active ? ' · <em>Inactive</em>' : '') +
+        '</div></div></div>' +
         '<div class="row-btns">' +
         '<button class="icon-btn" onclick="openEditWorker(\'' + w.id + '\')">✏️</button>' +
         '<button class="icon-btn" onclick="adminEnrollFace(\'' + w.id + '\',\'' + escQ(w.name) + '\',\'dev\')">🤳</button>' +
@@ -1153,8 +1307,10 @@ function loadDevSystem() {
   el.innerHTML =
     '<div class="info-row"><span class="info-lbl">Username</span><span>@' + S.admin.username + '</span></div>' +
     '<div class="info-row"><span class="info-lbl">Role</span><span style="color:var(--purple);font-weight:700">Developer</span></div>' +
-    '<div class="field" style="margin-top:12px"><label>Full Name</label><input id="dev-profile-name" type="text" class="input" value="' + (S.admin.full_name || '').replace(/"/g, '&quot;') + '" placeholder="Full Name"></div>' +
-    '<div class="field"><label>Email</label><input id="dev-profile-email" type="email" class="input" value="' + (S.admin.email || '').replace(/"/g, '&quot;') + '" placeholder="Email"></div>' +
+    '<div class="field" style="margin-top:12px"><label>Full Name</label>' +
+      '<input id="dev-profile-name" type="text" class="input" value="' + (S.admin.full_name || '').replace(/"/g, '&quot;') + '" placeholder="Full Name"></div>' +
+    '<div class="field"><label>Email</label>' +
+      '<input id="dev-profile-email" type="email" class="input" value="' + (S.admin.email || '').replace(/"/g, '&quot;') + '" placeholder="Email"></div>' +
     '<button class="btn btn-outline btn-full" onclick="saveDevProfile()" style="margin-top:4px">Save Profile</button>' +
     '<p class="msg hidden" id="dev-profile-msg"></p>';
 }
@@ -1204,12 +1360,17 @@ document.addEventListener('DOMContentLoaded', function() {
   // 1. Sync init from localStorage — instant, no Supabase needed
   try {
     var co = JSON.parse(localStorage.getItem('wc_company') || 'null');
-    if (co && co.id) { S.companyId = co.id; S.companyName = co.name; }
+    if (co && co.id) {
+      S.companyId   = co.id;
+      S.companyName = co.name;
+      S.companyCode = co.code;
+    }
   } catch (e) {}
   updateHomeUI();
 
-  // 2. Show home page immediately
+  // 2. Show home page immediately and start home clock
   showPg('home');
+  startHomeClock();
 
   // 3. Remove splash — visual fade at 1.5s, hard remove at 3.5s
   var splash = document.getElementById('splash');
@@ -1223,7 +1384,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   checkIOSInstall();
 
-  // 4. Background async: verify company from Supabase, restore worker session
+  // 4. Background async: verify company from Supabase + restore worker session
   (async function() {
     try { await withTimeout(initCompany(), 4000); } catch (e) {}
 
@@ -1234,8 +1395,22 @@ document.addEventListener('DOMContentLoaded', function() {
         db.from('workers').select('*, workplace:workplaces(*)').eq('id', savedId).eq('is_active', true).maybeSingle(),
         5000
       );
-      if (r.data) { S.worker = r.data; enterClockScreen(); }
-      else localStorage.removeItem('wc_worker_id');
+      if (r.data) {
+        S.worker = r.data;
+        // Update company info from worker if needed
+        if (!S.companyId && r.data.company_id) {
+          try {
+            var coR = await withTimeout(
+              db.from('companies').select('*').eq('id', r.data.company_id).maybeSingle(),
+              3000
+            );
+            if (coR.data) setCompany(coR.data, false);
+          } catch (e) {}
+        }
+        enterWorkerDashboard();
+      } else {
+        localStorage.removeItem('wc_worker_id');
+      }
     } catch (e) { localStorage.removeItem('wc_worker_id'); }
   })();
 });

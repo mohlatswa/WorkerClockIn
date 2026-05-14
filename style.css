@@ -12,7 +12,7 @@
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
 #app{max-width:480px;margin:0 auto;min-height:100vh}
 
-/* Splash — pointer-events:none so it NEVER blocks taps */
+/* Splash */
 #splash{position:fixed;inset:0;z-index:9999;pointer-events:none;background:linear-gradient(160deg,#1E3A8A,#2563EB);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-align:center;gap:8px;transition:opacity .4s}
 #splash h1{font-size:2.4rem;font-weight:800}
 #splash p{opacity:.75;font-size:.95rem}
@@ -29,7 +29,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .back{background:none;border:none;font-size:1.4rem;color:var(--blue);cursor:pointer;padding:2px 8px 2px 0;line-height:1}
 .topbar-dark .back{color:rgba(255,255,255,.8)}
 .content{flex:1;padding:16px;overflow-y:auto}
-.center-v{align-items:center;justify-content:center;gap:20px}
 
 /* Cards */
 .card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:18px;margin-bottom:14px}
@@ -56,8 +55,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .btn-row{display:flex;gap:10px;flex-wrap:wrap}
 .btn-logout{background:rgba(255,255,255,.15);color:#fff;border:none;padding:7px 14px;border-radius:var(--rsm);font-size:.85rem;font-weight:600;cursor:pointer}
 .btn-bio{width:100%;padding:14px;border-radius:var(--r);background:linear-gradient(135deg,var(--blue),var(--blue-d));color:#fff;border:none;font-size:.95rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
-.btn-link{background:none;border:none;color:var(--muted);font-size:.83rem;cursor:pointer;padding:4px 0;text-decoration:underline;display:block;width:100%;text-align:center}
-.admin-link{width:100%;margin-top:16px;padding:11px;background:transparent;border:1.5px solid rgba(255,255,255,.3);border-radius:50px;color:rgba(255,255,255,.8);font-size:.85rem;cursor:pointer;transition:all .2s}
+.admin-link{width:100%;margin-top:20px;padding:11px;background:transparent;border:1.5px solid rgba(255,255,255,.3);border-radius:50px;color:rgba(255,255,255,.75);font-size:.85rem;cursor:pointer;transition:all .2s}
 .admin-link:active{background:rgba(255,255,255,.1)}
 
 /* Messages */
@@ -68,30 +66,30 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .msg.ok{background:#D1FAE5;color:#065F46}
 .msg.err{background:#FEE2E2;color:#991B1B}
 
-/* Home */
-#pg-home{background:linear-gradient(160deg,#1E3A8A 0%,#2563EB 55%,#3B82F6 100%);justify-content:center;align-items:center;padding:32px 20px}
-.home-wrap{width:100%}
+/* ─── HOME PAGE ─────────────────────────────────────────── */
+#pg-home{background:linear-gradient(160deg,#1E3A8A 0%,#2563EB 60%,#3B82F6 100%);justify-content:center;align-items:center;padding:40px 24px 32px}
+.home-wrap{width:100%;max-width:360px;margin:0 auto;display:flex;flex-direction:column;align-items:center}
 .home-brand{text-align:center;margin-bottom:32px}
-.method-bio{width:100%;padding:16px 18px;border-radius:var(--r);background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.3);color:#fff;cursor:pointer;display:flex;align-items:center;gap:14px;margin-bottom:10px;text-align:left}
-.method-bio:active{opacity:.85}
-.mw-text{display:flex;flex-direction:column;gap:2px;flex:1}
-.mw-text strong{font-size:.95rem;color:#fff}
-.mw-text span{font-size:.8rem;color:rgba(255,255,255,.75)}
-.method-wide{width:100%;padding:14px 16px;border-radius:var(--r);background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.2);cursor:pointer;display:flex;align-items:center;gap:12px;text-align:left}
-.method-wide:active{opacity:.85}
-.tile-ico{font-size:1.6rem;flex-shrink:0}
-.chev{color:rgba(255,255,255,.6);font-size:1.4rem;margin-left:auto}
-.install-banner{background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.2);border-radius:var(--r);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
+.home-co-pill{display:inline-block;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);border-radius:50px;padding:5px 16px;color:#fff;font-size:.85rem;font-weight:600;margin-top:6px}
+.home-info-card{background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.2);border-radius:var(--r);padding:20px;text-align:center;width:100%;margin-bottom:20px}
+.home-btn-worker{width:100%;padding:18px 20px;border-radius:var(--r);background:#fff;border:none;cursor:pointer;display:flex;align-items:center;gap:14px;text-align:left;box-shadow:0 4px 20px rgba(0,0,0,.18);margin-bottom:14px;transition:transform .15s,box-shadow .15s}
+.home-btn-worker:active{transform:scale(.97);box-shadow:0 2px 10px rgba(0,0,0,.18)}
+.home-btn-text{display:flex;flex-direction:column;gap:3px;flex:1}
+.home-btn-text strong{font-size:1.05rem;font-weight:700;color:#1E3A8A}
+.home-btn-text span{font-size:.82rem;color:var(--muted)}
+.home-btn-chev{font-size:1.6rem;color:var(--blue);font-weight:300;margin-left:auto}
+#home-actions{width:100%}
+.install-banner{background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.2);border-radius:var(--r);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;width:100%}
 .install-banner>div{display:flex;flex-direction:column;gap:2px;color:#fff;font-size:.88rem}
 
-/* Face scan */
+/* ─── FACE SCAN ─────────────────────────────────────────── */
 .scan-bar{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:rgba(0,0,0,.5);backdrop-filter:blur(4px)}
 .scan-back{background:none;border:none;color:#fff;font-size:.95rem;font-weight:600;cursor:pointer;padding:4px 8px}
 .scan-bar span{color:#fff;font-weight:600;font-size:.95rem}
 .face-oval{width:200px;height:250px;border:3px solid rgba(255,255,255,.6);border-radius:50%;box-shadow:0 0 0 2000px rgba(0,0,0,.45);transition:border-color .3s}
 .face-oval.found{border-color:#10B981;box-shadow:0 0 0 2000px rgba(0,0,0,.45),0 0 24px rgba(16,185,129,.8)}
 
-/* Worker chip */
+/* ─── WORKER CHIP ───────────────────────────────────────── */
 .wchip{display:flex;align-items:center;gap:12px}
 .wname{font-weight:700;font-size:.95rem}
 .wid{font-size:.8rem;color:var(--muted)}
@@ -101,7 +99,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .av-md{width:44px;height:44px;font-size:.9rem}
 .av-sm{width:36px;height:36px;font-size:.75rem}
 
-/* PIN */
+/* ─── PIN NUMPAD ────────────────────────────────────────── */
 .pin-dots{display:flex;justify-content:center;gap:12px;margin-bottom:20px}
 .pdot{width:14px;height:14px;border-radius:50%;border:2px solid var(--border);transition:all .15s}
 .pdot.filled{background:var(--blue);border-color:var(--blue)}
@@ -111,26 +109,55 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .nk-fn{font-size:.85rem}
 .or-div{text-align:center;color:var(--muted);font-size:.8rem;margin:10px 0}
 
-/* Clock screen */
-.row-card{display:flex;align-items:center;justify-content:space-between;gap:10px}
+/* ─── WORKER DASHBOARD HEADER ───────────────────────────── */
+.worker-header{background:linear-gradient(135deg,#1E3A8A,#2563EB);padding:16px;position:sticky;top:0;z-index:10}
+.worker-header-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px}
+.wk-greeting{color:#fff;font-weight:700;font-size:.95rem}
+.wk-co-name{color:rgba(255,255,255,.75);font-size:.8rem;margin-top:2px}
+.worker-profile-row{display:flex;align-items:center;gap:12px}
+.wk-name{font-weight:700;font-size:1rem;color:#fff}
+.wk-meta{font-size:.8rem;color:rgba(255,255,255,.75);margin-top:2px}
+.wk-job{font-size:.8rem;color:rgba(255,255,255,.6);margin-top:1px}
+
+/* ─── BADGE ─────────────────────────────────────────────── */
 .badge{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:50px;font-size:.78rem;font-weight:700;flex-shrink:0}
-.badge-in{background:#D1FAE5;color:#065F46}
-.badge-out{background:#FEE2E2;color:#991B1B}
+.badge-in{background:rgba(16,185,129,.2);color:#A7F3D0;border:1px solid rgba(16,185,129,.4)}
+.badge-out{background:rgba(239,68,68,.15);color:#FCA5A5;border:1px solid rgba(239,68,68,.3)}
 .dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex-shrink:0}
+
+/* ─── CLOCK BUTTON ──────────────────────────────────────── */
 .clock-btn{width:100%;padding:20px;border-radius:var(--r);border:none;font-size:1.2rem;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:14px;transition:opacity .15s}
 .clock-btn:active{opacity:.85}
 .clk-in{background:linear-gradient(135deg,#059669,#10B981);color:#fff;box-shadow:0 4px 20px rgba(16,185,129,.4)}
 .clk-out{background:linear-gradient(135deg,#DC2626,#EF4444);color:#fff;box-shadow:0 4px 20px rgba(239,68,68,.4)}
 .clk-wait{background:var(--border);color:var(--muted);cursor:not-allowed}
+
+/* ─── TODAY'S RECORD ────────────────────────────────────── */
 .rec-row{display:flex;gap:8px}
 .rec-cell{flex:1;text-align:center;padding:8px;background:var(--bg);border-radius:var(--rsm)}
 .rlbl{display:block;font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
 .rval{font-size:1rem;font-weight:700}
+
+/* ─── LOCATION ──────────────────────────────────────────── */
 .checking{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:.88rem}
 .spin{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* Admin/Dev tabs */
+/* ─── 14-DAY HISTORY ────────────────────────────────────── */
+.hist-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0;border-bottom:1px solid var(--border)}
+.hist-row:last-child{border-bottom:none}
+.hist-left{flex:1;min-width:0}
+.hist-date{font-weight:700;font-size:.88rem;color:var(--text);margin-bottom:2px}
+.hist-times{font-size:.78rem;color:var(--muted)}
+.hist-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
+.hist-hrs{font-size:.85rem;font-weight:700;color:var(--blue)}
+.hist-method{font-size:.72rem;color:var(--muted);text-transform:capitalize}
+.hist-chip{font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:50px}
+.hist-chip-active{background:#D1FAE5;color:#065F46}
+.hist-chip-done{background:#F1F5F9;color:var(--muted)}
+.hist-chip-absent{background:#FEF3C7;color:#92400E}
+
+/* ─── ADMIN / DEV TABS ──────────────────────────────────── */
 .tabs{display:flex;background:#fff;border-bottom:2px solid var(--border);overflow-x:auto;scrollbar-width:none;position:sticky;top:0;z-index:9}
 .tabs::-webkit-scrollbar{display:none}
 .tab{flex-shrink:0;padding:12px 16px;border:none;background:none;font-size:.85rem;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s}
@@ -140,13 +167,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .sec-lbl{font-size:.78rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
 .tab-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 
-/* Stats */
+/* ─── STATS ─────────────────────────────────────────────── */
 .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
 .stat-card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:16px;text-align:center}
 .stat-val{font-size:2rem;font-weight:800;color:var(--blue)}
 .stat-lbl{font-size:.75rem;font-weight:600;color:var(--muted);margin-top:2px;text-transform:uppercase}
 
-/* Activity */
+/* ─── ACTIVITY ──────────────────────────────────────────── */
 .act-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)}
 .act-item:last-child{border-bottom:none}
 .act-name{font-weight:600;font-size:.9rem}
@@ -155,7 +182,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .tag-in{background:#D1FAE5;color:#065F46}
 .tag-out{background:#F1F5F9;color:var(--muted)}
 
-/* List rows */
+/* ─── LIST ROWS ─────────────────────────────────────────── */
 .list-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0;border-bottom:1px solid var(--border)}
 .list-row:last-child{border-bottom:none}
 .row-info{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
@@ -166,7 +193,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .icon-btn:active{background:var(--bg)}
 .role-pill{font-size:.72rem;font-weight:700;padding:2px 7px;border-radius:50px;display:inline-block}
 
-/* Attendance */
+/* ─── ATTENDANCE ────────────────────────────────────────── */
 .att-row{padding:10px 0;border-bottom:1px solid var(--border)}
 .att-row:last-child{border-bottom:none}
 .att-name{font-weight:600;font-size:.88rem;margin-bottom:4px}
@@ -178,19 +205,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .chip-hrs{background:#EFF6FF;color:#1D4ED8}
 .chip-mth{background:#F3E8FF;color:#6D28D9}
 
-/* Setup */
+/* ─── SETUP ─────────────────────────────────────────────── */
 .link-box{background:var(--bg);border:1.5px dashed var(--border);border-radius:var(--rsm);padding:10px 12px;font-size:.82rem;color:var(--muted);word-break:break-all}
 .info-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:.88rem}
 .info-row:last-child{border-bottom:none}
 .info-lbl{font-weight:600;color:var(--muted)}
 
-/* Success overlay */
+/* ─── SUCCESS OVERLAY ───────────────────────────────────── */
 .success-overlay{position:fixed;inset:0;z-index:8000;background:rgba(16,185,129,.92);display:flex;align-items:center;justify-content:center;pointer-events:none}
 .success-inner{text-align:center;padding:32px}
 .succ-icon{font-size:4rem;line-height:1;margin-bottom:12px}
 .succ-icon.out{font-size:3.5rem}
 
-/* Modals */
+/* ─── MODALS ────────────────────────────────────────────── */
 .modal-bd{position:fixed;inset:0;z-index:7000;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center}
 .modal-box{background:#fff;border-radius:var(--r) var(--r) 0 0;width:100%;max-width:480px;max-height:90vh;overflow-y:auto}
 .modal-hd{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:#fff;z-index:1}
@@ -198,5 +225,5 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .modal-close{background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);padding:2px 6px}
 .modal-ft{display:flex;gap:10px;padding:14px 18px;border-top:1px solid var(--border);position:sticky;bottom:0;background:#fff}
 
-/* Toast */
+/* ─── TOAST ─────────────────────────────────────────────── */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1E293B;color:#fff;padding:10px 20px;border-radius:50px;font-size:.88rem;z-index:9000;max-width:90%;text-align:center}

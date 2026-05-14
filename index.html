@@ -20,39 +20,36 @@
 
 <div id="app">
 
-<!-- HOME -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- PAGE 1: HOME                                           -->
+<!-- ═══════════════════════════════════════════════════════ -->
 <div id="pg-home" class="pg active">
   <div class="home-wrap">
     <div class="home-brand">
-      <span style="font-size:64px;display:block;margin-bottom:10px">⏱</span>
-      <h1 style="font-size:2.4rem;font-weight:800;color:#fff">WorkClock</h1>
-      <p id="home-co-name" style="color:rgba(255,255,255,.85);margin-top:4px;font-size:.95rem;min-height:1.2em"></p>
+      <span style="font-size:64px;display:block;margin-bottom:6px">⏱</span>
+      <h1 style="font-size:2.4rem;font-weight:800;color:#fff;margin-bottom:4px">WorkClock</h1>
+      <div id="home-live-clock" style="font-size:2.6rem;font-weight:800;color:#fff;letter-spacing:-1px;font-variant-numeric:tabular-nums;margin:8px 0 4px">--:--</div>
+      <div id="home-co-pill" class="home-co-pill hidden"></div>
     </div>
 
-    <div id="no-co-card" class="card center hidden" style="background:rgba(255,255,255,.15);border:none">
+    <div id="no-co-card" class="home-info-card hidden">
       <div style="font-size:2rem;margin-bottom:8px">🔗</div>
       <h3 style="color:#fff;margin-bottom:6px">No Employer Link</h3>
       <p style="color:rgba(255,255,255,.8);font-size:.88rem">Open the link your employer shared to clock in.</p>
     </div>
 
-    <div id="clock-methods" class="hidden">
-      <button class="method-wide" onclick="openFaceRecog()" style="background:linear-gradient(135deg,#065F46,#10B981);margin-bottom:10px">
-        <span class="tile-ico">🤳</span>
-        <span class="mw-text"><strong style="color:#fff">Face Recognition</strong><span style="color:rgba(255,255,255,.8)">Camera identifies you automatically</span></span>
-        <span class="chev">›</span>
-      </button>
-      <button class="method-bio" onclick="homeBiometric()">
-        <span style="font-size:1.6rem">🔏</span>
-        <span class="mw-text"><strong>Fingerprint / Face ID</strong><span>Tap to authenticate instantly</span></span>
-      </button>
-      <button class="method-wide" onclick="showPg('manual')" style="margin-top:10px">
-        <span class="tile-ico">👤</span>
-        <span class="mw-text"><strong>Enter Employee ID</strong><span>Type your ID and PIN</span></span>
-        <span class="chev">›</span>
+    <div id="home-actions" class="hidden">
+      <button class="home-btn-worker" onclick="showPg('wlogin')">
+        <span style="font-size:1.6rem">👤</span>
+        <span class="home-btn-text">
+          <strong>Worker Portal</strong>
+          <span>Sign in to clock in &amp; out</span>
+        </span>
+        <span class="home-btn-chev">›</span>
       </button>
     </div>
 
-    <button class="admin-link" onclick="showPg('admin-login')">🔧 Admin Panel</button>
+    <button class="admin-link" onclick="showPg('admin-login')">🔧 Admin</button>
 
     <div id="install-banner" class="install-banner hidden">
       <div><strong>📲 Install WorkClock</strong><span>Add to home screen</span></div>
@@ -65,7 +62,30 @@
   </div>
 </div>
 
-<!-- FACE SCAN -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- PAGE 2: WORKER LOGIN (Employee ID)                     -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="pg-wlogin" class="pg">
+  <header class="topbar"><button class="back" onclick="showPg('home')">&#8592;</button><span>Worker Sign In</span></header>
+  <div class="content">
+    <div class="card center">
+      <div style="font-size:2.4rem;margin-bottom:10px">👤</div>
+      <h2>Your Employee ID</h2>
+      <p class="sub" style="margin-bottom:16px">Check your ID card or ask your manager</p>
+      <div class="field">
+        <input id="inp-empid" type="text" class="input input-xl" placeholder="e.g. EMP001"
+               autocomplete="off" autocapitalize="characters"
+               onkeydown="if(event.key==='Enter')findWorker()">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="findWorker()">Continue →</button>
+      <p class="err hidden" id="err-empid" style="margin-top:8px"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- PAGE 3: FACE SCAN (full-page video)                    -->
+<!-- ═══════════════════════════════════════════════════════ -->
 <div id="pg-face-scan" class="pg">
   <video id="face-video" playsinline muted style="position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0"></video>
   <div style="position:fixed;inset:0;z-index:1;display:flex;flex-direction:column">
@@ -81,26 +101,9 @@
   </div>
 </div>
 
-<!-- MANUAL ID ENTRY -->
-<div id="pg-manual" class="pg">
-  <header class="topbar"><button class="back" onclick="showPg('home')">&#8592;</button><span>Enter Employee ID</span></header>
-  <div class="content">
-    <div class="card center">
-      <div style="font-size:2.4rem;margin-bottom:10px">👤</div>
-      <h2>Your Employee ID</h2>
-      <p class="sub">Check your ID card or ask your manager</p>
-      <div class="field" style="margin-top:16px">
-        <input id="inp-empid" type="text" class="input input-xl" placeholder="e.g. EMP001"
-               autocomplete="off" autocapitalize="characters"
-               onkeydown="if(event.key==='Enter')findWorker()">
-      </div>
-      <button class="btn btn-primary btn-full" onclick="findWorker()">Continue →</button>
-      <p class="err hidden" id="err-empid" style="margin-top:8px"></p>
-    </div>
-  </div>
-</div>
-
-<!-- PIN AUTH -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- PAGE 4: PIN AUTH                                       -->
+<!-- ═══════════════════════════════════════════════════════ -->
 <div id="pg-auth" class="pg">
   <header class="topbar"><button class="back" onclick="backFromAuth()">&#8592;</button><span>Verify Identity</span></header>
   <div class="content">
@@ -137,28 +140,38 @@
   </div>
 </div>
 
-<!-- CLOCK SCREEN -->
-<div id="pg-clock" class="pg">
-  <header class="topbar topbar-dark topbar-flex">
-    <span id="clock-greeting" style="font-weight:600;font-size:.95rem">Hello!</span>
-    <button class="btn-logout" onclick="logoutWorker()">Logout</button>
-  </header>
-  <div class="content">
-    <div class="card row-card">
-      <div class="wchip">
-        <div class="av av-md" id="clk-av">JD</div>
-        <div>
-          <div class="wname" id="clk-name">John Doe</div>
-          <div class="wid"   id="clk-empid">EMP001</div>
-          <div class="wjob"  id="clk-job"></div>
-        </div>
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- PAGE 5: WORKER DASHBOARD                               -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="pg-worker" class="pg">
+  <header class="worker-header">
+    <div class="worker-header-top">
+      <div>
+        <div id="wk-greeting" class="wk-greeting">Good morning!</div>
+        <div id="wk-co-name" class="wk-co-name"></div>
       </div>
-      <div id="clk-badge" class="badge badge-out"><span class="dot"></span> Clocked Out</div>
+      <button class="btn-logout" onclick="logoutWorker()">Sign Out</button>
     </div>
+    <div class="worker-profile-row">
+      <div class="av av-lg" id="wk-av">JD</div>
+      <div style="flex:1;min-width:0">
+        <div class="wk-name" id="wk-name">John Doe</div>
+        <div class="wk-meta" id="wk-empid">EMP001</div>
+        <div class="wk-job"  id="wk-job"></div>
+      </div>
+      <div id="wk-badge" class="badge badge-out"><span class="dot"></span> Clocked Out</div>
+    </div>
+  </header>
+
+  <div class="content" id="wk-content">
+
+    <!-- Live Clock Card -->
     <div class="card" style="text-align:center">
       <div id="live-time" style="font-size:2.6rem;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-1px">--:--:--</div>
-      <div id="live-date" style="color:var(--muted);font-size:.88rem;margin-top:4px">—</div>
+      <div id="live-date" style="color:var(--muted);font-size:.88rem;margin-top:4px"></div>
     </div>
+
+    <!-- Location Card -->
     <div class="card" id="loc-card">
       <div class="sec-lbl">📍 Location</div>
       <div id="loc-status"><div class="checking"><div class="spin"></div> Getting your location…</div></div>
@@ -174,34 +187,51 @@
       </ol>
       <button class="btn btn-primary btn-full" onclick="retryLocation()">🔄 Retry</button>
     </div>
+
+    <!-- Clock In/Out Button -->
     <button id="clk-btn" class="clock-btn clk-wait" onclick="clockAction()" disabled>
       <span id="clk-icon">⏳</span>
       <span id="clk-label">Checking Location…</span>
     </button>
+
+    <!-- Today's Record -->
     <div class="card" id="today-card" style="display:none">
       <div class="sec-lbl">Today's Record</div>
       <div class="rec-row">
-        <div class="rec-cell"><span class="rlbl">Clock In</span><span id="rec-in"  class="rval" style="color:var(--green)">--:--</span></div>
+        <div class="rec-cell"><span class="rlbl">Clock In</span> <span id="rec-in"  class="rval" style="color:var(--green)">--:--</span></div>
         <div class="rec-cell"><span class="rlbl">Clock Out</span><span id="rec-out" class="rval" style="color:var(--red)">--:--</span></div>
-        <div class="rec-cell"><span class="rlbl">Hours</span><span id="rec-hrs" class="rval">--</span></div>
+        <div class="rec-cell"><span class="rlbl">Hours</span>    <span id="rec-hrs" class="rval">--</span></div>
       </div>
     </div>
+
+    <!-- 14-Day History -->
+    <div class="card" id="history-card" style="display:none">
+      <div class="sec-lbl" style="margin-bottom:12px">14-Day Attendance</div>
+      <div id="history-list"></div>
+    </div>
+
+    <!-- Biometric Registration (optional) -->
     <div class="card" id="bio-reg-card" style="display:none">
       <div class="sec-lbl">Optional: Fingerprint / Face ID</div>
       <p class="sub" style="margin-bottom:12px">Register for one-tap clock-in next time.</p>
       <button class="btn-bio" onclick="workerRegBio()">🔏 Register Fingerprint / Face ID</button>
       <p class="msg hidden" id="bio-reg-msg"></p>
     </div>
+
+    <!-- Face Registration (optional) -->
     <div class="card" id="face-reg-card" style="display:none">
       <div class="sec-lbl">Optional: Face Recognition</div>
       <p class="sub" style="margin-bottom:12px">Register your face so the camera can identify you.</p>
       <button class="btn-bio" style="background:linear-gradient(135deg,#10B981,#059669)" onclick="workerEnrollFace()">🤳 Register My Face</button>
       <p class="msg hidden" id="face-reg-msg"></p>
     </div>
+
   </div>
 </div>
 
-<!-- ADMIN LOGIN -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- PAGE 6: ADMIN LOGIN                                    -->
+<!-- ═══════════════════════════════════════════════════════ -->
 <div id="pg-admin-login" class="pg">
   <header class="topbar"><button class="back" onclick="showPg('home')">&#8592;</button><span>Admin Login</span></header>
   <div class="content">
@@ -225,10 +255,15 @@
   </div>
 </div>
 
-<!-- ADMIN PANEL -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- PAGE 7: ADMIN PANEL                                    -->
+<!-- ═══════════════════════════════════════════════════════ -->
 <div id="pg-admin" class="pg">
   <header class="topbar topbar-dark topbar-flex">
-    <div><div style="font-weight:700">⏱ WorkClock Admin</div><div id="admin-co-lbl" style="font-size:.78rem;opacity:.8"></div></div>
+    <div>
+      <div style="font-weight:700">⏱ WorkClock Admin</div>
+      <div id="admin-co-lbl" style="font-size:.78rem;opacity:.8"></div>
+    </div>
     <button class="btn-logout" onclick="adminLogout()">Logout</button>
   </header>
   <nav class="tabs" id="admin-tabs">
@@ -240,6 +275,7 @@
   </nav>
   <div class="content">
 
+    <!-- Dashboard Tab -->
     <div id="a-dash" class="tab-pane active">
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-val" id="s-present">--</div><div class="stat-lbl">Present Today</div></div>
@@ -251,6 +287,7 @@
       <div id="dash-activity"><div class="empty">Loading…</div></div>
     </div>
 
+    <!-- Workers Tab -->
     <div id="a-workers" class="tab-pane">
       <div class="tab-bar">
         <span class="sec-lbl">Workers</span>
@@ -271,6 +308,7 @@
       <div id="workers-list"><div class="empty">Loading…</div></div>
     </div>
 
+    <!-- Attendance Tab -->
     <div id="a-att" class="tab-pane">
       <div class="card" style="margin-bottom:12px">
         <div class="sec-lbl" style="margin-bottom:10px">🔍 Filter Records</div>
@@ -301,6 +339,7 @@
       <div id="att-list"><div class="empty">Select filters and tap View Report</div></div>
     </div>
 
+    <!-- Admins Tab (super_admin only) -->
     <div id="a-admins" class="tab-pane">
       <div class="tab-bar">
         <span class="sec-lbl">Company Admins</span>
@@ -327,6 +366,7 @@
       <div id="co-admins-list"><div class="empty">Loading…</div></div>
     </div>
 
+    <!-- Setup Tab -->
     <div id="a-setup" class="tab-pane">
       <div class="card">
         <h4>Workplace Location</h4>
@@ -347,20 +387,15 @@
         <button class="btn btn-primary btn-full" onclick="saveWorkplace()">Save Workplace</button>
         <p class="msg hidden" id="wp-msg"></p>
       </div>
+
       <div class="card">
-        <h4>📎 Worker Clock-In Links</h4>
-        <p class="sub" style="margin-bottom:10px">Share the <strong>Worker Portal</strong> link with workers — they sign in once and stay signed in.</p>
-        <label style="font-size:.8rem;color:var(--muted);font-weight:600;display:block;margin-bottom:4px">WORKER PORTAL (Recommended)</label>
+        <h4>📎 Worker Portal Link</h4>
+        <p class="sub" style="margin-bottom:10px">Share this link with workers — they sign in once and stay signed in.</p>
         <div class="link-box" id="portal-link">Loading…</div>
-        <button class="btn btn-primary btn-full" style="margin-top:8px" onclick="copyPortalLink()">📋 Copy Worker Portal Link</button>
-        <label style="font-size:.8rem;color:var(--muted);font-weight:600;display:block;margin:14px 0 4px">KIOSK (Shared device, no login)</label>
-        <div class="link-box" id="kiosk-link">Loading…</div>
-        <button class="btn btn-outline btn-full" style="margin-top:8px" onclick="copyKioskLink()">📋 Copy Kiosk Link</button>
-        <label style="font-size:.8rem;color:var(--muted);font-weight:600;display:block;margin:14px 0 4px">FULL APP (Admin + Worker)</label>
-        <div class="link-box" id="clockin-link">Loading…</div>
-        <button class="btn btn-outline btn-full" style="margin-top:8px" onclick="copyClockInLink()">📋 Copy Full App Link</button>
+        <button class="btn btn-primary btn-full" style="margin-top:10px" onclick="copyPortalLink()">📋 Copy Worker Portal Link</button>
         <p class="msg hidden" id="link-msg"></p>
       </div>
+
       <div class="card">
         <h4>My Profile</h4>
         <div class="field"><label>Full Name</label><input id="my-name"  type="text"  class="input"></div>
@@ -379,7 +414,9 @@
   </div>
 </div>
 
-<!-- DEVELOPER PANEL -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- PAGE 8: DEVELOPER PANEL                               -->
+<!-- ═══════════════════════════════════════════════════════ -->
 <div id="pg-developer" class="pg">
   <header class="topbar topbar-dark topbar-flex">
     <span style="font-weight:700">⚙ Developer Panel</span>
@@ -524,7 +561,7 @@
       <input type="hidden" id="eac-ctx">
       <div class="field"><label>Full Name *</label><input id="eac-name"  type="text"  class="input"></div>
       <div class="field"><label>Email</label>      <input id="eac-email" type="email" class="input"></div>
-      <div class="field" id="eac-role-wrap" class="hidden">
+      <div class="field" id="eac-role-wrap">
         <label>Role</label>
         <select id="eac-role" class="input">
           <option value="super_admin">Super Admin</option>

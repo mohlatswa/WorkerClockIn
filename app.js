@@ -1358,6 +1358,13 @@ function checkIOSInstall() {
 
 // ── Bootstrap ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  // Sync init from localStorage — no Supabase call needed, shows correct home state immediately
+  try {
+    const saved = localStorage.getItem('wc_company');
+    if (saved) { const co=JSON.parse(saved); S.companyId=co.id; S.companyName=co.name; }
+  } catch {}
+  updateHomeUI();
+
   // Remove splash after 1.1 s — do NOT wait for window.load (CDN scripts can delay it)
   const splash = document.getElementById('splash');
   if (splash) {
@@ -1365,6 +1372,8 @@ document.addEventListener('DOMContentLoaded', () => {
       splash.style.opacity = '0';
       setTimeout(() => { splash.style.display = 'none'; }, 350);
     }, 1100);
+    // Hard fallback: force-remove after 3 s in case something delays the first timer
+    setTimeout(() => { splash.style.display = 'none'; }, 3000);
   }
 
   checkIOSInstall();

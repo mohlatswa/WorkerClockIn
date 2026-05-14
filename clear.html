@@ -30,6 +30,7 @@
     for (var r of regs) { await r.unregister(); }
     var keys = await caches.keys();
     for (var k of keys) { await caches.delete(k); }
+    localStorage.removeItem('wc_worker_id');
     msg.textContent = 'Done! Loading the app…';
   } catch (e) {
     msg.textContent = 'Redirecting…';

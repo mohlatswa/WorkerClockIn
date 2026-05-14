@@ -420,11 +420,9 @@ async function clockAction() {
     if (action === 'in') {
       var ins = await withTimeout(db.from('attendance').insert({
         worker_id:           S.worker.id,
-        company_id:          S.worker.company_id,
         clock_in_time:       new Date().toISOString(),
         auth_method:         S.authMethod,
         status:              'active',
-        workplace_id:        S.worker.workplace_id || null,
         clock_in_latitude:   S.userLoc ? S.userLoc.latitude  : null,
         clock_in_longitude:  S.userLoc ? S.userLoc.longitude : null
       }).select().single(), 8000);

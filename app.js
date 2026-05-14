@@ -243,7 +243,28 @@ async function enterWorkerDashboard() {
   document.getElementById('wk-name').textContent  = w.name;
   document.getElementById('wk-empid').textContent = w.employee_id;
   document.getElementById('wk-job').textContent   = w.job_title || '';
-  document.getElementById('wk-co-name').textContent = S.companyName || '';
+
+  // Always resolve company name from the worker's own company_id — not URL context
+  var coName = '';
+  if (w.company_id) {
+    if (w.company_id === S.companyId && S.companyName) {
+      coName = S.companyName;
+    } else {
+      try {
+        var coR = await withTimeout(
+          db.from('companies').select('id,name,code').eq('id', w.company_id).maybeSingle(), 3000
+        );
+        if (coR.data) {
+          coName        = coR.data.name;
+          S.companyId   = coR.data.id;
+          S.companyName = coR.data.name;
+          S.companyCode = coR.data.code;
+          localStorage.setItem('wc_company', JSON.stringify(coR.data));
+        }
+      } catch (e) {}
+    }
+  }
+  document.getElementById('wk-co-name').textContent = coName;
 
   var hr = new Date().getHours();
   document.getElementById('wk-greeting').textContent =
@@ -1395,16 +1416,7 @@ document.addEventListener('DOMContentLoaded', function() {
       );
       if (r.data) {
         S.worker = r.data;
-        // Update company info from worker if needed
-        if (!S.companyId && r.data.company_id) {
-          try {
-            var coR = await withTimeout(
-              db.from('companies').select('*').eq('id', r.data.company_id).maybeSingle(),
-              3000
-            );
-            if (coR.data) setCompany(coR.data, false);
-          } catch (e) {}
-        }
+        // enterWorkerDashboard always resolves company from worker.company_id
         enterWorkerDashboard();
       } else {
         localStorage.removeItem('wc_worker_id');

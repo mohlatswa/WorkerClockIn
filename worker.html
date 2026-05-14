@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#1E40AF">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <title>WorkClock — Worker Portal</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue: #2563EB; --dblue: #1E3A8A; --green: #059669; --red: #DC2626;
+      --purple: #7C3AED; --amber: #D97706; --muted: #6B7280; --border: #E5E7EB;
+      --card: #fff; --bg: #F3F4F6;
+    }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); }
+
+    /* ── Views ── */
+    .view { display: none; min-height: 100vh; flex-direction: column; }
+    .view.on { display: flex; }
+
+    /* ════════════════════════════════════
+       SIGN-IN VIEW
+    ════════════════════════════════════ */
+    #v-signin {
+      background: linear-gradient(160deg, #1E3A8A 0%, #2563EB 100%);
+      align-items: center; justify-content: center; padding: 24px 20px; text-align: center;
+    }
+    .si-brand { margin-bottom: 28px; }
+    .si-brand .ico { font-size: 56px; display: block; margin-bottom: 10px; }
+    .si-brand h1 { color: #fff; font-size: 2rem; font-weight: 800; }
+    .si-brand p  { color: rgba(255,255,255,.7); font-size: .9rem; margin-top: 4px; }
+    .si-card { background: #fff; border-radius: 20px; padding: 24px 20px; width: 100%; max-width: 400px; }
+    .si-card h2 { font-size: 1.1rem; font-weight: 700; color: #111827; margin-bottom: 4px; }
+    .si-card .sub { font-size: .85rem; color: var(--muted); margin-bottom: 18px; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: .82rem; font-weight: 600; color: #374151; margin-bottom: 5px; }
+    .inp { width: 100%; padding: 13px 14px; border: 2px solid var(--border); border-radius: 12px; font-size: 1rem; outline: none; transition: border-color .2s; }
+    .inp:focus { border-color: var(--blue); }
+    .inp-xl { font-size: 1.5rem; font-weight: 700; letter-spacing: 3px; text-align: center; text-transform: uppercase; padding: 15px 14px; }
+    .btn-primary { width: 100%; padding: 14px; background: linear-gradient(135deg,#1E40AF,#2563EB); color: #fff; font-size: 1rem; font-weight: 700; border: none; border-radius: 12px; cursor: pointer; transition: opacity .15s; }
+    .btn-primary:active { opacity: .85; }
+    .btn-primary:disabled { opacity: .5; cursor: default; }
+    .or-row { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: .82rem; margin: 14px 0; }
+    .or-row::before, .or-row::after { content:''; flex:1; height:1px; background:var(--border); }
+    .btn-method { width: 100%; padding: 13px; border: 2px solid var(--border); background: #fff; color: #111827; font-size: .95rem; font-weight: 600; border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; transition: border-color .15s, background .15s; }
+    .btn-method:hover { border-color: var(--blue); background: #EFF6FF; }
+    .btn-method:active { opacity: .8; }
+    .btn-face-si { background: linear-gradient(135deg,#065F46,#10B981); color: #fff; border-color: transparent; }
+    .btn-bio-si  { background: linear-gradient(135deg,#1E40AF,#4F46E5); color: #fff; border-color: transparent; }
+    .err-msg { color: var(--red); font-size: .85rem; text-align: center; min-height: 1.2em; margin-top: 8px; }
+
+    /* ── PIN view inside sign-in ── */
+    #v-pin {
+      background: linear-gradient(160deg, #1E3A8A 0%, #2563EB 100%);
+      align-items: center; justify-content: flex-start; padding: 0;
+    }
+    .pin-hd { width: 100%; background: linear-gradient(135deg,#1E3A8A,#2563EB); padding: 20px 20px 24px; position: relative; border-radius: 0 0 24px 24px; }
+    .back-btn { position: absolute; top: 16px; left: 16px; background: rgba(255,255,255,.2); border: none; color: #fff; width: 36px; height: 36px; border-radius: 50%; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .wchip { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,.18); border-radius: 14px; padding: 12px 14px; }
+    .wchip-av { width: 46px; height: 46px; border-radius: 50%; background: rgba(255,255,255,.3); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: 800; color: #fff; flex-shrink: 0; }
+    .wchip-name { color: #fff; font-weight: 700; font-size: .98rem; }
+    .wchip-sub  { color: rgba(255,255,255,.65); font-size: .78rem; margin-top: 2px; }
+    .pin-body { flex: 1; background: var(--bg); width: 100%; padding: 20px 20px 16px; display: flex; flex-direction: column; align-items: center; gap: 14px; overflow-y: auto; }
+    .pin-lbl { color: var(--muted); font-size: .9rem; }
+    .dots { display: flex; gap: 14px; }
+    .dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #9CA3AF; background: transparent; transition: all .12s; }
+    .dot.f { background: var(--dblue); border-color: var(--dblue); }
+    .btn-bio-np { width: 100%; padding: 13px; background: linear-gradient(135deg,#1E40AF,#4F46E5); color: #fff; font-size: .95rem; font-weight: 600; border: none; border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .numpad { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; width: 100%; max-width: 310px; }
+    .nk { padding: 17px; background: #fff; border: 1px solid var(--border); border-radius: 12px; font-size: 1.4rem; font-weight: 700; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,.06); transition: all .1s; }
+    .nk:active { background: #F3F4F6; transform: scale(.94); }
+    .nk-fn { font-size: .88rem; font-weight: 600; color: var(--muted); }
+
+    /* ════════════════════════════════════
+       DASHBOARD VIEW
+    ════════════════════════════════════ */
+    #v-dash { background: var(--bg); }
+    .dash-hd {
+      background: linear-gradient(135deg,#1E3A8A,#2563EB);
+      padding: 16px 18px 20px;
+    }
+    .dash-hd-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .dash-brand { color: #fff; font-size: 1rem; font-weight: 800; }
+    .dash-co { color: rgba(255,255,255,.65); font-size: .78rem; margin-top: 1px; }
+    .btn-logout { background: rgba(255,255,255,.18); border: none; color: #fff; padding: 7px 14px; border-radius: 20px; font-size: .82rem; cursor: pointer; font-weight: 600; }
+    .btn-logout:active { opacity: .75; }
+    .profile-card { background: rgba(255,255,255,.16); border-radius: 16px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; }
+    .profile-av { width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,.3); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; font-weight: 800; color: #fff; flex-shrink: 0; }
+    .profile-name { color: #fff; font-size: 1.05rem; font-weight: 700; }
+    .profile-sub  { color: rgba(255,255,255,.65); font-size: .8rem; margin-top: 2px; }
+    .profile-badge { display: inline-block; margin-top: 5px; padding: 2px 10px; border-radius: 12px; font-size: .73rem; font-weight: 700; }
+    .badge-in  { background: #059669; color: #fff; }
+    .badge-out { background: rgba(255,255,255,.22); color: rgba(255,255,255,.9); }
+
+    .dash-body { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+
+    /* time card */
+    .time-card { background: #fff; border-radius: 16px; padding: 18px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+    .live-time { font-size: 2.8rem; font-weight: 800; color: #111827; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
+    .live-date { color: var(--muted); font-size: .85rem; margin-top: 4px; }
+
+    /* location card */
+    .loc-card { background: #fff; border-radius: 16px; padding: 14px 16px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+    .card-lbl { font-size: .75rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+    .checking { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .88rem; }
+
+    /* big clock button */
+    .clk-btn {
+      width: 100%; padding: 20px; border: none; border-radius: 18px;
+      font-size: 1.25rem; font-weight: 800; cursor: pointer; letter-spacing: .3px;
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+      transition: opacity .15s, transform .1s;
+    }
+    .clk-btn:active { transform: scale(.97); }
+    .clk-btn:disabled { opacity: .55; cursor: default; transform: none; }
+    .clk-in  { background: linear-gradient(135deg,#059669,#10B981); color: #fff; box-shadow: 0 6px 20px rgba(5,150,105,.35); }
+    .clk-out { background: linear-gradient(135deg,#DC2626,#EF4444); color: #fff; box-shadow: 0 6px 20px rgba(220,38,38,.3); }
+    .clk-wait{ background: #E5E7EB; color: #9CA3AF; }
+
+    /* record card */
+    .rec-card { background: #fff; border-radius: 16px; padding: 14px 16px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+    .rec-row  { display: flex; gap: 8px; }
+    .rec-cell { flex: 1; text-align: center; }
+    .rec-lbl  { font-size: .73rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .3px; display: block; margin-bottom: 4px; }
+    .rec-val  { font-size: 1rem; font-weight: 700; color: #111827; }
+
+    /* history */
+    .hist-card { background: #fff; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.06); overflow: hidden; }
+    .hist-hd { padding: 14px 16px 0; display: flex; align-items: center; justify-content: space-between; }
+    .hist-hd span { font-size: .75rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .hist-row { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .hist-row:first-child { border-top: none; }
+    .hist-date { font-size: .82rem; font-weight: 600; color: #374151; }
+    .hist-times { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+    .hist-right { text-align: right; flex-shrink: 0; }
+    .hist-hrs { font-size: .9rem; font-weight: 700; color: #111827; }
+    .hist-method { font-size: .72rem; color: var(--muted); margin-top: 2px; text-transform: capitalize; }
+    .chip-status { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: .7rem; font-weight: 700; }
+    .chip-active { background: #D1FAE5; color: #065F46; }
+    .chip-done   { background: #F3F4F6; color: #374151; }
+    .hist-empty  { padding: 20px 16px; color: var(--muted); font-size: .88rem; text-align: center; }
+
+    /* enrol cards */
+    .enrol-card { background: #fff; border-radius: 16px; padding: 14px 16px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+    .enrol-card p { font-size: .85rem; color: var(--muted); margin: 6px 0 12px; }
+    .btn-enrol { width: 100%; padding: 12px; border: none; border-radius: 12px; cursor: pointer; font-size: .92rem; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn-enrol-bio  { background: linear-gradient(135deg,#1E40AF,#4F46E5); color: #fff; }
+    .btn-enrol-face { background: linear-gradient(135deg,#065F46,#10B981); color: #fff; }
+    .msg-inline { font-size: .82rem; min-height: 1.2em; margin-top: 8px; text-align: center; }
+    .msg-ok  { color: var(--green); }
+    .msg-err { color: var(--red); }
+
+    /* loc blocked card */
+    .loc-blocked { background: #FEF2F2; border-radius: 16px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.06); text-align: center; }
+    .loc-blocked h3 { font-size: 1rem; font-weight: 700; margin-bottom: 6px; }
+    .loc-blocked p  { font-size: .85rem; color: var(--muted); margin-bottom: 12px; }
+    .btn-retry { padding: 10px 20px; background: var(--blue); color: #fff; border: none; border-radius: 10px; font-size: .9rem; font-weight: 600; cursor: pointer; }
+
+    /* success overlay */
+    .succ-ov { position: fixed; inset: 0; z-index: 300; display: flex; align-items: center; justify-content: center; text-align: center; opacity: 0; pointer-events: none; transition: opacity .3s; }
+    .succ-ov.show { opacity: 1; pointer-events: auto; }
+    .succ-ov.clk-in  { background: linear-gradient(160deg,#065F46,#10B981); }
+    .succ-ov.clk-out { background: linear-gradient(160deg,#5B21B6,#7C3AED); }
+    .succ-inner .ico { font-size: 5rem; display: block; margin-bottom: 12px; }
+    .succ-inner h2 { color: #fff; font-size: 2rem; font-weight: 800; }
+    .succ-inner p  { color: rgba(255,255,255,.8); font-size: 1rem; margin-top: 6px; }
+
+    /* Face overlay */
+    #face-ov { display: none; position: fixed; inset: 0; z-index: 400; background: #000; flex-direction: column; }
+    #face-ov.on { display: flex; }
+    #face-vid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .face-ui { position: absolute; inset: 0; display: flex; flex-direction: column; }
+    .face-top { background: linear-gradient(to bottom,rgba(0,0,0,.7),transparent); padding: 18px 20px; display: flex; align-items: center; gap: 12px; }
+    .face-top button { background: rgba(255,255,255,.2); border: none; color: #fff; padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: .9rem; }
+    .face-oval { width: 200px; height: 260px; border: 3px solid rgba(255,255,255,.65); border-radius: 50%; margin: auto; }
+    .face-oval.found { border-color: #10B981; box-shadow: 0 0 0 6px rgba(16,185,129,.35); }
+    .face-status { background: linear-gradient(to top,rgba(0,0,0,.7),transparent); padding: 24px; text-align: center; color: #fff; font-size: .9rem; }
+
+    /* Face enrol modal */
+    .modal-bd { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 500; align-items: flex-end; justify-content: center; }
+    .modal-bd.on { display: flex; }
+    .modal-box { background: #fff; border-radius: 20px 20px 0 0; width: 100%; max-width: 500px; overflow: hidden; }
+    .modal-hd { padding: 16px 18px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+    .modal-hd h3 { font-size: 1rem; font-weight: 700; }
+    .modal-close { background: none; border: none; font-size: 1.2rem; cursor: pointer; color: var(--muted); }
+    .modal-ft { padding: 14px 18px; display: flex; gap: 10px; border-top: 1px solid var(--border); }
+    .btn-outline { flex: 1; padding: 12px; background: none; border: 2px solid var(--border); border-radius: 12px; font-size: .95rem; font-weight: 600; cursor: pointer; color: #374151; }
+
+    /* Spinner */
+    .spin { width: 18px; height: 18px; border: 3px solid rgba(0,0,0,.1); border-top-color: var(--blue); border-radius: 50%; animation: rot .65s linear infinite; display: inline-block; vertical-align: middle; }
+    .spin-w { border-color: rgba(255,255,255,.25); border-top-color: #fff; }
+    @keyframes rot { to { transform: rotate(360deg); } }
+
+    .empty { padding: 20px; text-align: center; color: var(--muted); font-size: .88rem; }
+  </style>
+</head>
+<body>
+
+<!-- ══ SIGN IN ═══════════════════════════════════════════ -->
+<div id="v-signin" class="view on">
+  <div class="si-brand">
+    <span class="ico">⏱</span>
+    <h1>WorkClock</h1>
+    <p id="si-co-name">Worker Portal</p>
+  </div>
+  <div class="si-card">
+    <h2>Sign in</h2>
+    <p class="sub">Enter your Employee ID to access your portal</p>
+    <div class="field">
+      <label>Employee ID</label>
+      <input id="si-empid" type="text" class="inp inp-xl" placeholder="EMP001"
+             autocomplete="off" autocapitalize="characters"
+             oninput="this.value=this.value.toUpperCase()"
+             onkeydown="if(event.key==='Enter')siFind()">
+    </div>
+    <button class="btn-primary" id="si-btn" onclick="siFind()">Continue →</button>
+    <p class="err-msg" id="si-err"></p>
+    <div class="or-row">or sign in with</div>
+    <button class="btn-method btn-face-si" id="si-face-btn" onclick="startFace('signin')">🤳 Face Recognition</button>
+    <button class="btn-method btn-bio-si"  id="si-bio-btn"  onclick="siBio()">🔏 Fingerprint / Face ID</button>
+  </div>
+</div>
+
+<!-- ══ PIN ENTRY ══════════════════════════════════════════ -->
+<div id="v-pin" class="view">
+  <div class="pin-hd">
+    <button class="back-btn" onclick="showView('signin')">←</button>
+    <div class="wchip">
+      <div class="wchip-av" id="pi-av"></div>
+      <div>
+        <div class="wchip-name" id="pi-name"></div>
+        <div class="wchip-sub"  id="pi-sub"></div>
+      </div>
+    </div>
+  </div>
+  <div class="pin-body">
+    <button class="btn-bio-np" id="pi-bio-btn" onclick="piBio()" style="display:none">
+      🔏 Use Fingerprint / Face ID instead
+    </button>
+    <div class="pin-lbl">Enter your PIN</div>
+    <div class="dots">
+      <span class="dot" id="pd0"></span><span class="dot" id="pd1"></span>
+      <span class="dot" id="pd2"></span><span class="dot" id="pd3"></span>
+      <span class="dot" id="pd4"></span><span class="dot" id="pd5"></span>
+    </div>
+    <p class="err-msg" id="pi-err"></p>
+    <div class="numpad">
+      <button class="nk" onclick="npk(1)">1</button>
+      <button class="nk" onclick="npk(2)">2</button>
+      <button class="nk" onclick="npk(3)">3</button>
+      <button class="nk" onclick="npk(4)">4</button>
+      <button class="nk" onclick="npk(5)">5</button>
+      <button class="nk" onclick="npk(6)">6</button>
+      <button class="nk" onclick="npk(7)">7</button>
+      <button class="nk" onclick="npk(8)">8</button>
+      <button class="nk" onclick="npk(9)">9</button>
+      <button class="nk nk-fn" onclick="npClear()">Clear</button>
+      <button class="nk" onclick="npk(0)">0</button>
+      <button class="nk nk-fn" onclick="npBack()">⌫</button>
+    </div>
+    <p style="color:var(--muted);font-size:.82rem;min-height:1.2em;text-align:center" id="pi-work"></p>
+  </div>
+</div>
+
+<!-- ══ DASHBOARD ══════════════════════════════════════════ -->
+<div id="v-dash" class="view">
+  <div class="dash-hd">
+    <div class="dash-hd-row">
+      <div>
+        <div class="dash-brand">⏱ WorkClock</div>
+        <div class="dash-co" id="d-co"></div>
+      </div>
+      <button class="btn-logout" onclick="signOut()">Sign Out</button>
+    </div>
+    <div class="profile-card">
+      <div class="profile-av"   id="d-av"></div>
+      <div>
+        <div class="profile-name" id="d-name"></div>
+        <div class="profile-sub"  id="d-sub"></div>
+        <span class="profile-badge badge-out" id="d-badge">Checking…</span>
+      </div>
+    </div>
+  </div>
+  <div class="dash-body">
+
+    <!-- Live clock -->
+    <div class="time-card">
+      <div class="live-time" id="d-time">--:--:--</div>
+      <div class="live-date" id="d-date"></div>
+    </div>
+
+    <!-- Location -->
+    <div class="loc-card" id="loc-card">
+      <div class="card-lbl">📍 Location</div>
+      <div id="loc-status" class="checking"><span class="spin"></span> Getting your location…</div>
+    </div>
+    <div id="loc-blocked" class="loc-blocked" style="display:none">
+      <h3>📍 Location Required</h3>
+      <p>Enable location access so you can clock in. Go to phone <strong>Settings → Privacy → Location</strong> and turn it on.</p>
+      <button class="btn-retry" onclick="retryLoc()">🔄 Retry</button>
+    </div>
+
+    <!-- Clock button -->
+    <button class="clk-btn clk-wait" id="clk-btn" onclick="clockAction()" disabled>
+      <span id="clk-ico">⏳</span>
+      <span id="clk-lbl">Checking Location…</span>
+    </button>
+
+    <!-- Today record -->
+    <div class="rec-card" id="rec-card" style="display:none">
+      <div class="card-lbl" style="margin-bottom:10px">Today's Record</div>
+      <div class="rec-row">
+        <div class="rec-cell"><span class="rec-lbl">Clock In</span><span class="rec-val" id="rec-in" style="color:var(--green)">--:--</span></div>
+        <div class="rec-cell"><span class="rec-lbl">Clock Out</span><span class="rec-val" id="rec-out" style="color:var(--red)">--:--</span></div>
+        <div class="rec-cell"><span class="rec-lbl">Hours</span><span class="rec-val" id="rec-hrs">--</span></div>
+      </div>
+    </div>
+
+    <!-- Register biometric -->
+    <div class="enrol-card" id="bio-reg-card" style="display:none">
+      <div class="card-lbl">Optional: Fingerprint / Face ID</div>
+      <p>Register once to sign in with a single touch next time.</p>
+      <button class="btn-enrol btn-enrol-bio" onclick="registerBio()">🔏 Register Fingerprint / Face ID</button>
+      <div class="msg-inline" id="bio-msg"></div>
+    </div>
+
+    <!-- Register face -->
+    <div class="enrol-card" id="face-reg-card" style="display:none">
+      <div class="card-lbl">Optional: Face Recognition</div>
+      <p>Register your face so the camera can sign you in automatically.</p>
+      <button class="btn-enrol btn-enrol-face" onclick="startFace('enroll')">🤳 Register My Face</button>
+      <div class="msg-inline" id="face-msg"></div>
+    </div>
+
+    <!-- Attendance history -->
+    <div class="hist-card">
+      <div class="hist-hd"><span>Recent Attendance</span></div>
+      <div id="hist-list"><div class="hist-empty"><span class="spin"></span></div></div>
+    </div>
+
+    <div style="height:20px"></div>
+  </div>
+</div>
+
+<!-- ══ SUCCESS OVERLAY ════════════════════════════════════ -->
+<div class="succ-ov" id="succ-ov">
+  <div class="succ-inner">
+    <span class="ico" id="succ-ico"></span>
+    <h2 id="succ-h"></h2>
+    <p id="succ-p"></p>
+  </div>
+</div>
+
+<!-- ══ FACE OVERLAY ═══════════════════════════════════════ -->
+<div id="face-ov">
+  <video id="face-vid" playsinline muted autoplay></video>
+  <div class="face-ui">
+    <div class="face-top">
+      <button onclick="stopFace()">← Back</button>
+      <span style="color:#fff;font-size:.95rem" id="face-mode-lbl">Face Recognition</span>
+    </div>
+    <div style="flex:1;display:flex;align-items:center;justify-content:center">
+      <div class="face-oval" id="face-oval"></div>
+    </div>
+    <div class="face-status" id="face-st">Initialising…</div>
+  </div>
+</div>
+
+<!-- ══ FACE ENROL MODAL ═══════════════════════════════════ -->
+<div id="modal-enroll" class="modal-bd">
+  <div class="modal-box">
+    <div class="modal-hd">
+      <h3>Register Face</h3>
+      <button class="modal-close" onclick="closeEnroll()">✕</button>
+    </div>
+    <video id="enroll-vid" playsinline muted style="width:100%;display:block;max-height:260px;object-fit:cover"></video>
+    <div style="padding:14px 18px">
+      <p id="enroll-st" style="text-align:center;color:var(--muted);font-size:.88rem;margin-bottom:12px">Loading…</p>
+      <button id="enroll-snap" class="btn-primary" onclick="captureEnroll()" disabled style="margin-bottom:0">📷 Capture Face</button>
+    </div>
+    <div class="modal-ft">
+      <button class="btn-outline" onclick="closeEnroll()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="supabase.min.js"></script>
+<script src="config.js"></script>
+<script>
+'use strict';
+
+var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ── State ─────────────────────────────────────────────────
+var W = {
+  worker:    null,
+  companyId: null,
+  workplace: null,
+  clockedIn: false,
+  attId:     null,
+  locOk:     false,
+  userLoc:   null,
+  geoWatch:  null
+};
+var pin = '', pinBusy = false;
+
+// face-api
+var FACE_CDN = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
+var _faP = null, _fmP = null, _fmLoaded = false;
+var _fStream = null, _fRunning = false, _fMode = 'signin';
+var _eStream = null;
+
+// ── Helpers ───────────────────────────────────────────────
+function wt(p, ms){ return Promise.race([p, new Promise(function(_,r){ setTimeout(function(){ r(new Error('timeout')); }, ms||5000); })]); }
+function ini(n){ return (n||'?').trim().split(/\s+/).slice(0,2).map(function(w){ return w[0].toUpperCase(); }).join(''); }
+function b64(buf){ return btoa(String.fromCharCode.apply(null,new Uint8Array(buf))); }
+function unb64(s){ var b=atob(s),a=new Uint8Array(b.length); for(var i=0;i<b.length;i++) a[i]=b.charCodeAt(i); return a.buffer; }
+function hav(a1,o1,a2,o2){ var R=6371000,r=function(d){return d*Math.PI/180;}; var a=Math.pow(Math.sin(r(a2-a1)/2),2)+Math.cos(r(a1))*Math.cos(r(a2))*Math.pow(Math.sin(r(o2-o1)/2),2); return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); }
+function vib(p){ if(navigator.vibrate) navigator.vibrate(p||50); }
+function ft(d){ return d ? new Date(d).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '--:--'; }
+function fd(d){ return d ? new Date(d).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}) : ''; }
+
+// ── Views ─────────────────────────────────────────────────
+function showView(id){
+  document.querySelectorAll('.view').forEach(function(v){ v.classList.remove('on'); });
+  var el = document.getElementById('v-'+id);
+  if (el) { el.classList.add('on'); window.scrollTo(0,0); }
+}
+
+// ── URL / Company ─────────────────────────────────────────
+function coCode(){ var p=new URLSearchParams(window.location.search); return p.get('c')||p.get('company')||null; }
+
+async function initCo(){
+  var code = coCode();
+  if (code) {
+    try {
+      var r = await wt(db.from('companies').select('id,name,code').eq('code',code.toUpperCase()).eq('is_active',true).maybeSingle());
+      if (r.data) { W.companyId=r.data.id; document.getElementById('si-co-name').textContent=r.data.name; localStorage.setItem('wc_company',JSON.stringify(r.data)); return; }
+    } catch(e) {}
+  }
+  try {
+    var s = JSON.parse(localStorage.getItem('wc_company')||'null');
+    if (s && s.id) { W.companyId=s.id; document.getElementById('si-co-name').textContent=s.name; }
+  } catch(e) {}
+}
+
+// ── SIGN-IN: Find worker ──────────────────────────────────
+async function siFind(){
+  var eid = document.getElementById('si-empid').value.trim().toUpperCase();
+  if (!eid) { document.getElementById('si-err').textContent='Please enter your Employee ID.'; return; }
+  var btn = document.getElementById('si-btn');
+  btn.disabled=true; btn.textContent='Searching…';
+  document.getElementById('si-err').textContent='';
+  try {
+    var q = db.from('workers').select('id,name,employee_id,job_title,pin,biometric_enabled,biometric_credential_id,face_descriptor,company_id').eq('employee_id',eid).eq('is_active',true);
+    if (W.companyId) q = q.eq('company_id',W.companyId);
+    var r = await wt(q.maybeSingle());
+    if (!r.data){ document.getElementById('si-err').textContent='Employee ID not found. Check with your manager.'; btn.disabled=false; btn.textContent='Continue →'; return; }
+    openPin(r.data);
+  } catch(e){ document.getElementById('si-err').textContent='Connection error — check internet and try again.'; }
+  btn.disabled=false; btn.textContent='Continue →';
+}
+
+// ── Biometric sign-in (home screen) ──────────────────────
+async function siBio(){
+  if (!window.PublicKeyCredential){ document.getElementById('si-err').textContent='Biometric not supported on this device.'; return; }
+  document.getElementById('si-bio-btn').textContent='🔏 Authenticating…';
+  try {
+    var cred = await navigator.credentials.get({ publicKey:{ challenge:crypto.getRandomValues(new Uint8Array(32)), allowCredentials:[], userVerification:'required', timeout:60000 }});
+    if (!cred) return;
+    var wid = new TextDecoder().decode(cred.response.userHandle);
+    if (!wid){ document.getElementById('si-err').textContent='Biometric not linked. Use Employee ID.'; return; }
+    var r = await wt(db.from('workers').select('id,name,employee_id,job_title,pin,biometric_enabled,biometric_credential_id,face_descriptor,company_id').eq('id',wid).eq('is_active',true).maybeSingle());
+    if (!r.data){ document.getElementById('si-err').textContent='Account not found.'; return; }
+    signInWorker(r.data);
+  } catch(e){ if(e.name!=='NotAllowedError') document.getElementById('si-err').textContent='Biometric error: '+e.message; }
+  document.getElementById('si-bio-btn').textContent='🔏 Fingerprint / Face ID';
+}
+
+// ── PIN ───────────────────────────────────────────────────
+function openPin(w){
+  pin=''; pinBusy=false; renderDots();
+  document.getElementById('pi-err').textContent='';
+  document.getElementById('pi-work').textContent='';
+  document.getElementById('pi-av').textContent   = ini(w.name);
+  document.getElementById('pi-name').textContent = w.name;
+  document.getElementById('pi-sub').textContent  = w.employee_id+(w.job_title?' · '+w.job_title:'');
+  var bb = document.getElementById('pi-bio-btn');
+  bb.style.display = (w.biometric_enabled && w.biometric_credential_id && window.PublicKeyCredential) ? '' : 'none';
+  W.worker = w;
+  showView('pin');
+}
+function npk(n){ if(pin.length>=6||pinBusy) return; pin+=String(n); renderDots(); vib(20); if(pin.length>=4) setTimeout(tryPin,350); }
+function npBack(){ if(!pinBusy){ pin=pin.slice(0,-1); renderDots(); } }
+function npClear(){ if(!pinBusy){ pin=''; renderDots(); document.getElementById('pi-err').textContent=''; } }
+function renderDots(){ for(var i=0;i<6;i++){ var d=document.getElementById('pd'+i); if(d) d.classList.toggle('f',i<pin.length); } }
+function tryPin(){
+  if(pinBusy) return;
+  if(String(W.worker.pin)!==pin){ vib([50,30,50]); document.getElementById('pi-err').textContent='Incorrect PIN — try again'; pin=''; renderDots(); return; }
+  pinBusy=true;
+  document.getElementById('pi-work').innerHTML='<span class="spin"></span> Signing in…';
+  signInWorker(W.worker);
+}
+async function piBio(){
+  if(!window.PublicKeyCredential) return;
+  document.getElementById('pi-bio-btn').textContent='🔏 Authenticating…';
+  try {
+    var cred = await navigator.credentials.get({ publicKey:{ challenge:crypto.getRandomValues(new Uint8Array(32)), allowCredentials:[{id:unb64(W.worker.biometric_credential_id),type:'public-key'}], userVerification:'required', timeout:60000 }});
+    if(cred){ pinBusy=true; signInWorker(W.worker); }
+  } catch(e){ if(e.name!=='NotAllowedError') document.getElementById('pi-err').textContent='Biometric error — use PIN instead.'; }
+  document.getElementById('pi-bio-btn').textContent='🔏 Use Fingerprint / Face ID instead';
+}
+
+// ── Sign in / session ─────────────────────────────────────
+async function signInWorker(w){
+  W.worker = w;
+  W.companyId = w.company_id;
+  localStorage.setItem('wc_portal_worker', w.id);
+  await loadDashboard();
+}
+
+function signOut(){
+  stopGeo();
+  localStorage.removeItem('wc_portal_worker');
+  W.worker=null; W.clockedIn=false; W.attId=null; W.locOk=false; W.userLoc=null;
+  document.getElementById('si-empid').value='';
+  document.getElementById('si-err').textContent='';
+  showView('signin');
+}
+
+// ── Dashboard setup ───────────────────────────────────────
+async function loadDashboard(){
+  var w = W.worker;
+  document.getElementById('d-co').textContent   = '';
+  document.getElementById('d-av').textContent   = ini(w.name);
+  document.getElementById('d-name').textContent = w.name;
+  document.getElementById('d-sub').textContent  = w.employee_id+(w.job_title?' · '+w.job_title:'');
+  document.getElementById('d-badge').textContent = 'Checking…';
+  document.getElementById('d-badge').className   = 'profile-badge badge-out';
+  document.getElementById('clk-btn').disabled=true;
+  document.getElementById('clk-btn').className='clk-btn clk-wait';
+  document.getElementById('clk-ico').textContent='⏳';
+  document.getElementById('clk-lbl').textContent='Loading…';
+  document.getElementById('rec-card').style.display='none';
+  document.getElementById('bio-reg-card').style.display = (!w.biometric_enabled && window.PublicKeyCredential) ? '' : 'none';
+  document.getElementById('face-reg-card').style.display = !w.face_descriptor ? '' : 'none';
+  showView('dash');
+  startClock();
+  // Load company name
+  try {
+    var cr = await wt(db.from('companies').select('name').eq('id',W.companyId).maybeSingle());
+    if(cr.data) document.getElementById('d-co').textContent=cr.data.name;
+  } catch(e) {}
+  // Load workplace
+  try {
+    var wr = await wt(db.from('workplaces').select('*').eq('company_id',W.companyId).eq('is_active',true).maybeSingle());
+    if(wr.data) W.workplace=wr.data;
+  } catch(e) {}
+  await loadTodayRecord();
+  await loadHistory();
+  startGeo();
+}
+
+// ── Live clock ────────────────────────────────────────────
+var _clockInt = null;
+function startClock(){
+  if(_clockInt) clearInterval(_clockInt);
+  var tick = function(){
+    var n=new Date();
+    document.getElementById('d-time').textContent=n.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    document.getElementById('d-date').textContent=n.toLocaleDateString([],{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  };
+  tick(); _clockInt=setInterval(tick,1000);
+}
+
+// ── Today record ──────────────────────────────────────────
+async function loadTodayRecord(){
+  var today=new Date(); today.setHours(0,0,0,0);
+  try {
+    var r = await wt(db.from('attendance').select('*').eq('worker_id',W.worker.id).gte('clock_in_time',today.toISOString()).order('clock_in_time',{ascending:false}).limit(1));
+    var rec = r.data && r.data[0];
+    var badge=document.getElementById('d-badge');
+    if(rec){
+      document.getElementById('rec-card').style.display='';
+      document.getElementById('rec-in').textContent  = ft(rec.clock_in_time);
+      document.getElementById('rec-out').textContent = rec.clock_out_time ? ft(rec.clock_out_time) : 'Still In';
+      if(rec.clock_in_time && rec.clock_out_time){
+        var hrs=((new Date(rec.clock_out_time)-new Date(rec.clock_in_time))/3600000).toFixed(1);
+        document.getElementById('rec-hrs').textContent=hrs+'h';
+      } else { document.getElementById('rec-hrs').textContent='--'; }
+      if(rec.status==='active'){
+        W.clockedIn=true; W.attId=rec.id;
+        badge.textContent='Clocked In'; badge.className='profile-badge badge-in';
+      } else {
+        W.clockedIn=false;
+        badge.textContent='Clocked Out'; badge.className='profile-badge badge-out';
+      }
+    } else {
+      W.clockedIn=false;
+      badge.textContent='Clocked Out'; badge.className='profile-badge badge-out';
+    }
+  } catch(e) {}
+}
+
+// ── History (last 14 days) ────────────────────────────────
+async function loadHistory(){
+  var el=document.getElementById('hist-list');
+  var ago=new Date(); ago.setDate(ago.getDate()-14); ago.setHours(0,0,0,0);
+  try {
+    var r = await wt(db.from('attendance').select('*').eq('worker_id',W.worker.id).gte('clock_in_time',ago.toISOString()).order('clock_in_time',{ascending:false}).limit(30));
+    if(!r.data||!r.data.length){ el.innerHTML='<div class="hist-empty">No attendance records in the last 14 days</div>'; return; }
+    el.innerHTML = r.data.map(function(rec){
+      var hrs = (rec.clock_in_time && rec.clock_out_time) ? ((new Date(rec.clock_out_time)-new Date(rec.clock_in_time))/3600000).toFixed(1)+'h' : '—';
+      var active = rec.status==='active';
+      return '<div class="hist-row">'+
+        '<div><div class="hist-date">'+fd(rec.clock_in_time)+'</div>'+
+        '<div class="hist-times">'+ft(rec.clock_in_time)+' → '+(rec.clock_out_time?ft(rec.clock_out_time):'Still In')+'</div></div>'+
+        '<div class="hist-right">'+
+        '<div class="hist-hrs">'+hrs+'</div>'+
+        '<div class="hist-method">'+(rec.auth_method||'')+'</div>'+
+        '<span class="chip-status '+(active?'chip-active':'chip-done')+'">'+(active?'Active':'Done')+'</span>'+
+        '</div></div>';
+    }).join('');
+  } catch(e){ el.innerHTML='<div class="hist-empty">Could not load history</div>'; }
+}
+
+// ── Geolocation ───────────────────────────────────────────
+function startGeo(){
+  document.getElementById('loc-card').style.display='';
+  document.getElementById('loc-blocked').style.display='none';
+  document.getElementById('loc-status').innerHTML='<span class="checking"><span class="spin"></span> Getting your location…</span>';
+  if(!navigator.geolocation){ document.getElementById('loc-status').textContent='⚠️ Location not supported'; setClkBtn(true); return; }
+  stopGeo();
+  W.geoWatch = navigator.geolocation.watchPosition(onGeo, onGeoErr, {enableHighAccuracy:true,maximumAge:15000,timeout:20000});
+}
+function stopGeo(){ if(W.geoWatch!=null){ navigator.geolocation.clearWatch(W.geoWatch); W.geoWatch=null; } }
+function retryLoc(){ document.getElementById('loc-blocked').style.display='none'; startGeo(); }
+function onGeo(pos){
+  W.userLoc={lat:pos.coords.latitude,lng:pos.coords.longitude};
+  var wp=W.workplace;
+  if(!wp||!wp.latitude||!wp.longitude){
+    document.getElementById('loc-status').innerHTML='⚠️ <span style="color:var(--amber)">Workplace not set — contact your admin</span>';
+    setClkBtn(true); return;
+  }
+  var dist=Math.round(hav(pos.coords.latitude,pos.coords.longitude,wp.latitude,wp.longitude));
+  var rad=wp.radius_meters||100;
+  var ok=dist<=rad;
+  W.locOk=ok;
+  document.getElementById('loc-status').innerHTML = ok
+    ? '✅ <strong>'+(wp.name||'Workplace')+'</strong> — '+dist+'m away'
+    : '❌ Too far — '+dist+'m from <strong>'+(wp.name||'workplace')+'</strong> (need within '+rad+'m)';
+  setClkBtn(ok);
+}
+function onGeoErr(err){
+  if(err.code===1){ document.getElementById('loc-card').style.display='none'; document.getElementById('loc-blocked').style.display=''; }
+  else { document.getElementById('loc-status').textContent='⚠️ Location error — tap Retry'; setClkBtn(false); }
+}
+function setClkBtn(enabled){
+  var btn=document.getElementById('clk-btn');
+  btn.disabled=!enabled;
+  if(enabled){
+    if(W.clockedIn){
+      btn.className='clk-btn clk-out';
+      document.getElementById('clk-ico').textContent='⏹';
+      document.getElementById('clk-lbl').textContent='Clock Out';
+    } else {
+      btn.className='clk-btn clk-in';
+      document.getElementById('clk-ico').textContent='▶';
+      document.getElementById('clk-lbl').textContent='Clock In';
+    }
+  } else {
+    btn.className='clk-btn clk-wait';
+    document.getElementById('clk-ico').textContent='⏳';
+    document.getElementById('clk-lbl').textContent='Checking Location…';
+  }
+}
+
+// ── Clock action ──────────────────────────────────────────
+async function clockAction(){
+  var btn=document.getElementById('clk-btn');
+  btn.disabled=true;
+  var action=W.clockedIn?'out':'in';
+  try {
+    if(action==='in'){
+      var ins = await wt(db.from('attendance').insert({
+        worker_id: W.worker.id, company_id: W.companyId,
+        clock_in_time: new Date().toISOString(), auth_method: 'portal',
+        status: 'active', workplace_id: W.workplace?W.workplace.id:null,
+        clock_in_latitude:  W.userLoc?W.userLoc.lat:null,
+        clock_in_longitude: W.userLoc?W.userLoc.lng:null
+      }).select('id').single(), 8000);
+      if(ins.error) throw ins.error;
+      W.attId=ins.data.id; W.clockedIn=true;
+    } else {
+      await wt(db.from('attendance').update({
+        clock_out_time: new Date().toISOString(), status: 'completed',
+        clock_out_latitude:  W.userLoc?W.userLoc.lat:null,
+        clock_out_longitude: W.userLoc?W.userLoc.lng:null
+      }).eq('id',W.attId), 8000);
+      W.clockedIn=false;
+    }
+    vib([50,30,100]);
+    showSucc(action);
+    var badge=document.getElementById('d-badge');
+    if(action==='in'){ badge.textContent='Clocked In'; badge.className='profile-badge badge-in'; }
+    else             { badge.textContent='Clocked Out'; badge.className='profile-badge badge-out'; }
+    await loadTodayRecord();
+    await loadHistory();
+    setClkBtn(W.locOk);
+  } catch(e){ alert('Error: '+(e.message||'Try again')); btn.disabled=false; setClkBtn(W.locOk); }
+}
+function showSucc(action){
+  var ov=document.getElementById('succ-ov');
+  ov.className='succ-ov show '+(action==='in'?'clk-in':'clk-out');
+  document.getElementById('succ-ico').textContent=action==='in'?'✓':'👋';
+  document.getElementById('succ-h').textContent  =action==='in'?'Clocked In!':'Clocked Out!';
+  document.getElementById('succ-p').textContent  =new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+(W.workplace?' · '+W.workplace.name:'');
+  setTimeout(function(){ ov.classList.remove('show'); },2200);
+}
+
+// ── Register biometric ────────────────────────────────────
+async function registerBio(){
+  if(!window.PublicKeyCredential){ setMsg('bio-msg','Biometric not supported on this device.','err'); return; }
+  try {
+    var cred = await navigator.credentials.create({ publicKey:{
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      rp: { name:'WorkClock', id:window.location.hostname||'localhost' },
+      user: { id:new TextEncoder().encode(W.worker.id), name:W.worker.employee_id, displayName:W.worker.name },
+      pubKeyCredParams:[{alg:-7,type:'public-key'},{alg:-257,type:'public-key'}],
+      authenticatorSelection:{ authenticatorAttachment:'platform', userVerification:'required', residentKey:'required', requireResidentKey:true },
+      timeout: 60000
+    }});
+    if(!cred) return;
+    var r = await wt(db.from('workers').update({ biometric_credential_id:b64(cred.rawId), biometric_enabled:true }).eq('id',W.worker.id));
+    if(r.error) throw r.error;
+    W.worker.biometric_enabled=true; W.worker.biometric_credential_id=b64(cred.rawId);
+    document.getElementById('bio-reg-card').style.display='none';
+    setMsg('bio-msg','✅ Biometric registered! Use fingerprint to sign in next time.','ok');
+  } catch(e){ if(e.name!=='NotAllowedError') setMsg('bio-msg','Error: '+e.message,'err'); }
+}
+function setMsg(id,txt,type){ var el=document.getElementById(id); if(!el) return; el.textContent=txt; el.className='msg-inline msg-'+(type||'ok'); }
+
+// ── Face Recognition ──────────────────────────────────────
+function ensureFaceApi(){
+  if(typeof faceapi!=='undefined') return Promise.resolve();
+  if(_faP) return _faP;
+  _faP=new Promise(function(res,rej){
+    var s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js';
+    s.onload=res; s.onerror=function(){ _faP=null; rej(new Error('Could not load face library')); };
+    document.head.appendChild(s);
+  });
+  return _faP;
+}
+async function loadFaceMods(){
+  await ensureFaceApi();
+  if(_fmLoaded) return;
+  if(_fmP) return _fmP;
+  _fmP=Promise.all([
+    faceapi.nets.tinyFaceDetector.loadFromUri(FACE_CDN),
+    faceapi.nets.faceLandmark68TinyNet.loadFromUri(FACE_CDN),
+    faceapi.nets.faceRecognitionNet.loadFromUri(FACE_CDN)
+  ]).then(function(){ _fmLoaded=true; }).catch(function(e){ _fmP=null; throw e; });
+  return _fmP;
+}
+
+async function startFace(mode){
+  _fMode=mode;
+  var lbl=document.getElementById('face-mode-lbl');
+  lbl.textContent = mode==='enroll' ? 'Register Your Face' : 'Face Recognition';
+  document.getElementById('face-oval').classList.remove('found');
+  document.getElementById('face-st').textContent='Loading models…';
+  document.getElementById('face-ov').classList.add('on');
+  if(mode==='enroll'){ openEnrollModal(); return; } // enroll uses separate modal
+  // Sign-in mode: detect + match
+  var srcBtn=mode==='enroll'?null:document.getElementById('si-face-btn');
+  if(srcBtn){ srcBtn.textContent='⏳ Loading…'; srcBtn.disabled=true; }
+  try {
+    await wt(loadFaceMods(),30000);
+    document.getElementById('face-st').textContent='Loading enrolled faces…';
+    var q = db.from('workers').select('id,name,employee_id,job_title,pin,biometric_enabled,biometric_credential_id,face_descriptor,company_id').eq('is_active',true).not('face_descriptor','is',null);
+    if(W.companyId) q=q.eq('company_id',W.companyId);
+    var r = await wt(q);
+    var workers=(r.data||[]).filter(function(w){ return w.face_descriptor; });
+    if(!workers.length){ document.getElementById('face-st').textContent='⚠️ No faces enrolled yet. Use Employee ID.'; if(srcBtn){srcBtn.textContent='🤳 Face Recognition';srcBtn.disabled=false;} return; }
+    var labeled=[],wmap={};
+    workers.forEach(function(w){
+      try{ labeled.push(new faceapi.LabeledFaceDescriptors(w.id,[new Float32Array(JSON.parse(w.face_descriptor))])); wmap[w.id]=w; }catch(e){}
+    });
+    if(!labeled.length){ document.getElementById('face-st').textContent='⚠️ Face data invalid.'; if(srcBtn){srcBtn.textContent='🤳 Face Recognition';srcBtn.disabled=false;} return; }
+    var matcher=new faceapi.FaceMatcher(labeled,0.50);
+    var stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+    _fStream=stream;
+    var vid=document.getElementById('face-vid');
+    vid.srcObject=stream; await vid.play();
+    _fRunning=true;
+    document.getElementById('face-st').textContent='Look straight at the camera…';
+    var opts=new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.5});
+    (function detect(){
+      if(!_fRunning) return;
+      faceapi.detectSingleFace(vid,opts).withFaceLandmarks(true).withFaceDescriptor().then(function(det){
+        if(!_fRunning) return;
+        if(!det){ requestAnimationFrame(detect); return; }
+        var m=matcher.findBestMatch(det.descriptor);
+        if(m.label==='unknown'){ requestAnimationFrame(detect); return; }
+        var found=wmap[m.label]; if(!found){ requestAnimationFrame(detect); return; }
+        _fRunning=false;
+        document.getElementById('face-oval').classList.add('found');
+        document.getElementById('face-st').textContent='✅ Recognised: '+found.name;
+        vib([50,30,100]);
+        stopFace();
+        signInWorker(found);
+      }).catch(function(){ if(_fRunning) requestAnimationFrame(detect); });
+    })();
+  } catch(e){ document.getElementById('face-st').textContent='❌ '+(e.message||'Error'); stopFace(); }
+  if(srcBtn){ srcBtn.textContent='🤳 Face Recognition'; srcBtn.disabled=false; }
+}
+
+function stopFace(){
+  _fRunning=false;
+  if(_fStream){ _fStream.getTracks().forEach(function(t){ t.stop(); }); _fStream=null; }
+  document.getElementById('face-ov').classList.remove('on');
+}
+
+// ── Face enrolment ────────────────────────────────────────
+async function openEnrollModal(){
+  document.getElementById('face-ov').classList.remove('on'); // close scanner overlay
+  document.getElementById('modal-enroll').classList.add('on');
+  document.getElementById('enroll-st').textContent='Loading models…';
+  document.getElementById('enroll-snap').disabled=true;
+  try {
+    await wt(loadFaceMods(),30000);
+    _eStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+    var vid=document.getElementById('enroll-vid');
+    vid.srcObject=_eStream; await vid.play();
+    document.getElementById('enroll-st').textContent='Position your face clearly, then tap Capture.';
+    document.getElementById('enroll-snap').disabled=false;
+  } catch(e){ document.getElementById('enroll-st').textContent='❌ '+(e.message||'Camera error'); }
+}
+async function captureEnroll(){
+  var btn=document.getElementById('enroll-snap');
+  btn.disabled=true;
+  document.getElementById('enroll-st').textContent='Detecting face…';
+  var vid=document.getElementById('enroll-vid');
+  try {
+    var opts=new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.5});
+    var det=await faceapi.detectSingleFace(vid,opts).withFaceLandmarks(true).withFaceDescriptor();
+    if(!det){ document.getElementById('enroll-st').textContent='❌ No face detected — ensure good lighting and try again.'; btn.disabled=false; return; }
+    var desc=JSON.stringify(Array.from(det.descriptor));
+    var r=await wt(db.from('workers').update({face_descriptor:desc}).eq('id',W.worker.id));
+    if(r.error) throw r.error;
+    W.worker.face_descriptor=desc;
+    document.getElementById('face-reg-card').style.display='none';
+    vib([50,30,100]);
+    document.getElementById('enroll-st').textContent='✅ Face registered successfully!';
+    setMsg('face-msg','✅ Face registered! You can now sign in using face recognition.','ok');
+    setTimeout(closeEnroll,1500);
+  } catch(e){ document.getElementById('enroll-st').textContent='❌ '+e.message; btn.disabled=false; }
+}
+function closeEnroll(){
+  if(_eStream){ _eStream.getTracks().forEach(function(t){ t.stop(); }); _eStream=null; }
+  document.getElementById('modal-enroll').classList.remove('on');
+}
+
+// ── Boot ──────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function(){
+  showView('signin');
+  initCo().catch(function(){});
+  // Restore session
+  var sid=localStorage.getItem('wc_portal_worker');
+  if(sid){
+    wt(db.from('workers').select('id,name,employee_id,job_title,pin,biometric_enabled,biometric_credential_id,face_descriptor,company_id').eq('id',sid).eq('is_active',true).maybeSingle(),6000)
+      .then(function(r){ if(r.data){ W.worker=r.data; W.companyId=r.data.company_id; loadDashboard(); } else { localStorage.removeItem('wc_portal_worker'); } })
+      .catch(function(){ /* stay on sign-in */ });
+  }
+  // Clear stale SW
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.getRegistrations().then(function(r){ r.forEach(function(x){ x.unregister(); }); });
+    caches.keys().then(function(k){ k.forEach(function(x){ caches.delete(x); }); });
+  }
+});
+</script>
+</body>
+</html>

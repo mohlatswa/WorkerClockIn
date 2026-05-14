@@ -1,45 +1,106 @@
 'use strict';
 
-// ── App State ────────────────────────────────────────
+// ═══════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════
 const S = {
-  worker:         null,
-  admin:          null,
-  workplace:      null,
-  userLoc:        null,
-  geoWatcher:     null,
-  clockStatus:    'out',
-  attendanceId:   null,
-  authMethod:     'pin',
-  scanStream:     null,
-  scanRunning:    false,
-  nfcReader:      null,
-  npPin:          [],
-  npAutoTimer:    null,
-  authSource:     'manual',
-  companyId:      null,
-  companyName:    null,
-  companyFromUrl: false, // true only when ?c=CODE is in the URL
+  worker:       null,  // logged-in worker
+  admin:        null,  // logged-in admin/developer
+  workplace:    null,
+  userLoc:      null,
+  geoWatcher:   null,
+  clockStatus:  'out',
+  attendanceId: null,
+  authMethod:   'pin',
+  authSource:   'manual',
+  scanStream:   null,
+  scanRunning:  false,
+  nfcReader:    null,
+  npPin:        [],
+  npTimer:      null,
+  companyId:    null,
+  companyName:  null,
+  fromUrl:      false,
 };
 
-// ── Navigation ───────────────────────────────────────
+// caches for edit modals
+const _wCache = {};
+const _cCache = {};
+
+// ═══════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  const el = document.getElementById(`page-${id}`);
+  const el = document.getElementById('page-' + id);
   if (el) { el.classList.add('active'); window.scrollTo(0, 0); }
 }
 
-// ── Company (set from URL or localStorage — workers never pick manually) ─
-function setCompany(co, fromUrl = false) {
-  S.companyId      = co.id;
-  S.companyName    = co.name;
-  S.companyFromUrl = fromUrl;
-  localStorage.setItem('wc_company', JSON.stringify(co));
-  updateHomeCompanyUI();
+// ═══════════════════════════════════════════════
+//  UTILITIES
+// ═══════════════════════════════════════════════
+const initials = n => (n || '??').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)),
+  ]);
 }
 
-function updateHomeCompanyUI() {
-  const nameEl  = document.getElementById('home-company-name');
-  const noCard  = document.getElementById('no-company-card');
+function haversineM(la1, lo1, la2, lo2) {
+  const R = 6371000, r = d => d * Math.PI / 180;
+  const a = Math.sin(r(la2-la1)/2)**2 + Math.cos(r(la1))*Math.cos(r(la2))*Math.sin(r(lo2-lo1)/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+const b64   = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const unb64 = s   => { const b=atob(s),a=new Uint8Array(b.length); for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i); return a.buffer; };
+
+let _toastTimer;
+function toast(msg, dur = 3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.remove('hidden');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.add('hidden'), dur);
+}
+
+function showErr(id, msg) {
+  const el = document.getElementById(id); if (!el) return;
+  if (!msg) { el.classList.add('hidden'); return; }
+  el.textContent = msg; el.classList.remove('hidden');
+}
+
+function showMsg(id, msg, type) {
+  const el = document.getElementById(id); if (!el) return;
+  el.textContent = msg; el.className = 'msg ' + (type || ''); el.classList.remove('hidden');
+  if (type === 'ok') setTimeout(() => el.classList.add('hidden'), 3500);
+}
+
+function fmtTime(iso) {
+  return iso ? new Date(iso).toLocaleTimeString('en-ZA', { hour:'2-digit', minute:'2-digit' }) : '--:--';
+}
+
+function fmtDate(iso) {
+  return iso ? new Date(iso).toLocaleDateString('en-ZA') : '';
+}
+
+function vibrate(p = 50) { navigator.vibrate?.(p); }
+
+// ═══════════════════════════════════════════════
+//  COMPANY INIT
+// ═══════════════════════════════════════════════
+function setCompany(co, fromUrl) {
+  S.companyId   = co.id;
+  S.companyName = co.name;
+  S.fromUrl     = !!fromUrl;
+  localStorage.setItem('wc_company', JSON.stringify(co));
+  updateHomeUI();
+}
+
+function updateHomeUI() {
+  const nameEl  = document.getElementById('home-co-name');
+  const noCard  = document.getElementById('no-co-card');
   const methods = document.getElementById('clock-methods');
   if (S.companyId) {
     if (nameEl)  nameEl.textContent = S.companyName;
@@ -53,7 +114,6 @@ function updateHomeCompanyUI() {
 }
 
 async function initCompany() {
-  // 1. URL param ?c=CODE — authoritative, marks company as "from URL"
   const params = new URLSearchParams(window.location.search);
   const code   = params.get('c') || params.get('company');
   if (code) {
@@ -65,57 +125,14 @@ async function initCompany() {
       if (data) { setCompany(data, true); return; }
     } catch {}
   }
-  // 2. localStorage fallback — company is set but NOT from URL (no strict filter)
   const saved = localStorage.getItem('wc_company');
   if (saved) { try { setCompany(JSON.parse(saved), false); return; } catch {} }
-  updateHomeCompanyUI();
+  updateHomeUI();
 }
 
-// ── Utilities ────────────────────────────────────────
-const initials = n => (n || '??').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-
-function withTimeout(promise, ms) {
-  return Promise.race([
-    Promise.resolve(promise),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
-  ]);
-}
-
-function haversineM(la1, lo1, la2, lo2) {
-  const R = 6_371_000, r = d => d * Math.PI / 180;
-  const dlat = r(la2 - la1), dlon = r(lo2 - lo1);
-  const a = Math.sin(dlat/2)**2 + Math.cos(r(la1)) * Math.cos(r(la2)) * Math.sin(dlon/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-const b64    = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
-const unb64  = s   => { const b = atob(s); const a = new Uint8Array(b.length); for (let i=0;i<b.length;i++) a[i]=b.charCodeAt(i); return a.buffer; };
-
-let _toast;
-function toast(msg, dur = 3000) {
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.classList.remove('hidden');
-  clearTimeout(_toast);
-  _toast = setTimeout(() => el.classList.add('hidden'), dur);
-}
-
-function showErr(id, msg) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  if (!msg) { el.classList.add('hidden'); return; }
-  el.textContent = msg; el.classList.remove('hidden');
-}
-
-function showMsg(id, msg, type) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.textContent = msg; el.className = `msg ${type}`; el.classList.remove('hidden');
-  if (type === 'ok') setTimeout(() => el.classList.add('hidden'), 3500);
-}
-
-function vibrate(ms = 50) { navigator.vibrate?.(ms); }
-
-// ── Live Clock ───────────────────────────────────────
+// ═══════════════════════════════════════════════
+//  LIVE CLOCK
+// ═══════════════════════════════════════════════
 function startClock() {
   const tick = () => {
     const n = new Date();
@@ -127,695 +144,540 @@ function startClock() {
   tick(); setInterval(tick, 1000);
 }
 
-// ════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════
 //  QR SCANNER
-// ════════════════════════════════════════════════════
-async function openScanner() {
+// ═══════════════════════════════════════════════
+async function openQR() {
   showPage('scan');
   document.getElementById('scan-status').textContent = 'Searching for QR code…';
-
   try {
-    S.scanStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
-    const video = document.getElementById('qr-video');
-    video.srcObject = S.scanStream;
-    await video.play();
+    S.scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode:'environment', width:{ideal:1280}, height:{ideal:720} } });
+    const video  = document.getElementById('qr-video');
+    video.srcObject = S.scanStream; await video.play();
     S.scanRunning = true;
-    requestAnimationFrame(scanFrame);
+    requestAnimationFrame(qrFrame);
   } catch (err) {
     document.getElementById('scan-status').textContent =
-      err.name === 'NotAllowedError'
-        ? '❌ Camera access denied — allow camera in your browser settings'
-        : '❌ Could not open camera: ' + err.message;
+      err.name === 'NotAllowedError' ? '❌ Camera access denied — allow camera in browser settings' : '❌ ' + err.message;
   }
 }
 
-function scanFrame() {
+function qrFrame() {
   if (!S.scanRunning) return;
-  const video  = document.getElementById('qr-video');
+  const video = document.getElementById('qr-video');
   const canvas = document.getElementById('qr-canvas');
   if (video.readyState === video.HAVE_ENOUGH_DATA) {
-    canvas.width  = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0);
-    const img  = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
-    if (code) {
-      vibrate(80);
-      stopScanner();
-      handleCardRead(code.data.trim().toUpperCase());
-      return;
-    }
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d'); ctx.drawImage(video, 0, 0);
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(img.data, img.width, img.height, { inversionAttempts:'dontInvert' });
+    if (code) { vibrate(80); stopQR(); handleCardRead(code.data.trim().toUpperCase()); return; }
   }
-  requestAnimationFrame(scanFrame);
+  requestAnimationFrame(qrFrame);
 }
 
-function stopScanner() {
+function stopQR() {
   S.scanRunning = false;
   if (S.scanStream) { S.scanStream.getTracks().forEach(t => t.stop()); S.scanStream = null; }
 }
 
-// ════════════════════════════════════════════════════
-//  NFC READER
-// ════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════
+//  NFC
+// ═══════════════════════════════════════════════
 async function openNFC() {
-  if (!('NDEFReader' in window)) {
-    // Show NFC page with "not supported" message
-    showPage('nfc');
-    document.getElementById('nfc-hint').textContent = '⚠️ NFC is not supported on this browser (requires Android + Chrome)';
-    showErr('nfc-err', 'NFC is not available. Please use QR scan or Enter ID instead.');
-    return;
-  }
   showPage('nfc');
+  if (!('NDEFReader' in window)) {
+    document.getElementById('nfc-hint').textContent = '⚠️ NFC not supported (requires Android + Chrome)';
+    showErr('nfc-err', 'Use QR scan or Enter Employee ID instead.'); return;
+  }
   document.getElementById('nfc-hint').textContent = 'Ready — tap your NFC card to the back of the phone';
   try {
-    S.nfcReader = new NDEFReader();
-    await S.nfcReader.scan();
+    S.nfcReader = new NDEFReader(); await S.nfcReader.scan();
     S.nfcReader.addEventListener('reading', ({ message }) => {
       const dec = new TextDecoder();
       for (const rec of message.records) {
         if (rec.recordType === 'text') {
-          const empId = dec.decode(rec.data).trim().toUpperCase();
-          vibrate(80);
-          stopNFC();
-          handleCardRead(empId);
-          return;
+          vibrate(80); stopNFC(); handleCardRead(dec.decode(rec.data).trim().toUpperCase()); return;
         }
       }
-      showErr('nfc-err', 'Card read but no employee ID found. Check NFC card format.');
+      showErr('nfc-err', 'Card read but no ID found.');
     });
-    S.nfcReader.addEventListener('readingerror', () => {
-      showErr('nfc-err', 'Could not read NFC card. Try again.');
-    });
+    S.nfcReader.addEventListener('readingerror', () => showErr('nfc-err', 'Could not read card.'));
   } catch (err) {
-    const msg = err.name === 'NotAllowedError'
-      ? 'NFC permission denied. Allow NFC in browser settings.'
-      : err.message;
-    showErr('nfc-err', msg);
+    showErr('nfc-err', err.name === 'NotAllowedError' ? 'NFC permission denied.' : err.message);
   }
 }
 
-function stopNFC() {
-  S.nfcReader = null; // NDEFReader has no explicit stop; reassigning clears handlers
-}
+function stopNFC() { S.nfcReader = null; }
 
-// ════════════════════════════════════════════════════
-//  CARD READ (from QR or NFC) → lookup worker
-// ════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════
+//  CARD READ (QR / NFC)
+// ═══════════════════════════════════════════════
 async function handleCardRead(empId) {
-  toast('🔍 Looking up card…');
+  toast('🔍 Looking up ' + empId + '…');
   S.authSource = 'card';
   document.getElementById('inp-empid').value = empId;
   await findWorker(empId);
 }
 
-// ════════════════════════════════════════════════════
-//  HOME-SCREEN BIOMETRIC (discoverable credentials)
-// ════════════════════════════════════════════════════
-async function homeScreenBiometric() {
+// ═══════════════════════════════════════════════
+//  HOME BIOMETRIC (discoverable credential)
+// ═══════════════════════════════════════════════
+async function homeBiometric() {
   if (!window.PublicKeyCredential) { toast('Biometric not supported on this browser'); return; }
   try {
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
-    const cred = await navigator.credentials.get({
-      publicKey: {
-        challenge,
-        allowCredentials: [], // empty = device picks any registered credential
-        userVerification: 'required',
-        timeout: 60000,
-      },
-    });
+    const cred = await navigator.credentials.get({ publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials: [],
+      userVerification: 'required',
+      timeout: 60000,
+    }});
     if (!cred) return;
     const workerId = new TextDecoder().decode(cred.response.userHandle);
-    if (!workerId) { toast('❌ Biometric not linked. Use Employee ID instead.'); return; }
+    if (!workerId) { toast('❌ Biometric not linked. Use Employee ID.'); return; }
     toast('Authenticated — loading your account…');
-    S.authSource  = 'biometric';
-    S.authMethod  = 'biometric';
+    S.authSource = 'biometric'; S.authMethod = 'biometric';
     let q = db.from('workers').select('*, workplace:workplaces(*)').eq('id', workerId).eq('is_active', true);
-    if (S.companyId && S.companyFromUrl) q = q.eq('company_id', S.companyId);
-    const { data, error } = await q.maybeSingle();
-    if (error || !data) { toast('❌ Account not found. Use Employee ID instead.'); return; }
-    S.worker = data;
-    enterClockScreen();
+    if (S.companyId && S.fromUrl) q = q.eq('company_id', S.companyId);
+    const { data } = await q.maybeSingle();
+    if (!data) { toast('❌ Account not found.'); return; }
+    S.worker = data; enterClockScreen();
   } catch (err) {
     if (err.name !== 'NotAllowedError') toast('Biometric error: ' + err.message);
   }
 }
 
-// ════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════
 //  WORKER LOOKUP
-// ════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════
 async function findWorker(overrideId) {
-  const id = overrideId
-    ? overrideId
-    : (document.getElementById('inp-empid').value || '').trim().toUpperCase();
-
+  const id = overrideId || (document.getElementById('inp-empid').value || '').trim().toUpperCase();
   showErr('err-empid', '');
   if (!id) { showErr('err-empid', 'Please enter your Employee ID.'); return; }
-
   try {
     let q = db.from('workers').select('*, workplace:workplaces(*)')
       .eq('employee_id', id).eq('is_active', true);
-    // Only scope by company when the company URL param was used (?c=CODE).
-    // If company came from localStorage only, don't filter — avoids "not found"
-    // errors when a worker opens the app without their employer's link.
-    if (S.companyId && S.companyFromUrl) q = q.eq('company_id', S.companyId);
+    if (S.companyId && S.fromUrl) q = q.eq('company_id', S.companyId);
     const { data, error } = await q.maybeSingle();
-
     if (error?.code === 'PGRST116') {
-      showErr('err-empid', 'Multiple accounts share this ID. Please use your employer's sign-in link (?c=CODE).');
+      showErr('err-empid', 'Multiple accounts with this ID — open your employer's link (?c=CODE).');
       return;
     }
-    if (error || !data) {
-      if (S.authSource === 'card') {
-        toast(`❌ Card not recognised (${id})`);
-        showPage('home');
-      } else {
-        showErr('err-empid', 'Employee ID not found. Check with your manager.');
-      }
+    if (!data) {
+      if (S.authSource === 'card') { toast('❌ Card not recognised (' + id + ')'); showPage('home'); }
+      else showErr('err-empid', 'Employee ID not found. Check with your manager.');
       return;
     }
-
-    S.worker = data;
-    goToAuth(data);
+    S.worker = data; goToAuth(data);
   } catch {
     if (S.authSource === 'card') { toast('❌ Connection error'); showPage('home'); }
     else showErr('err-empid', 'Connection error. Check internet and try again.');
   }
 }
 
-// ── Move to auth screen ──────────────────────────────
-function goToAuth(worker) {
-  document.getElementById('auth-avatar').textContent   = initials(worker.name);
-  document.getElementById('auth-name').textContent     = worker.name;
-  document.getElementById('auth-empid').textContent    = worker.employee_id;
-  document.getElementById('auth-jobtitle').textContent = worker.job_title || '';
-
-  const bioWrap = document.getElementById('bio-btn-wrap');
-  if (worker.biometric_enabled && worker.biometric_credential_id && window.PublicKeyCredential) {
+function goToAuth(w) {
+  document.getElementById('auth-avatar').textContent = initials(w.name);
+  document.getElementById('auth-name').textContent   = w.name;
+  document.getElementById('auth-empid').textContent  = w.employee_id;
+  document.getElementById('auth-job').textContent    = w.job_title || '';
+  const bioWrap = document.getElementById('bio-auth-wrap');
+  if (w.biometric_enabled && w.biometric_credential_id && window.PublicKeyCredential) {
     bioWrap.classList.remove('hidden');
-    // Fast flow for card: auto-prompt biometric immediately
-    if (S.authSource === 'card') {
-      showPage('auth');
-      npReset();
-      setTimeout(authenticateWithBiometric, 400);
-      return;
-    }
+    if (S.authSource === 'card') { showPage('auth'); npReset(); setTimeout(authBiometric, 400); return; }
   } else {
     bioWrap.classList.add('hidden');
   }
-
-  showPage('auth');
-  npReset();
+  showPage('auth'); npReset();
 }
 
-function backFromAuth() {
-  S.worker     = null;
-  S.authSource = 'manual';
-  showPage('home');
-}
+function backFromAuth() { S.worker = null; S.authSource = 'manual'; showPage('home'); }
 
-// ════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════
 //  PIN NUMPAD
-// ════════════════════════════════════════════════════
-function npReset() {
-  S.npPin = [];
-  clearTimeout(S.npAutoTimer);
-  renderDots();
-  showErr('err-auth', '');
-}
+// ═══════════════════════════════════════════════
+function npReset() { S.npPin = []; clearTimeout(S.npTimer); renderDots(); showErr('err-pin', ''); }
 
-function npPress(d) {
+function npKey(d) {
   if (S.npPin.length >= 6) return;
-  S.npPin.push(d);
-  renderDots();
-  vibrate(20);
-  clearTimeout(S.npAutoTimer);
-  if (S.npPin.length >= 4) {
-    S.npAutoTimer = setTimeout(verifyPin, 600);
-  }
+  S.npPin.push(d); renderDots(); vibrate(20); clearTimeout(S.npTimer);
+  if (S.npPin.length >= 4) S.npTimer = setTimeout(verifyPin, 600);
 }
 
-function npBack() {
-  S.npPin.pop();
-  renderDots();
-  clearTimeout(S.npAutoTimer);
-  showErr('err-auth', '');
-}
-
-function npClear() {
-  npReset();
-}
+function npBack()  { S.npPin.pop(); renderDots(); clearTimeout(S.npTimer); showErr('err-pin', ''); }
+function npClear() { npReset(); }
 
 function renderDots() {
   for (let i = 0; i < 6; i++) {
-    const dot = document.getElementById(`pd${i}`);
-    if (dot) dot.classList.toggle('filled', i < S.npPin.length);
+    const d = document.getElementById('pd' + i);
+    if (d) d.classList.toggle('filled', i < S.npPin.length);
   }
 }
 
 function verifyPin() {
-  const entered = S.npPin.join('');
   if (!S.worker) return;
-  if (entered !== String(S.worker.pin)) {
-    vibrate([50, 30, 50]);
-    showErr('err-auth', 'Incorrect PIN — try again');
-    npReset();
-    return;
+  if (S.npPin.join('') !== String(S.worker.pin)) {
+    vibrate([50,30,50]); showErr('err-pin', 'Incorrect PIN — try again'); npReset(); return;
   }
-  showErr('err-auth', '');
-  S.authMethod = 'pin';
-  enterClockScreen();
+  S.authMethod = 'pin'; enterClockScreen();
 }
 
-// ════════════════════════════════════════════════════
-//  BIOMETRIC (WebAuthn)
-// ════════════════════════════════════════════════════
-async function authenticateWithBiometric() {
-  showErr('err-auth', '');
-  if (!window.PublicKeyCredential) { showErr('err-auth', 'Biometric not supported on this browser.'); return; }
-
+// ═══════════════════════════════════════════════
+//  BIOMETRIC AUTH
+// ═══════════════════════════════════════════════
+async function authBiometric() {
+  showErr('err-pin', '');
+  if (!window.PublicKeyCredential) { showErr('err-pin', 'Biometric not supported.'); return; }
   try {
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
-    const cred = await navigator.credentials.get({
-      publicKey: {
-        challenge,
-        allowCredentials: [{ id: unb64(S.worker.biometric_credential_id), type: 'public-key', transports: ['internal'] }],
-        userVerification: 'required',
-        timeout: 60000,
-      },
-    });
+    const cred = await navigator.credentials.get({ publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials: [{ id: unb64(S.worker.biometric_credential_id), type:'public-key' }],
+      userVerification: 'required', timeout: 60000,
+    }});
     if (cred) { S.authMethod = 'biometric'; enterClockScreen(); }
   } catch (err) {
-    if (err.name === 'NotAllowedError') showErr('err-auth', 'Biometric cancelled — please use PIN instead.');
-    else showErr('err-auth', 'Biometric error: ' + err.message);
+    if (err.name !== 'NotAllowedError') showErr('err-pin', 'Error: ' + err.message);
   }
 }
 
-// ════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════
 //  CLOCK SCREEN
-// ════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════
 async function enterClockScreen() {
   const w = S.worker;
-  document.getElementById('clock-avatar').textContent    = initials(w.name);
-  document.getElementById('clock-name').textContent      = w.name;
-  document.getElementById('clock-empid').textContent     = w.employee_id;
-  document.getElementById('clock-jobtitle').textContent  = w.job_title || '';
-  document.getElementById('clock-greeting').textContent  = `Hello, ${w.name.split(' ')[0]}!`;
-  S.workplace = w.workplace || null;
-
-  // Persist session so worker stays logged in across page reloads / app restarts
   localStorage.setItem('wc_worker_id', w.id);
 
-  showPage('clock');
-  startClock();
-  await refreshClockStatus();
-  startGeoWatch();
+  document.getElementById('clk-avatar').textContent = initials(w.name);
+  document.getElementById('clk-name').textContent   = w.name;
+  document.getElementById('clk-empid').textContent  = w.employee_id;
+  document.getElementById('clk-job').textContent    = w.job_title || '';
 
-  // Show biometric / face registration cards if not yet enrolled
-  document.getElementById('bio-reg-card').style.display =
-    (!w.biometric_enabled && window.PublicKeyCredential) ? 'block' : 'none';
-  document.getElementById('face-reg-card').style.display =
-    !w.face_descriptor ? 'block' : 'none';
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  document.getElementById('clock-greeting').textContent = greet + ', ' + w.name.split(' ')[0] + '!';
+
+  showPage('clock'); startClock();
+  document.getElementById('bio-reg-card').style.display = (!w.biometric_enabled && window.PublicKeyCredential) ? '' : 'none';
+  document.getElementById('face-reg-card').style.display = !w.face_descriptor ? '' : 'none';
+
+  await loadTodayRecord();
+  startLocationWatch();
 }
 
-// ── Geolocation watcher ──────────────────────────────
-async function startGeoWatch() {
-  const locEl = document.getElementById('loc-status');
-  locEl.innerHTML = '<div class="checking"><div class="spin-sm"></div> Getting your location…</div>';
+async function loadTodayRecord() {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const { data } = await db.from('attendance')
+    .select('*').eq('worker_id', S.worker.id)
+    .gte('clock_in_time', today.toISOString())
+    .order('clock_in_time', { ascending: false }).limit(1);
+
+  const rec = data?.[0];
+  const card = document.getElementById('today-card');
+  const badge = document.getElementById('clk-badge');
+
+  if (rec) {
+    card.style.display = '';
+    document.getElementById('rec-in').textContent  = fmtTime(rec.clock_in_time);
+    document.getElementById('rec-out').textContent = rec.clock_out_time ? fmtTime(rec.clock_out_time) : 'Still In';
+    if (rec.clock_in_time && rec.clock_out_time) {
+      const hrs = ((new Date(rec.clock_out_time) - new Date(rec.clock_in_time)) / 3600000).toFixed(1);
+      document.getElementById('rec-hrs').textContent = hrs + 'h';
+    }
+    if (rec.status === 'active') {
+      S.clockStatus = 'in'; S.attendanceId = rec.id;
+      badge.className = 'badge badge-in'; badge.innerHTML = '<span class="dot"></span> Clocked In';
+    } else {
+      S.clockStatus = 'out';
+      badge.className = 'badge badge-out'; badge.innerHTML = '<span class="dot"></span> Clocked Out';
+    }
+  } else {
+    card.style.display = 'none'; S.clockStatus = 'out';
+    badge.className = 'badge badge-out'; badge.innerHTML = '<span class="dot"></span> Clocked Out';
+  }
+}
+
+function startLocationWatch() {
+  const btn     = document.getElementById('clk-btn');
+  const locCard = document.getElementById('loc-card');
+  const locBlk  = document.getElementById('loc-blocked-card');
+  locCard.style.display = ''; locBlk.classList.add('hidden');
+  document.getElementById('loc-status').innerHTML = '<div class="checking"><div class="spin-sm"></div> Getting your location…</div>';
 
   if (!navigator.geolocation) {
-    showLocationBlocked('This device does not support GPS. Location is required to clock in.');
-    return;
+    document.getElementById('loc-status').textContent = '⚠️ Location not available on this device';
+    setClockBtn(true); return;
   }
 
   if (S.geoWatcher) navigator.geolocation.clearWatch(S.geoWatcher);
 
-  // Check permission state before watching (Permissions API)
-  if (navigator.permissions) {
-    try {
-      const perm = await navigator.permissions.query({ name: 'geolocation' });
-      if (perm.state === 'denied') { showLocationBlocked(); return; }
-      perm.onchange = () => { if (perm.state === 'denied') showLocationBlocked(); };
-    } catch {}
-  }
-
   S.geoWatcher = navigator.geolocation.watchPosition(
     pos => {
-      S.userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: Math.round(pos.coords.accuracy) };
-      hideLocationBlocked();
-      refreshLocUI();
+      S.userLoc = pos.coords;
+      const wp  = S.worker?.workplace;
+      if (!wp?.latitude || !wp?.longitude) {
+        document.getElementById('loc-status').innerHTML = '⚠️ <span style="color:var(--amber)">Workplace not configured yet — ask your admin to set it up</span>';
+        setClockBtn(true); return;
+      }
+      const dist = Math.round(haversineM(pos.coords.latitude, pos.coords.longitude, wp.latitude, wp.longitude));
+      const radius = wp.radius_meters || 100;
+      const inside = dist <= radius;
+      document.getElementById('loc-status').innerHTML = inside
+        ? '✅ <strong>' + (wp.name || 'Workplace') + '</strong> — ' + dist + 'm away'
+        : '❌ Too far — ' + dist + 'm from <strong>' + (wp.name || 'workplace') + '</strong> (max ' + radius + 'm)';
+      setClockBtn(inside);
     },
     err => {
-      if (err.code === 1) {
-        // Permission denied — hard block
-        showLocationBlocked();
-      } else if (err.code === 2) {
-        // Position unavailable (GPS off at device level)
-        showLocationBlocked('Location services appear to be OFF on your device. Turn on GPS to clock in.');
+      if (err.code === err.PERMISSION_DENIED) {
+        locCard.style.display = 'none'; locBlk.classList.remove('hidden');
       } else {
-        document.getElementById('loc-status').innerHTML = '<span class="loc-err">❌ Location timed out — move to an open area and retry</span>';
+        document.getElementById('loc-status').textContent = '⚠️ Location error: ' + err.message;
         setClockBtn(false);
       }
     },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
+    { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 }
   );
 }
 
-function showLocationBlocked(customMsg) {
-  document.getElementById('loc-card').classList.add('hidden');
-  document.getElementById('loc-blocked-card').classList.remove('hidden');
-  document.getElementById('clock-btn').disabled = true;
-  document.getElementById('clock-btn').className = 'clock-btn disabled';
-  document.getElementById('clock-label').textContent = 'Location Required';
-  document.getElementById('clock-icon').textContent = '📍';
-  if (customMsg) {
-    document.querySelector('.loc-blocked-card p').textContent = customMsg;
-  }
-}
-
-function hideLocationBlocked() {
-  document.getElementById('loc-card').classList.remove('hidden');
-  document.getElementById('loc-blocked-card').classList.add('hidden');
-}
-
 function retryLocation() {
-  hideLocationBlocked();
-  S.userLoc = null;
-  startGeoWatch();
-}
-
-function refreshLocUI() {
-  if (!S.workplace || !S.userLoc) return;
-  const locEl = document.getElementById('loc-status');
-  const dist   = Math.round(haversineM(S.userLoc.lat, S.userLoc.lng, +S.workplace.latitude, +S.workplace.longitude));
-  const radius = S.workplace.radius_meters || 100;
-  const ok     = dist <= radius;
-
-  if (ok) {
-    locEl.innerHTML = `<div class="loc-ok">✅ You're within range</div>
-      <div class="loc-dist">${dist}m from <strong>${S.workplace.name}</strong> · GPS ±${S.userLoc.acc}m</div>`;
-  } else {
-    locEl.innerHTML = `<div class="loc-err">❌ Too far from workplace</div>
-      <div class="loc-dist">You are <strong>${dist}m</strong> away (max ${radius}m from ${S.workplace.name})</div>`;
-  }
-  setClockBtn(ok);
+  document.getElementById('loc-blocked-card').classList.add('hidden');
+  document.getElementById('loc-card').style.display = '';
+  startLocationWatch();
 }
 
 function setClockBtn(enabled) {
-  const btn  = document.getElementById('clock-btn');
-  const lbl  = document.getElementById('clock-label');
-  const icon = document.getElementById('clock-icon');
+  const btn = document.getElementById('clk-btn');
   if (enabled) {
-    btn.disabled  = false;
-    btn.className = `clock-btn ${S.clockStatus === 'out' ? 'clock-in' : 'clock-out'}`;
-    lbl.textContent  = S.clockStatus === 'out' ? 'Clock In'   : 'Clock Out';
-    icon.textContent = S.clockStatus === 'out' ? '▶'           : '⬛';
-  } else {
-    btn.disabled  = true;
-    btn.className = 'clock-btn disabled';
-    lbl.textContent  = S.userLoc ? 'Not in Range' : 'Checking Location…';
-    icon.textContent = '📍';
-  }
-}
-
-// ── Check today's status ─────────────────────────────
-async function refreshClockStatus() {
-  if (!S.worker) return;
-  const today = new Date(); today.setHours(0,0,0,0);
-  const tmrw  = new Date(today); tmrw.setDate(tmrw.getDate()+1);
-
-  const { data } = await db
-    .from('attendance').select('*')
-    .eq('worker_id', S.worker.id)
-    .gte('clock_in_time', today.toISOString())
-    .lt('clock_in_time', tmrw.toISOString())
-    .order('clock_in_time', { ascending: false }).limit(1);
-
-  const badge = document.getElementById('status-badge');
-  const card  = document.getElementById('today-card');
-
-  if (data?.length) {
-    const r = data[0];
-    if (r.status === 'active' && !r.clock_out_time) {
-      S.clockStatus = 'in'; S.attendanceId = r.id;
-      badge.className = 'badge badge-in'; badge.innerHTML = '<span class="dot"></span> Clocked In';
+    btn.disabled = false;
+    if (S.clockStatus === 'in') {
+      btn.className = 'clock-btn clk-out';
+      document.getElementById('clk-icon').textContent  = '⏹';
+      document.getElementById('clk-label').textContent = 'Clock Out';
     } else {
-      S.clockStatus = 'out'; S.attendanceId = null;
-      badge.className = 'badge badge-out'; badge.innerHTML = '<span class="dot"></span> Clocked Out';
-    }
-    card.style.display = 'block';
-    document.getElementById('rec-in').textContent  = r.clock_in_time  ? fmtTime(r.clock_in_time)  : '--:--';
-    document.getElementById('rec-out').textContent = r.clock_out_time ? fmtTime(r.clock_out_time) : '--:--';
-    if (r.clock_in_time && r.clock_out_time) {
-      document.getElementById('rec-hrs').textContent = ((new Date(r.clock_out_time)-new Date(r.clock_in_time))/3_600_000).toFixed(1)+'h';
+      btn.className = 'clock-btn clk-in';
+      document.getElementById('clk-icon').textContent  = '▶';
+      document.getElementById('clk-label').textContent = 'Clock In';
     }
   } else {
-    S.clockStatus = 'out'; S.attendanceId = null;
-    badge.className = 'badge badge-out'; badge.innerHTML = '<span class="dot"></span> Clocked Out';
-    card.style.display = 'none';
+    btn.disabled = true; btn.className = 'clock-btn clk-wait';
+    document.getElementById('clk-icon').textContent  = '⏳';
+    document.getElementById('clk-label').textContent = 'Checking Location…';
   }
-  refreshLocUI();
 }
 
-const fmtTime = iso => new Date(iso).toLocaleTimeString('en-ZA', { hour:'2-digit', minute:'2-digit' });
-
-// ── Clock In / Out ───────────────────────────────────
 async function clockAction() {
-  const btn = document.getElementById('clock-btn');
-  if (btn.disabled) return;
+  const btn = document.getElementById('clk-btn');
   btn.disabled = true;
-  S.clockStatus === 'out' ? await doClockIn() : await doClockOut();
-}
+  const action = S.clockStatus === 'in' ? 'out' : 'in';
 
-async function doClockIn() {
   try {
-    const { data, error } = await db.from('attendance').insert({
-      worker_id: S.worker.id, workplace_id: S.workplace?.id || null,
-      clock_in_time: new Date().toISOString(),
-      clock_in_latitude: S.userLoc?.lat, clock_in_longitude: S.userLoc?.lng,
-      auth_method: S.authMethod, status: 'active',
-    }).select().single();
+    if (action === 'in') {
+      const { data, error } = await db.from('attendance').insert({
+        worker_id: S.worker.id,
+        clock_in_time: new Date().toISOString(),
+        auth_method: S.authMethod,
+        status: 'active',
+        location_lat: S.userLoc?.latitude  || null,
+        location_lng: S.userLoc?.longitude || null,
+      }).select().single();
+      if (error) throw error;
+      S.attendanceId = data.id; S.clockStatus = 'in';
+    } else {
+      const { error } = await db.from('attendance').update({
+        clock_out_time: new Date().toISOString(),
+        status: 'completed',
+      }).eq('id', S.attendanceId);
+      if (error) throw error;
+      S.clockStatus = 'out';
+    }
 
-    if (error) throw error;
-    S.attendanceId = data.id; S.clockStatus = 'in';
     vibrate([50, 30, 100]);
-    showSuccess('in');
-    await refreshClockStatus();
-  } catch (err) { toast('❌ Failed to clock in — ' + err.message); }
-  document.getElementById('clock-btn').disabled = false;
-}
-
-async function doClockOut() {
-  if (!S.attendanceId) { toast('No active clock-in found.'); return; }
-  try {
-    const { error } = await db.from('attendance').update({
-      clock_out_time: new Date().toISOString(),
-      clock_out_latitude: S.userLoc?.lat, clock_out_longitude: S.userLoc?.lng,
-      status: 'completed',
-    }).eq('id', S.attendanceId);
-
-    if (error) throw error;
-    S.clockStatus = 'out'; S.attendanceId = null;
-    vibrate([50, 30, 50, 30, 100]);
-    showSuccess('out');
-    await refreshClockStatus();
-  } catch (err) { toast('❌ Failed to clock out — ' + err.message); }
-  document.getElementById('clock-btn').disabled = false;
-}
-
-// ── Success overlay ──────────────────────────────────
-function showSuccess(type) {
-  const ov = document.getElementById('success-overlay');
-  ov.className = `success-overlay ${type}-type`;
-  document.getElementById('success-icon').textContent   = type === 'in' ? '✓' : '✓';
-  document.getElementById('success-action').textContent = type === 'in' ? 'Clocked In!' : 'Clocked Out!';
-  document.getElementById('success-name').textContent   = S.worker.name;
-  document.getElementById('success-time').textContent   = new Date().toLocaleTimeString('en-ZA', { hour:'2-digit', minute:'2-digit' });
-  document.getElementById('success-wp').textContent     = S.workplace?.name || '';
-  ov.classList.remove('hidden');
-  setTimeout(() => ov.classList.add('hidden'), 2800);
-}
-
-// ── Worker registers own biometric ───────────────────
-async function workerRegisterBiometric() {
-  const w = S.worker;
-  try {
-    const cred = await navigator.credentials.create({ publicKey: {
-      challenge: crypto.getRandomValues(new Uint8Array(32)),
-      rp:   { name: 'WorkClock', id: window.location.hostname || 'localhost' },
-      user: { id: new TextEncoder().encode(w.id), name: w.employee_id, displayName: w.name },
-      pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
-      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'required', requireResidentKey: true },
-      timeout: 60000,
-    }});
-    if (!cred) return;
-    const credId = b64(cred.rawId);
-    const { error } = await db.from('workers')
-      .update({ biometric_credential_id: credId, biometric_enabled: true }).eq('id', w.id);
-    if (error) throw error;
-    S.worker.biometric_enabled = true; S.worker.biometric_credential_id = credId;
-    document.getElementById('bio-reg-card').style.display = 'none';
-    showMsg('bio-reg-msg', '✅ Registered! Use fingerprint to clock in next time.', 'ok');
-    toast('✅ Biometric registered!');
+    showSuccess(action);
+    await loadTodayRecord();
   } catch (err) {
-    if (err.name !== 'NotAllowedError') showMsg('bio-reg-msg', 'Error: ' + err.message, 'err');
-    else showMsg('bio-reg-msg', 'Registration cancelled.', 'err');
+    toast('❌ ' + err.message);
   }
+
+  btn.disabled = false;
+  setClockBtn(true);
 }
 
-// ── Worker logout ────────────────────────────────────
+function showSuccess(action) {
+  const overlay = document.getElementById('success-overlay');
+  const icon    = document.getElementById('succ-icon');
+  icon.className = 'succ-icon' + (action === 'out' ? ' out' : '');
+  icon.textContent = action === 'in' ? '✓' : '⏹';
+  document.getElementById('succ-action').textContent = action === 'in' ? 'Clocked In!' : 'Clocked Out!';
+  document.getElementById('succ-name').textContent   = S.worker.name;
+  document.getElementById('succ-time').textContent   = new Date().toLocaleTimeString('en-ZA', { hour:'2-digit', minute:'2-digit' });
+  document.getElementById('succ-wp').textContent     = S.worker?.workplace?.name || '';
+  overlay.classList.remove('hidden');
+  setTimeout(() => overlay.classList.add('hidden'), 2500);
+}
+
 function logoutWorker() {
   if (S.geoWatcher) { navigator.geolocation.clearWatch(S.geoWatcher); S.geoWatcher = null; }
-  Object.assign(S, { worker: null, userLoc: null, clockStatus: 'out', attendanceId: null, authSource: 'manual' });
+  S.worker = null; S.userLoc = null; S.clockStatus = 'out'; S.attendanceId = null; S.authSource = 'manual';
   localStorage.removeItem('wc_worker_id');
   document.getElementById('inp-empid').value = '';
   showPage('home');
 }
 
-// ════════════════════════════════════════════════════
-//  ADMIN
-// ════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════
+//  WORKER BIOMETRIC REGISTER
+// ═══════════════════════════════════════════════
+async function workerRegBio() {
+  if (!window.PublicKeyCredential) { showMsg('bio-reg-msg', 'Biometric not supported on this browser.', 'err'); return; }
+  try {
+    const cred = await navigator.credentials.create({ publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      rp:   { name:'WorkClock', id: window.location.hostname || 'localhost' },
+      user: { id: new TextEncoder().encode(S.worker.id), name: S.worker.employee_id, displayName: S.worker.name },
+      pubKeyCredParams: [{ alg:-7, type:'public-key' }, { alg:-257, type:'public-key' }],
+      authenticatorSelection: { authenticatorAttachment:'platform', userVerification:'required', residentKey:'required', requireResidentKey:true },
+      timeout: 60000,
+    }});
+    if (!cred) return;
+    const { error } = await db.from('workers')
+      .update({ biometric_credential_id: b64(cred.rawId), biometric_enabled: true }).eq('id', S.worker.id);
+    if (error) throw error;
+    S.worker.biometric_enabled = true;
+    document.getElementById('bio-reg-card').style.display = 'none';
+    showMsg('bio-reg-msg', '✅ Biometric registered! Use fingerprint to clock in next time.', 'ok');
+  } catch (err) {
+    if (err.name !== 'NotAllowedError') showMsg('bio-reg-msg', 'Error: ' + err.message, 'err');
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  ADMIN LOGIN
+// ═══════════════════════════════════════════════
 async function adminLogin() {
   const user = (document.getElementById('inp-auser').value || '').trim().toLowerCase();
   const pass =  document.getElementById('inp-apass').value || '';
   showErr('err-admin', '');
   if (!user || !pass) { showErr('err-admin', 'Enter username and password.'); return; }
-
-  // Guard: verify db client loaded correctly
-  if (typeof db === 'undefined' || !db) {
-    showErr('err-admin', 'App failed to initialise. Hold Ctrl and press F5 to force-reload, then try again.');
-    return;
-  }
-
+  if (typeof db === 'undefined') { showErr('err-admin', 'App not ready — refresh the page.'); return; }
   try {
     const { data, error } = await db.from('admin_users')
-      .select('*, co:companies(name,code)').eq('username', user).eq('password_hash', pass).eq('is_active', true).maybeSingle();
+      .select('*, co:companies(name,code)')
+      .eq('username', user).eq('password_hash', pass).eq('is_active', true).maybeSingle();
     if (error) { showErr('err-admin', 'Database error: ' + error.message); return; }
     if (!data)  { showErr('err-admin', 'Invalid username or password.'); return; }
     S.admin = data;
     document.getElementById('inp-auser').value = '';
     document.getElementById('inp-apass').value = '';
     if (data.role === 'developer') {
-      showPage('developer');
-      loadDevCompanies();
+      showPage('developer'); loadDevCos();
     } else {
-      // Scope all operations to this admin's company
-      document.getElementById('admin-company-label').textContent = data.co?.name || '';
-      // Admins tab: super_admin only. Setup tab: all admin roles get it.
+      document.getElementById('admin-co-label').textContent = data.co?.name || '';
       const isSA = data.role === 'super_admin';
       document.getElementById('tab-btn-admins').classList.toggle('hidden', !isSA);
-      document.getElementById('tab-btn-setup').classList.remove('hidden');
-      showPage('admin');
-      loadDashboard();
+      showPage('admin'); loadDashboard();
     }
-  } catch(err) { showErr('err-admin', 'Error: ' + (err?.message || String(err))); }
+  } catch (err) { showErr('err-admin', 'Error: ' + err.message); }
 }
 
 function adminLogout() { S.admin = null; showPage('home'); }
 
-// ── Forgot Password (OTP via EmailJS) ────────────────
+// ═══════════════════════════════════════════════
+//  FORGOT PASSWORD (OTP via EmailJS)
+// ═══════════════════════════════════════════════
 const _otp = { code: null, expiry: null };
 
 function toggleForgot() {
   const p = document.getElementById('forgot-panel');
   p.classList.toggle('hidden');
-  // Reset to step 1 when opening
   if (!p.classList.contains('hidden')) {
-    document.getElementById('forgot-step1').classList.remove('hidden');
-    document.getElementById('forgot-step2').classList.add('hidden');
-    document.getElementById('forgot-step3').classList.add('hidden');
-    document.getElementById('forgot-msg').classList.add('hidden');
+    ['fp-step2','fp-step3'].forEach(id => document.getElementById(id).classList.add('hidden'));
+    document.getElementById('fp-step1').classList.remove('hidden');
+    document.getElementById('fp-msg').classList.add('hidden');
   }
 }
 
-async function sendResetOTP() {
+async function sendOTP() {
   const btn = document.getElementById('send-otp-btn');
   if (typeof EMAILJS_PUBLIC_KEY === 'undefined' || EMAILJS_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
-    showMsg('forgot-msg', '⚠️ Email reset is not configured yet. See setup instructions.', 'err');
-    return;
+    showMsg('fp-msg', '⚠️ Email reset not configured yet.', 'err'); return;
   }
-  btn.disabled = true;
-  btn.textContent = 'Sending…';
-  showMsg('forgot-msg', '', '');
-
-  _otp.code   = String(Math.floor(100000 + Math.random() * 900000));
-  _otp.expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
-
+  const user = (document.getElementById('inp-auser').value || '').trim().toLowerCase();
+  if (!user) { showMsg('fp-msg', 'Enter your username first.', 'err'); return; }
+  btn.disabled = true; btn.textContent = 'Sending…';
+  _otp.code = String(Math.floor(100000 + Math.random() * 900000));
+  _otp.expiry = Date.now() + 600000;
   try {
+    const { data } = await db.from('admin_users').select('email').eq('username', user).maybeSingle();
+    if (!data?.email) { showMsg('fp-msg', 'No email on file for that username.', 'err'); btn.disabled = false; btn.textContent = '📧 Send Reset Code'; return; }
     emailjs.init(EMAILJS_PUBLIC_KEY);
-    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      to_email: ADMIN_RECOVERY_EMAIL,
-      otp:      _otp.code,
-      app_name: 'WorkClock',
-    });
-    document.getElementById('forgot-step1').classList.add('hidden');
-    document.getElementById('forgot-step2').classList.remove('hidden');
-    showMsg('forgot-msg', `✅ Code sent to ${ADMIN_RECOVERY_EMAIL} — check your inbox (and spam folder)`, 'ok');
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { to_email: data.email, otp: _otp.code, app_name: 'WorkClock' });
+    document.getElementById('fp-step1').classList.add('hidden');
+    document.getElementById('fp-step2').classList.remove('hidden');
+    showMsg('fp-msg', '✅ Code sent to ' + data.email, 'ok');
   } catch (err) {
-    showMsg('forgot-msg', 'Failed to send email: ' + (err?.text || err?.message || String(err)), 'err');
+    showMsg('fp-msg', 'Failed: ' + (err?.text || err.message), 'err');
   }
-  btn.disabled = false;
-  btn.textContent = '📧 Send Reset Code';
+  btn.disabled = false; btn.textContent = '📧 Send Reset Code';
 }
 
-function verifyResetOTP() {
+function verifyOTP() {
   const entered = (document.getElementById('inp-otp').value || '').trim();
-  if (!_otp.code) { showMsg('forgot-msg', 'Please request a new code first.', 'err'); return; }
-  if (Date.now() > _otp.expiry) { showMsg('forgot-msg', 'Code has expired — request a new one.', 'err'); _otp.code = null; return; }
-  if (entered !== _otp.code) { showMsg('forgot-msg', 'Incorrect code — try again.', 'err'); return; }
-  document.getElementById('forgot-step2').classList.add('hidden');
-  document.getElementById('forgot-step3').classList.remove('hidden');
-  showMsg('forgot-msg', '✅ Identity verified — set your new password below.', 'ok');
+  if (!_otp.code)             { showMsg('fp-msg', 'Request a code first.', 'err'); return; }
+  if (Date.now() > _otp.expiry) { showMsg('fp-msg', 'Code expired — request a new one.', 'err'); _otp.code = null; return; }
+  if (entered !== _otp.code)  { showMsg('fp-msg', 'Incorrect code.', 'err'); return; }
+  document.getElementById('fp-step2').classList.add('hidden');
+  document.getElementById('fp-step3').classList.remove('hidden');
+  showMsg('fp-msg', '✅ Verified — set your new password.', 'ok');
 }
 
-async function applyNewPassword() {
-  const pw = (document.getElementById('inp-newpw').value || '').trim();
-  if (!pw || pw.length < 6) { showMsg('forgot-msg', 'Password must be at least 6 characters.', 'err'); return; }
-  const { error } = await db.from('admin_users').update({ password_hash: pw }).eq('username', 'admin');
-  if (error) { showMsg('forgot-msg', 'Failed to update: ' + error.message, 'err'); return; }
+async function applyNewPw() {
+  const pw   = (document.getElementById('inp-newpw').value || '').trim();
+  const user = (document.getElementById('inp-auser').value || '').trim().toLowerCase();
+  if (!pw || pw.length < 6) { showMsg('fp-msg', 'Password must be at least 6 characters.', 'err'); return; }
+  const { error } = await db.from('admin_users').update({ password_hash: pw }).eq('username', user);
+  if (error) { showMsg('fp-msg', 'Failed: ' + error.message, 'err'); return; }
   _otp.code = null;
-  showMsg('forgot-msg', '✅ Password updated! Please log in with your new password.', 'ok');
-  document.getElementById('forgot-step3').classList.add('hidden');
-  setTimeout(() => {
-    document.getElementById('forgot-panel').classList.add('hidden');
-    document.getElementById('inp-newpw').value = '';
-  }, 2500);
+  showMsg('fp-msg', '✅ Password updated! Log in now.', 'ok');
+  document.getElementById('fp-step3').classList.add('hidden');
+  setTimeout(() => { document.getElementById('forgot-panel').classList.add('hidden'); document.getElementById('inp-newpw').value = ''; }, 2500);
 }
 
+// ═══════════════════════════════════════════════
+//  ADMIN TABS
+// ═══════════════════════════════════════════════
 function switchTab(name, btn) {
   document.querySelectorAll('#admin-tabs .tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   document.querySelectorAll('#page-admin .tab-pane').forEach(p => p.classList.remove('active'));
-  document.getElementById(`tab-${name}`).classList.add('active');
-  if (name === 'workers')         loadWorkers();
-  if (name === 'company-admins')  loadCompanyAdmins();
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'dash')       loadDashboard();
+  if (name === 'workers')    loadWorkers();
+  if (name === 'co-admins')  loadCoAdmins();
+  if (name === 'setup')      loadSetup();
   if (name === 'attendance') {
     const today = new Date().toISOString().slice(0, 10);
-    const eightMonthsAgo = new Date(); eightMonthsAgo.setMonth(eightMonthsAgo.getMonth() - 8);
-    document.getElementById('att-from').value = eightMonthsAgo.toISOString().slice(0, 10);
+    const ago   = new Date(); ago.setMonth(ago.getMonth() - 1);
+    document.getElementById('att-from').value = ago.toISOString().slice(0, 10);
     document.getElementById('att-to').value   = today;
     loadWorkerOptions();
   }
-  if (name === 'setup')           loadWorkplaceSetting();
 }
 
-// ── Dashboard ────────────────────────────────────────
+// ═══════════════════════════════════════════════
+//  DASHBOARD
+// ═══════════════════════════════════════════════
 async function loadDashboard() {
-  const today = new Date(); today.setHours(0,0,0,0);
-  const tmrw  = new Date(today); tmrw.setDate(tmrw.getDate()+1);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const tmrw  = new Date(today); tmrw.setDate(tmrw.getDate() + 1);
+  const cid   = S.admin?.company_id;
 
-  const cid = S.admin?.company_id;
   const [{ count: total }, { data: wkrs }] = await Promise.all([
     db.from('workers').select('id', { count:'exact', head:true }).eq('is_active', true).eq('company_id', cid),
     db.from('workers').select('id').eq('company_id', cid),
   ]);
-  const workerIds = wkrs?.map(w => w.id) || [];
-  const { data: recs } = workerIds.length
+  const ids = (wkrs || []).map(w => w.id);
+  const { data: recs } = ids.length
     ? await db.from('attendance').select('*, w:workers(name,employee_id)')
-        .in('worker_id', workerIds)
-        .gte('clock_in_time', today.toISOString()).lt('clock_in_time', tmrw.toISOString())
+        .in('worker_id', ids)
+        .gte('clock_in_time', today.toISOString())
+        .lt('clock_in_time', tmrw.toISOString())
         .order('clock_in_time', { ascending: false })
     : { data: [] };
 
@@ -823,12 +685,12 @@ async function loadDashboard() {
   const stillin = recs?.filter(r => r.status === 'active').length ?? 0;
   document.getElementById('s-present').textContent = present;
   document.getElementById('s-total').textContent   = total ?? '--';
-  document.getElementById('s-absent').textContent  = Math.max(0, (total??0) - present);
+  document.getElementById('s-absent').textContent  = Math.max(0, (total ?? 0) - present);
   document.getElementById('s-active').textContent  = stillin;
 
   const el = document.getElementById('activity-list');
   el.innerHTML = recs?.length
-    ? '<div class="act-list">' + recs.slice(0,12).map(r => `
+    ? '<div class="act-list">' + recs.slice(0, 15).map(r => `
         <div class="act-item">
           <div>
             <div class="act-name">${r.w?.name ?? 'Unknown'}</div>
@@ -839,38 +701,37 @@ async function loadDashboard() {
     : '<div class="empty">No clock-ins today</div>';
 }
 
-// ── Shared edit caches (worker + company) ────────────
-const _wCache = {};
-const _cCache = {};
-
-// ── Workers ──────────────────────────────────────────
+// ═══════════════════════════════════════════════
+//  WORKERS (Admin)
+// ═══════════════════════════════════════════════
 async function loadWorkers() {
   const el = document.getElementById('workers-list');
   el.innerHTML = '<div class="empty">Loading…</div>';
-  const { data, error } = await db.from('workers').select('*').eq('company_id', S.admin?.company_id).order('name');
+  const { data, error } = await db.from('workers')
+    .select('*').eq('company_id', S.admin?.company_id).order('name');
   if (error || !data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
   if (!data.length)   { el.innerHTML = '<div class="empty">No workers yet — add one above</div>'; return; }
-
   data.forEach(w => { _wCache[w.id] = { ...w, _ctx: 'admin' }; });
-
-  el.innerHTML = '<div class="workers-list">' + data.map(w => `
-    <div class="wr-row">
-      <div class="wr-info">
-        <div class="avatar sm">${initials(w.name)}</div>
+  el.innerHTML = '<div class="list-rows">' + data.map(w => `
+    <div class="list-row">
+      <div class="row-info">
+        <div class="avatar av-sm">${initials(w.name)}</div>
         <div>
-          <div class="wr-name">${w.name}</div>
-          <div class="wr-meta">${w.employee_id}${w.job_title?' · '+w.job_title:''}${w.biometric_enabled?' · 🔏':''}${w.face_descriptor?' · 🤳':''} ${!w.is_active?'· <em>Inactive</em>':''}</div>
+          <div class="row-name">${w.name}</div>
+          <div class="row-meta">${w.employee_id}${w.job_title?' · '+w.job_title:''}${w.biometric_enabled?' · 🔏':''}${w.face_descriptor?' · 🤳':''}${!w.is_active?' · <em>Inactive</em>':''}</div>
         </div>
       </div>
-      <div class="wr-btns">
-        <button class="icon-btn" title="Edit Worker" onclick="openEditWorkerById('${w.id}')">✏️</button>
-        <button class="icon-btn" title="Enrol Face" onclick="adminEnrollFace('${w.id}','${w.name.replace(/'/g,"\\'")}','admin')">🤳</button>
-        <button class="icon-btn" title="Print ID Card" onclick="openCardModal('${w.id}','${w.employee_id}','${w.name.replace(/'/g,"\\'")}','${(w.job_title||'').replace(/'/g,"\\'")}')">🪪</button>
-        <button class="icon-btn" title="Register Fingerprint/Face ID" onclick="adminRegisterBio('${w.id}','${w.name.replace(/'/g,"\\'")}')">🔏</button>
+      <div class="row-btns">
+        <button class="icon-btn" title="Edit"             onclick="openEditWorker('${w.id}')">✏️</button>
+        <button class="icon-btn" title="Enrol Face"       onclick="adminEnrollFace('${w.id}','${escQ(w.name)}','admin')">🤳</button>
+        <button class="icon-btn" title="Register Bio"     onclick="adminRegBio('${w.id}','${escQ(w.name)}')">🔏</button>
+        <button class="icon-btn" title="Print ID Card"    onclick="openCard('${w.id}','${w.employee_id}','${escQ(w.name)}','${escQ(w.job_title||'')}')">🪪</button>
         <button class="icon-btn" title="${w.is_active?'Deactivate':'Reactivate'}" onclick="toggleWorker('${w.id}',${w.is_active})">${w.is_active?'🚫':'✅'}</button>
       </div>
     </div>`).join('') + '</div>';
 }
+
+function escQ(s) { return (s || '').replace(/'/g, "\\'"); }
 
 function toggleAddWorker() {
   const p = document.getElementById('add-worker-panel');
@@ -879,29 +740,23 @@ function toggleAddWorker() {
 }
 
 async function addWorker() {
-  const empId    = (document.getElementById('nw-id').value      || '').trim().toUpperCase();
-  const name     = (document.getElementById('nw-name').value    || '').trim();
-  const jobTitle = (document.getElementById('nw-jobtitle').value|| '').trim();
-  const phone    = (document.getElementById('nw-phone').value   || '').trim();
-  const email    = (document.getElementById('nw-email').value   || '').trim();
-  const pin      = (document.getElementById('nw-pin').value     || '').trim();
-
+  const empId = (document.getElementById('nw-id').value    || '').trim().toUpperCase();
+  const name  = (document.getElementById('nw-name').value  || '').trim();
+  const job   = (document.getElementById('nw-job').value   || '').trim();
+  const phone = (document.getElementById('nw-phone').value || '').trim();
+  const email = (document.getElementById('nw-email').value || '').trim();
+  const pin   = (document.getElementById('nw-pin').value   || '').trim();
   if (!empId || !name || !pin) { showMsg('nw-msg', 'Employee ID, Name and PIN are required.', 'err'); return; }
-  if (pin.length < 4)          { showMsg('nw-msg', 'PIN must be at least 4 digits.', 'err');           return; }
-
+  if (pin.length < 4)          { showMsg('nw-msg', 'PIN must be at least 4 digits.', 'err'); return; }
   const cid = S.admin?.company_id;
   const { data: wps } = await db.from('workplaces').select('id').eq('company_id', cid).limit(1);
   const { error } = await db.from('workers').insert({
-    employee_id: empId, name, job_title: jobTitle||null, phone: phone||null, email: email||null, pin,
-    workplace_id: wps?.[0]?.id ?? null, company_id: cid, is_active: true,
+    employee_id: empId, name, job_title: job||null, phone: phone||null, email: email||null,
+    pin, workplace_id: wps?.[0]?.id ?? null, company_id: cid, is_active: true,
   });
-
-  if (error) {
-    showMsg('nw-msg', error.code === '23505' ? 'Employee ID already exists.' : error.message, 'err');
-    return;
-  }
-  showMsg('nw-msg', '✅ Worker added successfully!', 'ok');
-  setTimeout(() => { toggleAddWorker(); loadWorkers(); }, 1300);
+  if (error) { showMsg('nw-msg', error.code === '23505' ? 'Employee ID already exists.' : error.message, 'err'); return; }
+  showMsg('nw-msg', '✅ Worker added!', 'ok');
+  setTimeout(() => { toggleAddWorker(); loadWorkers(); ['nw-id','nw-name','nw-job','nw-phone','nw-email','nw-pin'].forEach(id => document.getElementById(id).value=''); }, 1300);
 }
 
 async function toggleWorker(id, cur) {
@@ -909,244 +764,217 @@ async function toggleWorker(id, cur) {
   if (!error) { toast(cur ? 'Worker deactivated' : 'Worker reactivated'); loadWorkers(); }
 }
 
-// ── Admin-initiated biometric registration ───────────
-async function adminRegisterBio(workerId, workerName) {
+async function adminRegBio(workerId, workerName) {
   if (!window.PublicKeyCredential) { toast('WebAuthn not supported here'); return; }
-  if (!confirm(`Register biometric for "${workerName}"?\n\nThe worker must be present on this device.`)) return;
+  if (!confirm('Register biometric for "' + workerName + '"?\n\nThe worker must be present on this device.')) return;
   try {
     const cred = await navigator.credentials.create({ publicKey: {
       challenge: crypto.getRandomValues(new Uint8Array(32)),
-      rp:   { name: 'WorkClock', id: window.location.hostname || 'localhost' },
+      rp:   { name:'WorkClock', id: window.location.hostname || 'localhost' },
       user: { id: new TextEncoder().encode(workerId), name: workerName, displayName: workerName },
-      pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
-      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'required', requireResidentKey: true },
+      pubKeyCredParams: [{ alg:-7, type:'public-key' }, { alg:-257, type:'public-key' }],
+      authenticatorSelection: { authenticatorAttachment:'platform', userVerification:'required', residentKey:'required', requireResidentKey:true },
       timeout: 60000,
     }});
     if (!cred) return;
     const { error } = await db.from('workers')
       .update({ biometric_credential_id: b64(cred.rawId), biometric_enabled: true }).eq('id', workerId);
     if (error) throw error;
-    toast(`✅ Biometric registered for ${workerName}`); loadWorkers();
-  } catch (err) {
-    toast(err.name === 'NotAllowedError' ? 'Cancelled.' : 'Error: ' + err.message);
-  }
+    toast('✅ Biometric registered for ' + workerName); loadWorkers();
+  } catch (err) { toast(err.name === 'NotAllowedError' ? 'Cancelled.' : '❌ ' + err.message); }
 }
 
-// ── Print / QR Card ──────────────────────────────────
-async function openCardModal(workerId, empId, name, jobTitle) {
-  document.getElementById('pc-name').textContent     = name;
-  document.getElementById('pc-jobtitle').textContent = jobTitle || '';
-  document.getElementById('pc-id').textContent       = empId;
-  document.getElementById('card-modal').classList.remove('hidden');
-
-  const canvas = document.getElementById('qr-gen-canvas');
-  if (typeof QRCode === 'undefined') { toast('QR library still loading — please try again in a moment.'); return; }
-  try {
-    await QRCode.toCanvas(canvas, empId, { width: 180, margin: 2, color: { dark: '#1E293B', light: '#FFFFFF' } });
-  } catch (err) {
-    toast('QR generation failed: ' + err.message);
-  }
+// ═══════════════════════════════════════════════
+//  PRINT ID CARD
+// ═══════════════════════════════════════════════
+async function openCard(workerId, empId, name, job) {
+  document.getElementById('pc-name').textContent = name;
+  document.getElementById('pc-job').textContent  = job || '';
+  document.getElementById('pc-id').textContent   = empId;
+  document.getElementById('modal-card').classList.remove('hidden');
+  const canvas = document.getElementById('qr-card-canvas');
+  if (typeof QRCode === 'undefined') { toast('QR library loading — try again in a moment.'); return; }
+  try { await QRCode.toCanvas(canvas, empId, { width:180, margin:2, color:{ dark:'#1E293B', light:'#FFFFFF' } }); }
+  catch (err) { toast('QR error: ' + err.message); }
 }
+function closeCardModal() { document.getElementById('modal-card').classList.add('hidden'); }
 
-function closeCardModal(e) {
-  if (!e || e.target === document.getElementById('card-modal'))
-    document.getElementById('card-modal').classList.add('hidden');
-}
-
-function printCard() { window.print(); }
-
-// ── CSV Export ───────────────────────────────────────
-async function downloadCSV() {
-  const from   = document.getElementById('att-from').value;
-  const to     = document.getElementById('att-to').value;
-  const worker = document.getElementById('att-worker').value;
-  const method = document.getElementById('att-method').value;
-
-  if (!from || !to) { showMsg('csv-msg', 'Please select a date range first.', 'err'); return; }
-  if (new Date(from) > new Date(to)) { showMsg('csv-msg', 'From date must be before To date.', 'err'); return; }
-
-  showMsg('csv-msg', '⏳ Fetching records…', 'ok');
-
-  const start = new Date(from); start.setHours(0, 0, 0, 0);
-  const end   = new Date(to);   end.setHours(23, 59, 59, 999);
-
-  try {
-    const { data: cWorkers } = await db.from('workers').select('id').eq('company_id', S.admin?.company_id);
-    const cIds = cWorkers?.map(w => w.id) || [];
-    const allowed = worker ? [worker] : cIds;
-    if (!allowed.length) { showMsg('csv-msg', 'No workers found for this company.', 'err'); return; }
-
-    let q = db.from('attendance')
-      .select('*, w:workers(name, employee_id, job_title)')
-      .in('worker_id', allowed)
-      .gte('clock_in_time', start.toISOString())
-      .lte('clock_in_time', end.toISOString())
-      .order('clock_in_time');
-
-    if (method) q = q.eq('auth_method', method);
-    const { data, error } = await q;
-
-    if (error) throw error;
-    if (!data?.length) { showMsg('csv-msg', 'No records found for this date range.', 'err'); return; }
-
-    const headers = ['Worker Name', 'Employee ID', 'Job Title', 'Date', 'Clock In', 'Clock Out', 'Hours Worked', 'Auth Method', 'Status'];
-    const rows = data.map(r => {
-      const cin  = r.clock_in_time  ? new Date(r.clock_in_time)  : null;
-      const cout = r.clock_out_time ? new Date(r.clock_out_time) : null;
-      const hrs  = (cin && cout) ? ((cout - cin) / 3_600_000).toFixed(2) : '';
-      return [
-        r.w?.name        || 'Unknown',
-        r.w?.employee_id || '',
-        r.w?.job_title   || '',
-        cin  ? cin.toLocaleDateString('en-ZA')  : '',
-        cin  ? cin.toLocaleTimeString('en-ZA',  { hour:'2-digit', minute:'2-digit' }) : '',
-        cout ? cout.toLocaleTimeString('en-ZA', { hour:'2-digit', minute:'2-digit' }) : 'Still In',
-        hrs  ? hrs + 'h' : '',
-        r.auth_method || '',
-        r.status || ''
-      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
-    });
-
-    const csv  = '﻿' + [headers.join(','), ...rows].join('\r\n'); // BOM for Excel
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `attendance_${from}_to_${to}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    showMsg('csv-msg', `✅ Downloaded ${data.length} record${data.length !== 1 ? 's' : ''}`, 'ok');
-  } catch (err) {
-    showMsg('csv-msg', 'Export failed: ' + err.message, 'err');
-  }
-}
-
-// ── Attendance report (filterable) ───────────────────
+// ═══════════════════════════════════════════════
+//  ATTENDANCE
+// ═══════════════════════════════════════════════
 async function loadWorkerOptions() {
   const sel = document.getElementById('att-worker');
-  try {
-    const { data } = await db.from('workers').select('id, name, employee_id, job_title').eq('company_id', S.admin?.company_id).order('name');
-    if (!data) return;
-    sel.innerHTML = '<option value="">All Workers</option>' +
-      data.map(w => `<option value="${w.id}">${w.name}${w.job_title ? ' · '+w.job_title : ''} (${w.employee_id})</option>`).join('');
-  } catch { /* keep default */ }
+  const { data } = await db.from('workers').select('id,name,employee_id,job_title')
+    .eq('company_id', S.admin?.company_id).order('name');
+  sel.innerHTML = '<option value="">All Workers</option>' +
+    (data || []).map(w => `<option value="${w.id}">${w.name}${w.job_title?' · '+w.job_title:''} (${w.employee_id})</option>`).join('');
 }
 
-async function loadAttendanceReport() {
+async function loadAttendance() {
   const from   = document.getElementById('att-from').value;
   const to     = document.getElementById('att-to').value;
   const worker = document.getElementById('att-worker').value;
   const method = document.getElementById('att-method').value;
   const el     = document.getElementById('att-list');
   const sum    = document.getElementById('att-summary');
-
-  if (!from || !to) { el.innerHTML = '<div class="empty">Please select a date range</div>'; return; }
-
-  el.innerHTML = '<div class="empty">Loading…</div>';
-  sum.classList.add('hidden');
+  if (!from || !to) { el.innerHTML = '<div class="empty">Select a date range</div>'; return; }
+  el.innerHTML = '<div class="empty">Loading…</div>'; sum.classList.add('hidden');
 
   const start = new Date(from); start.setHours(0, 0, 0, 0);
   const end   = new Date(to);   end.setHours(23, 59, 59, 999);
 
   try {
-    const { data: cWorkers } = await db.from('workers').select('id').eq('company_id', S.admin?.company_id);
-    const cIds = cWorkers?.map(w => w.id) || [];
-    const allowed = worker ? [worker] : cIds;
+    const { data: cWks } = await db.from('workers').select('id').eq('company_id', S.admin?.company_id);
+    const allowed = worker ? [worker] : (cWks || []).map(w => w.id);
     if (!allowed.length) { el.innerHTML = '<div class="empty">No workers found</div>'; return; }
-
     let q = db.from('attendance')
-      .select('*, w:workers(name, employee_id, job_title)')
+      .select('*, w:workers(name,employee_id,job_title)')
       .in('worker_id', allowed)
       .gte('clock_in_time', start.toISOString())
       .lte('clock_in_time', end.toISOString())
       .order('clock_in_time', { ascending: false });
-
     if (method) q = q.eq('auth_method', method);
     const { data, error } = await q;
-
-    if (error) { el.innerHTML = '<div class="empty">Failed to load records</div>'; return; }
-    if (!data?.length) { el.innerHTML = '<div class="empty">No records match your filters</div>'; return; }
-
-    const totalHrs = data.reduce((s, r) =>
-      s + (r.clock_in_time && r.clock_out_time
-        ? (new Date(r.clock_out_time) - new Date(r.clock_in_time)) / 3_600_000 : 0), 0);
-    const stillIn = data.filter(r => r.status === 'active').length;
-    sum.textContent = `${data.length} record${data.length !== 1 ? 's' : ''} · ${totalHrs.toFixed(1)}h total · ${stillIn} still clocked in`;
+    if (error) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
+    if (!data?.length) { el.innerHTML = '<div class="empty">No records match filters</div>'; return; }
+    const totalHrs = data.reduce((s, r) => s + (r.clock_in_time && r.clock_out_time ? (new Date(r.clock_out_time) - new Date(r.clock_in_time)) / 3600000 : 0), 0);
+    const still = data.filter(r => r.status === 'active').length;
+    sum.textContent = data.length + ' records · ' + totalHrs.toFixed(1) + 'h total · ' + still + ' still in';
     sum.classList.remove('hidden');
-
-    el.innerHTML = '<div class="att-list">' + data.map(r => {
-      const cin  = r.clock_in_time  ? fmtTime(r.clock_in_time)  : '--';
-      const cout = r.clock_out_time ? fmtTime(r.clock_out_time) : 'Still in';
-      const date = r.clock_in_time  ? new Date(r.clock_in_time).toLocaleDateString('en-ZA') : '';
-      const hrs  = (r.clock_in_time && r.clock_out_time)
-        ? ((new Date(r.clock_out_time) - new Date(r.clock_in_time)) / 3_600_000).toFixed(1) + 'h' : '--';
-      return `<div class="att-item">
-        <div class="att-name">${r.w?.name ?? 'Unknown'} <small style="color:#94a3b8">${r.w?.employee_id ?? ''}</small>${r.w?.job_title ? ` <small style="color:#2563EB">· ${r.w.job_title}</small>` : ''}</div>
-        <div class="att-date">${date}</div>
-        <div class="att-times">
-          <span class="t-in">▶ ${cin}</span>
-          <span class="t-out">⬛ ${cout}</span>
-          <span class="t-hrs">⏱ ${hrs}</span>
-          <span class="t-meth">${r.auth_method ?? ''}</span>
+    el.innerHTML = '<div class="att-rows">' + data.map(r => {
+      const hrs = (r.clock_in_time && r.clock_out_time) ? ((new Date(r.clock_out_time) - new Date(r.clock_in_time)) / 3600000).toFixed(1) + 'h' : '--';
+      return `<div class="att-row">
+        <div class="att-name">${r.w?.name ?? 'Unknown'} <small style="color:var(--muted)">${r.w?.employee_id ?? ''}</small>${r.w?.job_title ? ` <small style="color:var(--blue)">· ${r.w.job_title}</small>` : ''}</div>
+        <div class="att-date">${fmtDate(r.clock_in_time)}</div>
+        <div class="att-chips">
+          <span class="chip chip-in">▶ ${fmtTime(r.clock_in_time)}</span>
+          <span class="chip chip-out">⏹ ${r.clock_out_time ? fmtTime(r.clock_out_time) : 'Still in'}</span>
+          <span class="chip chip-hrs">⏱ ${hrs}</span>
+          <span class="chip chip-mth">${r.auth_method ?? ''}</span>
         </div>
       </div>`;
     }).join('') + '</div>';
-  } catch (err) { el.innerHTML = `<div class="empty">Error: ${err.message}</div>`; }
+  } catch (err) { el.innerHTML = '<div class="empty">Error: ' + err.message + '</div>'; }
 }
 
-// ── Workplace Setup ──────────────────────────────────
-async function loadWorkplaceSetting() {
-  const { data } = await db.from('workplaces').select('*').eq('company_id', S.admin?.company_id).limit(1);
-  if (data?.[0]) {
-    const w = data[0];
-    document.getElementById('wp-name').value   = w.name ?? '';
-    document.getElementById('wp-addr').value   = w.address ?? '';
-    document.getElementById('wp-lat').value    = w.latitude ?? '';
-    document.getElementById('wp-lng').value    = w.longitude ?? '';
-    document.getElementById('wp-radius').value = w.radius_meters ?? 100;
-  }
-  // Populate clock-in link box
-  const code    = S.admin?.co?.code;
-  const linkBox = document.getElementById('clockin-link-box');
-  if (linkBox) {
-    if (code) {
-      const base = window.location.origin + window.location.pathname;
-      linkBox.textContent = `${base}?c=${code}`;
-    } else {
-      linkBox.textContent = 'Company code not found — contact developer.';
-    }
-  }
-  // Populate My Profile fields
-  const nameEl  = document.getElementById('my-name');
-  const emailEl = document.getElementById('my-email');
-  if (nameEl)  nameEl.value  = S.admin?.full_name || '';
-  if (emailEl) emailEl.value = S.admin?.email     || '';
+async function downloadCSV() {
+  const from   = document.getElementById('att-from').value;
+  const to     = document.getElementById('att-to').value;
+  const worker = document.getElementById('att-worker').value;
+  const method = document.getElementById('att-method').value;
+  if (!from || !to) { showMsg('csv-msg', 'Select a date range first.', 'err'); return; }
+  showMsg('csv-msg', '⏳ Preparing CSV…', 'ok');
+  const start = new Date(from); start.setHours(0,0,0,0);
+  const end   = new Date(to);   end.setHours(23,59,59,999);
+  try {
+    const { data: cWks } = await db.from('workers').select('id').eq('company_id', S.admin?.company_id);
+    const allowed = worker ? [worker] : (cWks || []).map(w => w.id);
+    let q = db.from('attendance').select('*, w:workers(name,employee_id,job_title)')
+      .in('worker_id', allowed)
+      .gte('clock_in_time', start.toISOString()).lte('clock_in_time', end.toISOString())
+      .order('clock_in_time');
+    if (method) q = q.eq('auth_method', method);
+    const { data } = await q;
+    if (!data?.length) { showMsg('csv-msg', 'No records found.', 'err'); return; }
+    const hdr  = ['Worker Name','Employee ID','Job Title','Date','Clock In','Clock Out','Hours','Auth Method','Status'];
+    const rows = data.map(r => {
+      const cin  = r.clock_in_time  ? new Date(r.clock_in_time)  : null;
+      const cout = r.clock_out_time ? new Date(r.clock_out_time) : null;
+      const hrs  = (cin && cout) ? ((cout - cin) / 3600000).toFixed(2) : '';
+      return [r.w?.name||'',r.w?.employee_id||'',r.w?.job_title||'',cin?fmtDate(r.clock_in_time):'',cin?fmtTime(r.clock_in_time):'',cout?fmtTime(r.clock_out_time):'Still In',hrs?hrs+'h':'',r.auth_method||'',r.status||'']
+        .map(v => '"' + String(v).replace(/"/g,'""') + '"').join(',');
+    });
+    const csv  = '﻿' + [hdr.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), { href:url, download:`attendance_${from}_to_${to}.csv` });
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    showMsg('csv-msg', '✅ Downloaded ' + data.length + ' records', 'ok');
+  } catch (err) { showMsg('csv-msg', 'Export failed: ' + err.message, 'err'); }
 }
 
-function copyClockInLink() {
-  const code = S.admin?.co?.code;
-  if (!code) { showMsg('link-copy-msg', 'Company code not found.', 'err'); return; }
-  const base = window.location.origin + window.location.pathname;
-  const link = `${base}?c=${code}`;
-  navigator.clipboard.writeText(link).then(() => {
-    showMsg('link-copy-msg', '✅ Link copied!', 'ok');
-  }).catch(() => {
-    document.getElementById('clockin-link-box').textContent = link;
-    showMsg('link-copy-msg', 'Copy the link above manually.', 'ok');
+// ═══════════════════════════════════════════════
+//  COMPANY ADMINS (super_admin)
+// ═══════════════════════════════════════════════
+const ROLE_LABELS = { super_admin:'Super Admin', admin:'Admin', developer:'Developer' };
+const ROLE_COLORS = { super_admin:'var(--green)', admin:'var(--blue)', developer:'var(--purple)' };
+
+async function loadCoAdmins() {
+  const el = document.getElementById('co-admins-list');
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  const { data, error } = await db.from('admin_users')
+    .select('*').eq('company_id', S.admin?.company_id).neq('role','developer').order('full_name');
+  if (error || !data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
+  if (!data.length)   { el.innerHTML = '<div class="empty">No admins yet — create one above</div>'; return; }
+  el.innerHTML = '<div class="list-rows">' + data.map(a => `
+    <div class="list-row">
+      <div class="row-info">
+        <div class="avatar av-sm" style="background:${ROLE_COLORS[a.role]||'var(--blue)'}">${initials(a.full_name||a.username)}</div>
+        <div>
+          <div class="row-name">${a.full_name||a.username} <small style="color:var(--muted)">@${a.username}</small></div>
+          <div class="row-meta">
+            <span class="role-pill" style="background:${ROLE_COLORS[a.role]||'var(--blue)'}22;color:${ROLE_COLORS[a.role]||'var(--blue)'};">${ROLE_LABELS[a.role]||a.role}</span>
+            ${a.email?'· '+a.email:''}${!a.is_active?' · <em>Inactive</em>':''}
+          </div>
+        </div>
+      </div>
+      <div class="row-btns">
+        <button class="icon-btn" title="Edit"  onclick="openEditAcct('${a.id}','${escQ(a.full_name||'')}','${escQ(a.email||'')}','${a.role}','sa')">✏️</button>
+        <button class="icon-btn" title="Reset Password" onclick="resetPw('${a.id}','${a.username}')">🔑</button>
+        <button class="icon-btn" title="${a.is_active?'Deactivate':'Reactivate'}" onclick="toggleAdmin('${a.id}',${a.is_active})">${a.is_active?'🚫':'✅'}</button>
+      </div>
+    </div>`).join('') + '</div>';
+}
+
+function toggleAddAdmin() {
+  const p = document.getElementById('add-admin-panel');
+  p.classList.toggle('hidden');
+  if (!p.classList.contains('hidden')) document.getElementById('ca-name').focus();
+}
+
+async function addAdmin() {
+  const name  = (document.getElementById('ca-name').value  || '').trim();
+  const user  = (document.getElementById('ca-user').value  || '').trim().toLowerCase();
+  const pass  = (document.getElementById('ca-pass').value  || '').trim();
+  const email = (document.getElementById('ca-email').value || '').trim();
+  const role  =  document.getElementById('ca-role').value  || 'admin';
+  if (!name||!user||!pass) { showMsg('ca-msg','Name, username and password required.','err'); return; }
+  if (pass.length < 6)     { showMsg('ca-msg','Password must be at least 6 characters.','err'); return; }
+  if (!/^[a-z0-9_]+$/.test(user)) { showMsg('ca-msg','Username: letters, numbers and underscores only.','err'); return; }
+  const { error } = await db.from('admin_users').insert({
+    username:user, password_hash:pass, full_name:name, email:email||null,
+    role, company_id:S.admin?.company_id, is_active:true,
   });
+  if (error) { showMsg('ca-msg', error.code==='23505'?'Username already exists.':error.message,'err'); return; }
+  showMsg('ca-msg','✅ ' + (ROLE_LABELS[role]||role) + ' "@' + user + '" created!','ok');
+  ['ca-name','ca-user','ca-pass','ca-email'].forEach(id => document.getElementById(id).value='');
+  setTimeout(() => { toggleAddAdmin(); loadCoAdmins(); }, 1400);
 }
 
-async function saveMyProfile() {
-  const name  = (document.getElementById('my-name').value  || '').trim();
-  const email = (document.getElementById('my-email').value || '').trim();
-  if (!name) { showMsg('profile-msg', 'Full name is required.', 'err'); return; }
-  const { error } = await db.from('admin_users').update({ full_name: name, email: email || null }).eq('id', S.admin.id);
-  if (error) { showMsg('profile-msg', 'Failed: ' + error.message, 'err'); return; }
-  S.admin.full_name = name; S.admin.email = email;
-  showMsg('profile-msg', '✅ Profile updated!', 'ok');
+async function toggleAdmin(id, cur) {
+  const { error } = await db.from('admin_users').update({ is_active: !cur }).eq('id', id);
+  if (!error) { toast(cur?'Admin deactivated':'Admin reactivated'); loadCoAdmins(); }
+}
+
+// ═══════════════════════════════════════════════
+//  SETUP TAB
+// ═══════════════════════════════════════════════
+async function loadSetup() {
+  const cid = S.admin?.company_id;
+  const { data: wps } = await db.from('workplaces').select('*').eq('company_id', cid).limit(1);
+  if (wps?.[0]) {
+    const w = wps[0];
+    document.getElementById('wp-name').value   = w.name || '';
+    document.getElementById('wp-addr').value   = w.address || '';
+    document.getElementById('wp-lat').value    = w.latitude || '';
+    document.getElementById('wp-lng').value    = w.longitude || '';
+    document.getElementById('wp-radius').value = w.radius_meters || 100;
+  }
+  const code    = S.admin?.co?.code;
+  const linkEl  = document.getElementById('clockin-link');
+  if (linkEl) linkEl.textContent = code ? (window.location.origin + window.location.pathname + '?c=' + code) : 'Company code not found.';
+  document.getElementById('my-name').value  = S.admin?.full_name || '';
+  document.getElementById('my-email').value = S.admin?.email || '';
 }
 
 async function saveWorkplace() {
@@ -1155,100 +983,214 @@ async function saveWorkplace() {
   const lat    = parseFloat(document.getElementById('wp-lat').value);
   const lng    = parseFloat(document.getElementById('wp-lng').value);
   const radius = parseInt(document.getElementById('wp-radius').value) || 100;
-
-  if (!name || isNaN(lat) || isNaN(lng)) { showMsg('wp-msg', 'Name, Latitude and Longitude are required.', 'err'); return; }
-
-  const cid = S.admin?.company_id;
+  if (!name || isNaN(lat) || isNaN(lng)) { showMsg('wp-msg','Name, Latitude and Longitude are required.','err'); return; }
+  const cid     = S.admin?.company_id;
   const { data: ex } = await db.from('workplaces').select('id').eq('company_id', cid).limit(1);
-  const payload = { name, address: addr, latitude: lat, longitude: lng, radius_meters: radius, company_id: cid, updated_at: new Date() };
+  const payload = { name, address:addr, latitude:lat, longitude:lng, radius_meters:radius, company_id:cid };
   const { error } = ex?.length
     ? await db.from('workplaces').update(payload).eq('id', ex[0].id)
     : await db.from('workplaces').insert(payload);
-
-  if (error) { showMsg('wp-msg', 'Save failed: ' + error.message, 'err'); return; }
-  showMsg('wp-msg', '✅ Workplace saved!', 'ok');
-
+  if (error) { showMsg('wp-msg','Save failed: '+error.message,'err'); return; }
+  showMsg('wp-msg','✅ Workplace saved!','ok');
   const { data: wp } = await db.from('workplaces').select('id').eq('company_id', cid).limit(1);
-  if (wp?.[0]?.id) await db.from('workers').update({ workplace_id: wp[0].id }).eq('company_id', cid).is('workplace_id', null);
+  if (wp?.[0]?.id) await db.from('workers').update({ workplace_id:wp[0].id }).eq('company_id', cid).is('workplace_id', null);
 }
 
-function captureAdminLocation() {
-  if (!navigator.geolocation) { toast('Geolocation not supported'); return; }
+function detectLocation() {
+  if (!navigator.geolocation) { toast('Geolocation not available'); return; }
   toast('📍 Getting your location…');
-  navigator.geolocation.getCurrentPosition(
-    async pos => {
-      const lat = pos.coords.latitude.toFixed(7);
-      const lng = pos.coords.longitude.toFixed(7);
-      document.getElementById('wp-lat').value = lat;
-      document.getElementById('wp-lng').value = lng;
-      toast(`📍 Location captured (±${Math.round(pos.coords.accuracy)}m)`);
-      // Reverse geocode to fill in address automatically
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
-          { headers: { 'Accept-Language': 'en' } }
-        );
-        const geo = await res.json();
-        if (geo?.display_name) {
-          document.getElementById('wp-addr').value = geo.display_name;
-          toast(`📍 Address detected — review and save`);
-        }
-      } catch { /* address stays blank if reverse geocode fails */ }
-    },
-    () => toast('Could not get location — enter coordinates manually.')
-  );
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const lat = pos.coords.latitude.toFixed(7);
+    const lng = pos.coords.longitude.toFixed(7);
+    document.getElementById('wp-lat').value = lat;
+    document.getElementById('wp-lng').value = lng;
+    toast('📍 Location captured (±' + Math.round(pos.coords.accuracy) + 'm)');
+    try {
+      const res = await fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng, { headers:{ 'Accept-Language':'en' } });
+      const geo = await res.json();
+      if (geo?.display_name) { document.getElementById('wp-addr').value = geo.display_name; }
+    } catch {}
+  }, () => toast('Could not get location — enter coordinates manually.'));
+}
+
+function copyClockInLink() {
+  const code = S.admin?.co?.code;
+  if (!code) { showMsg('link-msg','Company code not found.','err'); return; }
+  const link = window.location.origin + window.location.pathname + '?c=' + code;
+  navigator.clipboard.writeText(link).then(() => showMsg('link-msg','✅ Link copied!','ok'))
+    .catch(() => { document.getElementById('clockin-link').textContent = link; showMsg('link-msg','Copy the link above manually.','ok'); });
+}
+
+async function saveProfile() {
+  const name  = (document.getElementById('my-name').value  || '').trim();
+  const email = (document.getElementById('my-email').value || '').trim();
+  if (!name) { showMsg('profile-msg','Full name is required.','err'); return; }
+  const { error } = await db.from('admin_users').update({ full_name:name, email:email||null }).eq('id', S.admin.id);
+  if (error) { showMsg('profile-msg','Failed: '+error.message,'err'); return; }
+  S.admin.full_name = name; S.admin.email = email;
+  showMsg('profile-msg','✅ Profile updated!','ok');
 }
 
 async function changeAdminPw() {
   const pw = document.getElementById('new-pw').value;
-  if (!pw || pw.length < 6) { showMsg('pw-msg', 'Password must be at least 6 characters.', 'err'); return; }
-  const { error } = await db.from('admin_users').update({ password_hash: pw }).eq('id', S.admin.id);
-  if (error) showMsg('pw-msg', 'Failed: ' + error.message, 'err');
-  else { showMsg('pw-msg', '✅ Password updated!', 'ok'); document.getElementById('new-pw').value = ''; }
+  if (!pw || pw.length < 6) { showMsg('pw-msg','Password must be at least 6 characters.','err'); return; }
+  const { error } = await db.from('admin_users').update({ password_hash:pw }).eq('id', S.admin.id);
+  if (error) showMsg('pw-msg','Failed: '+error.message,'err');
+  else { showMsg('pw-msg','✅ Password updated!','ok'); document.getElementById('new-pw').value=''; }
 }
 
-// ════════════════════════════════════════════════════
+async function resetPw(id, username) {
+  const pw = prompt('Set new password for @' + username + ':');
+  if (!pw) return;
+  if (pw.length < 6) { toast('Password must be at least 6 characters.'); return; }
+  const { error } = await db.from('admin_users').update({ password_hash:pw }).eq('id', id);
+  if (!error) toast('✅ Password updated for @' + username);
+  else toast('Error: ' + error.message);
+}
+
+// ═══════════════════════════════════════════════
+//  EDIT WORKER MODAL
+// ═══════════════════════════════════════════════
+function openEditWorker(id) {
+  const w = _wCache[id]; if (!w) return;
+  document.getElementById('ewk-id').value    = id;
+  document.getElementById('ewk-ctx').value   = w._ctx || 'admin';
+  document.getElementById('ewk-empid').value = w.employee_id || '';
+  document.getElementById('ewk-name').value  = w.name || '';
+  document.getElementById('ewk-job').value   = w.job_title || '';
+  document.getElementById('ewk-phone').value = w.phone || '';
+  document.getElementById('ewk-email').value = w.email || '';
+  document.getElementById('ewk-pin').value   = '';
+  document.getElementById('ewk-msg').classList.add('hidden');
+  document.getElementById('modal-edit-worker').classList.remove('hidden');
+}
+function closeEditWorker() { document.getElementById('modal-edit-worker').classList.add('hidden'); }
+
+async function saveEditWorker() {
+  const id    = document.getElementById('ewk-id').value;
+  const ctx   = document.getElementById('ewk-ctx').value;
+  const empId = (document.getElementById('ewk-empid').value || '').trim().toUpperCase();
+  const name  = (document.getElementById('ewk-name').value  || '').trim();
+  const job   = (document.getElementById('ewk-job').value   || '').trim();
+  const phone = (document.getElementById('ewk-phone').value || '').trim();
+  const email = (document.getElementById('ewk-email').value || '').trim();
+  const pin   = (document.getElementById('ewk-pin').value   || '').trim();
+  if (!empId || !name) { showMsg('ewk-msg','Employee ID and Name required.','err'); return; }
+  if (pin && pin.length < 4) { showMsg('ewk-msg','PIN must be at least 4 digits.','err'); return; }
+  const updates = { employee_id:empId, name, job_title:job||null, phone:phone||null, email:email||null };
+  if (pin) updates.pin = pin;
+  const { error } = await db.from('workers').update(updates).eq('id', id);
+  if (error) { showMsg('ewk-msg', error.code==='23505'?'Employee ID already in use.':error.message,'err'); return; }
+  showMsg('ewk-msg','✅ Worker updated!','ok');
+  setTimeout(() => { closeEditWorker(); if (ctx === 'dev') loadDevWorkers(); else loadWorkers(); }, 1200);
+}
+
+// ═══════════════════════════════════════════════
+//  EDIT ACCOUNT MODAL
+// ═══════════════════════════════════════════════
+function openEditAcct(id, name, email, role, ctx) {
+  document.getElementById('eac-id').value    = id;
+  document.getElementById('eac-ctx').value   = ctx;
+  document.getElementById('eac-name').value  = name;
+  document.getElementById('eac-email').value = email;
+  document.getElementById('eac-pw').value    = '';
+  document.getElementById('eac-msg').classList.add('hidden');
+  const roleWrap = document.getElementById('eac-role-wrap');
+  if (ctx === 'dev' || ctx === 'sa') {
+    roleWrap.classList.remove('hidden');
+    document.getElementById('eac-role').value = role;
+  } else {
+    roleWrap.classList.add('hidden');
+  }
+  document.getElementById('modal-edit-acct').classList.remove('hidden');
+}
+function closeEditAcct() { document.getElementById('modal-edit-acct').classList.add('hidden'); }
+
+async function saveEditAcct() {
+  const id       = document.getElementById('eac-id').value;
+  const ctx      = document.getElementById('eac-ctx').value;
+  const name     = (document.getElementById('eac-name').value  || '').trim();
+  const email    = (document.getElementById('eac-email').value || '').trim();
+  const pw       = (document.getElementById('eac-pw').value    || '').trim();
+  const roleWrap = document.getElementById('eac-role-wrap');
+  if (!name) { showMsg('eac-msg','Full name required.','err'); return; }
+  if (pw && pw.length < 6) { showMsg('eac-msg','Password must be at least 6 characters.','err'); return; }
+  const updates = { full_name:name, email:email||null };
+  if (pw) updates.password_hash = pw;
+  if (!roleWrap.classList.contains('hidden')) updates.role = document.getElementById('eac-role').value;
+  const { error } = await db.from('admin_users').update(updates).eq('id', id);
+  if (error) { showMsg('eac-msg','Failed: '+error.message,'err'); return; }
+  showMsg('eac-msg','✅ Account updated!','ok');
+  setTimeout(() => { closeEditAcct(); if (ctx === 'dev') loadDevAccounts(); else loadCoAdmins(); }, 1200);
+}
+
+// ═══════════════════════════════════════════════
+//  EDIT COMPANY MODAL
+// ═══════════════════════════════════════════════
+function openEditCo(id) {
+  const c = _cCache[id]; if (!c) return;
+  document.getElementById('eco-id').value   = id;
+  document.getElementById('eco-name').value = c.name || '';
+  document.getElementById('eco-code').value = c.code || '';
+  document.getElementById('eco-msg').classList.add('hidden');
+  document.getElementById('modal-edit-co').classList.remove('hidden');
+}
+function closeEditCo() { document.getElementById('modal-edit-co').classList.add('hidden'); }
+
+async function saveEditCo() {
+  const id   = document.getElementById('eco-id').value;
+  const name = (document.getElementById('eco-name').value || '').trim();
+  const code = (document.getElementById('eco-code').value || '').trim().toUpperCase().replace(/\s+/g,'');
+  if (!name || !code) { showMsg('eco-msg','Name and Code required.','err'); return; }
+  if (!/^[A-Z0-9_]+$/.test(code)) { showMsg('eco-msg','Code: letters, numbers, underscores only.','err'); return; }
+  const { error } = await db.from('companies').update({ name, code }).eq('id', id);
+  if (error) { showMsg('eco-msg', error.code==='23505'?'Code already exists.':error.message,'err'); return; }
+  showMsg('eco-msg','✅ Company updated!','ok');
+  setTimeout(() => { closeEditCo(); loadDevCos(); }, 1200);
+}
+
+// ═══════════════════════════════════════════════
 //  DEVELOPER PANEL
-// ════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════
 function devLogout() { S.admin = null; showPage('home'); }
 
 function switchDevTab(name, btn) {
-  document.querySelectorAll('#page-developer .tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#dev-tabs .tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   document.querySelectorAll('#page-developer .tab-pane').forEach(p => p.classList.remove('active'));
-  document.getElementById(`tab-${name}`).classList.add('active');
-  if (name === 'dev-companies')   loadDevCompanies();
-  if (name === 'dev-superadmins') loadDevSuperAdmins();
-  if (name === 'dev-workers')     loadDevWorkers();
-  if (name === 'dev-info')        loadDevInfo();
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'dev-cos')      loadDevCos();
+  if (name === 'dev-accounts') loadDevAccounts();
+  if (name === 'dev-workers')  loadDevWorkers();
+  if (name === 'dev-system')   loadDevSystem();
 }
 
-// ── Companies ────────────────────────────────────────
-async function loadDevCompanies() {
-  const el = document.getElementById('companies-list');
+// ── Dev: Companies ────────────────────────────
+async function loadDevCos() {
+  const el = document.getElementById('dev-cos-list');
   el.innerHTML = '<div class="empty">Loading…</div>';
   const { data, error } = await db.from('companies').select('*').order('name');
   if (error || !data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
-  if (!data.length)   { el.innerHTML = '<div class="empty">No companies yet — create one above</div>'; return; }
+  if (!data.length)   { el.innerHTML = '<div class="empty">No companies yet</div>'; return; }
   data.forEach(c => { _cCache[c.id] = c; });
-  el.innerHTML = '<div class="workers-list">' + data.map(c => `
-    <div class="wr-row">
-      <div class="wr-info">
-        <div class="avatar sm" style="background:var(--purple)">${c.code.slice(0,2)}</div>
+  el.innerHTML = '<div class="list-rows">' + data.map(c => `
+    <div class="list-row">
+      <div class="row-info">
+        <div class="avatar av-sm" style="background:var(--purple)">${c.code.slice(0,2)}</div>
         <div>
-          <div class="wr-name">${c.name}</div>
-          <div class="wr-meta">Code: ${c.code}${!c.is_active?' · <em>Inactive</em>':''}</div>
+          <div class="row-name">${c.name}</div>
+          <div class="row-meta">Code: ${c.code}${!c.is_active?' · <em>Inactive</em>':''}</div>
         </div>
       </div>
-      <div class="wr-btns">
-        <button class="icon-btn" title="Edit Company" onclick="openEditCompanyById('${c.id}')">✏️</button>
-        <button class="icon-btn" title="${c.is_active?'Deactivate':'Reactivate'}" onclick="devToggleCompany('${c.id}',${c.is_active})">${c.is_active?'🚫':'✅'}</button>
+      <div class="row-btns">
+        <button class="icon-btn" title="Edit"       onclick="openEditCo('${c.id}')">✏️</button>
+        <button class="icon-btn" title="${c.is_active?'Deactivate':'Reactivate'}" onclick="devToggleCo('${c.id}',${c.is_active})">${c.is_active?'🚫':'✅'}</button>
       </div>
     </div>`).join('') + '</div>';
 }
 
-function toggleAddCompany() {
-  const p = document.getElementById('add-company-panel');
+function toggleAddCo() {
+  const p = document.getElementById('add-co-panel');
   p.classList.toggle('hidden');
   if (!p.classList.contains('hidden')) document.getElementById('nc-name').focus();
 }
@@ -1256,135 +1198,135 @@ function toggleAddCompany() {
 async function addCompany() {
   const name = (document.getElementById('nc-name').value || '').trim();
   const code = (document.getElementById('nc-code').value || '').trim().toUpperCase().replace(/\s+/g,'');
-  if (!name || !code) { showMsg('nc-msg', 'Name and Code are required.', 'err'); return; }
-  if (!/^[A-Z0-9_]+$/.test(code)) { showMsg('nc-msg', 'Code may only contain letters, numbers and underscores.', 'err'); return; }
-  const { error } = await db.from('companies').insert({ name, code, is_active: true });
-  if (error) { showMsg('nc-msg', error.code === '23505' ? 'Company code already exists.' : error.message, 'err'); return; }
-  showMsg('nc-msg', `✅ Company "${name}" created! Code: ${code}`, 'ok');
-  ['nc-name','nc-code'].forEach(id => document.getElementById(id).value = '');
-  setTimeout(() => { toggleAddCompany(); loadDevCompanies(); }, 1400);
+  if (!name || !code) { showMsg('nc-msg','Name and Code required.','err'); return; }
+  if (!/^[A-Z0-9_]+$/.test(code)) { showMsg('nc-msg','Code: letters, numbers, underscores only.','err'); return; }
+  const { error } = await db.from('companies').insert({ name, code, is_active:true });
+  if (error) { showMsg('nc-msg', error.code==='23505'?'Code already exists.':error.message,'err'); return; }
+  showMsg('nc-msg','✅ Company "'+name+'" created!','ok');
+  document.getElementById('nc-name').value = ''; document.getElementById('nc-code').value = '';
+  setTimeout(() => { toggleAddCo(); loadDevCos(); }, 1400);
 }
 
-async function devToggleCompany(id, cur) {
+async function devToggleCo(id, cur) {
   const { error } = await db.from('companies').update({ is_active: !cur }).eq('id', id);
-  if (!error) { toast(cur ? 'Company deactivated' : 'Company reactivated'); loadDevCompanies(); }
+  if (!error) { toast(cur?'Company deactivated':'Company reactivated'); loadDevCos(); }
 }
 
-// ── Company Accounts ─────────────────────────────────
-const ROLE_LABELS = { super_admin: 'Super Admin', admin: 'Admin', developer: 'Developer' };
-const ROLE_COLORS = { super_admin: 'var(--green)', admin: 'var(--blue)', developer: 'var(--purple)' };
-
-async function loadDevSuperAdmins() {
-  const el        = document.getElementById('superadmins-list');
-  const filterSel = document.getElementById('dev-filter-company');
+// ── Dev: Accounts ─────────────────────────────
+async function loadDevAccounts() {
+  const el        = document.getElementById('dev-accounts-list');
+  const filterSel = document.getElementById('dev-filter-co');
   el.innerHTML    = '<div class="empty">Loading…</div>';
-
-  // Populate filter dropdown if empty
   if (filterSel.options.length <= 1) {
-    const { data: cos } = await db.from('companies').select('id,name').eq('is_active', true).order('name');
+    const { data: cos } = await db.from('companies').select('id,name').eq('is_active',true).order('name');
     filterSel.innerHTML = '<option value="">All Companies</option>' +
       (cos||[]).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
   }
-
-  let q = db.from('admin_users')
-    .select('*, co:companies(name,code)')
-    .neq('role', 'developer')
-    .order('full_name');
-  const filterCid = filterSel?.value;
-  if (filterCid) q = q.eq('company_id', filterCid);
-
+  let q = db.from('admin_users').select('*, co:companies(name,code)').neq('role','developer').order('full_name');
+  const fco = filterSel.value;
+  if (fco) q = q.eq('company_id', fco);
   const { data, error } = await q;
   if (error || !data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
-  if (!data.length)   { el.innerHTML = '<div class="empty">No accounts yet — create one above</div>'; return; }
-
-  el.innerHTML = '<div class="workers-list">' + data.map(a => `
-    <div class="wr-row">
-      <div class="wr-info">
-        <div class="avatar sm" style="background:${ROLE_COLORS[a.role]||'var(--blue)'}">${(a.full_name||a.username).slice(0,2).toUpperCase()}</div>
+  if (!data.length)   { el.innerHTML = '<div class="empty">No accounts yet</div>'; return; }
+  el.innerHTML = '<div class="list-rows">' + data.map(a => `
+    <div class="list-row">
+      <div class="row-info">
+        <div class="avatar av-sm" style="background:${ROLE_COLORS[a.role]||'var(--blue)'}">${initials(a.full_name||a.username)}</div>
         <div>
-          <div class="wr-name">${a.full_name||a.username} <small style="color:var(--muted)">@${a.username}</small></div>
-          <div class="wr-meta">
+          <div class="row-name">${a.full_name||a.username} <small style="color:var(--muted)">@${a.username}</small></div>
+          <div class="row-meta">
             <span class="role-pill" style="background:${ROLE_COLORS[a.role]||'var(--blue)'}22;color:${ROLE_COLORS[a.role]||'var(--blue)'};">${ROLE_LABELS[a.role]||a.role}</span>
             🏢 ${a.co?.name||'—'}${!a.is_active?' · <em>Inactive</em>':''}
           </div>
         </div>
       </div>
-      <div class="wr-btns">
-        <button class="icon-btn" title="Edit Account" onclick="openEditAccount('${a.id}','${(a.full_name||'').replace(/'/g,"\\'")}','${(a.email||'').replace(/'/g,"\\'")}','${a.role}',true)">✏️</button>
-        <button class="icon-btn" title="Reset Password" onclick="devResetAdminPw('${a.id}','${a.username}')">🔑</button>
-        <button class="icon-btn" title="${a.is_active?'Deactivate':'Reactivate'}" onclick="devToggleSA('${a.id}',${a.is_active})">${a.is_active?'🚫':'✅'}</button>
+      <div class="row-btns">
+        <button class="icon-btn" title="Edit"    onclick="openEditAcct('${a.id}','${escQ(a.full_name||'')}','${escQ(a.email||'')}','${a.role}','dev')">✏️</button>
+        <button class="icon-btn" title="Reset PW" onclick="resetPw('${a.id}','${a.username}')">🔑</button>
+        <button class="icon-btn" title="${a.is_active?'Deactivate':'Reactivate'}" onclick="devToggleAcct('${a.id}',${a.is_active})">${a.is_active?'🚫':'✅'}</button>
       </div>
     </div>`).join('') + '</div>';
 }
 
-function toggleAddSuperAdmin() {
-  const p = document.getElementById('add-superadmin-panel');
+function toggleAddDevAccount() {
+  const p = document.getElementById('add-dev-acct-panel');
   p.classList.toggle('hidden');
   if (!p.classList.contains('hidden')) {
     db.from('companies').select('id,name').eq('is_active',true).order('name').then(({ data }) => {
-      const sel = document.getElementById('nsa-company');
-      sel.innerHTML = '<option value="">Select Company…</option>' +
-        (data||[]).map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+      document.getElementById('da-company').innerHTML = '<option value="">Select Company…</option>' +
+        (data||[]).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
     });
-    document.getElementById('nsa-name').focus();
+    document.getElementById('da-name').focus();
   }
 }
 
-async function addSuperAdmin() {
-  const cid   = document.getElementById('nsa-company').value;
-  const role  = document.getElementById('nsa-role').value;
-  const name  = (document.getElementById('nsa-name').value || '').trim();
-  const user  = (document.getElementById('nsa-user').value || '').trim().toLowerCase();
-  const pass  = (document.getElementById('nsa-pass').value || '').trim();
-  const email = (document.getElementById('nsa-email').value|| '').trim();
-  if (!cid)  { showMsg('nsa-msg','Please select a company.','err'); return; }
-  if (!name||!user||!pass) { showMsg('nsa-msg','Name, username and password are required.','err'); return; }
-  if (pass.length < 6)     { showMsg('nsa-msg','Password must be at least 6 characters.','err'); return; }
-  if (!/^[a-z0-9_]+$/.test(user)) { showMsg('nsa-msg','Username may only contain letters, numbers and underscores.','err'); return; }
+async function addDevAccount() {
+  const cid   = document.getElementById('da-company').value;
+  const role  = document.getElementById('da-role').value;
+  const name  = (document.getElementById('da-name').value  || '').trim();
+  const user  = (document.getElementById('da-user').value  || '').trim().toLowerCase();
+  const pass  = (document.getElementById('da-pass').value  || '').trim();
+  const email = (document.getElementById('da-email').value || '').trim();
+  if (!cid)  { showMsg('da-msg','Select a company.','err'); return; }
+  if (!name||!user||!pass) { showMsg('da-msg','Name, username and password required.','err'); return; }
+  if (pass.length < 6)     { showMsg('da-msg','Password must be at least 6 characters.','err'); return; }
+  if (!/^[a-z0-9_]+$/.test(user)) { showMsg('da-msg','Username: letters, numbers, underscores only.','err'); return; }
   const { error } = await db.from('admin_users').insert({
-    username: user, password_hash: pass, full_name: name,
-    email: email||null, role, company_id: cid, is_active: true,
+    username:user, password_hash:pass, full_name:name, email:email||null,
+    role, company_id:cid, is_active:true,
   });
-  if (error) { showMsg('nsa-msg', error.code==='23505'?'Username already exists.':error.message,'err'); return; }
-  showMsg('nsa-msg', `✅ ${ROLE_LABELS[role]||role} "@${user}" created!`,'ok');
-  ['nsa-name','nsa-user','nsa-pass','nsa-email'].forEach(id => document.getElementById(id).value='');
-  setTimeout(() => { toggleAddSuperAdmin(); loadDevSuperAdmins(); }, 1400);
+  if (error) { showMsg('da-msg', error.code==='23505'?'Username already exists.':error.message,'err'); return; }
+  showMsg('da-msg','✅ ' + (ROLE_LABELS[role]||role) + ' "@' + user + '" created!','ok');
+  ['da-name','da-user','da-pass','da-email'].forEach(id => document.getElementById(id).value='');
+  setTimeout(() => { toggleAddDevAccount(); loadDevAccounts(); }, 1400);
 }
 
-async function devChangeRole(id, username, currentRole, companyId) {
-  // Build role options excluding developer
-  const roles = [
-    { value: 'super_admin', label: 'Super Admin — full company access' },
-    { value: 'admin',       label: 'Admin — workers & attendance' },
-  ];
-  const opts = roles.map(r => `${r.value === currentRole ? '✓ ' : ''}${r.label}`).join('\n');
-  const choice = prompt(`Change role for @${username}.\n\nCurrent: ${ROLE_LABELS[currentRole]||currentRole}\n\nEnter new role:\n1 = Super Admin\n2 = Admin`);
-  if (!choice) return;
-  const roleMap = { '1': 'super_admin', '2': 'admin' };
-  const newRole = roleMap[choice.trim()];
-  if (!newRole) { toast('Invalid choice — enter 1 or 2'); return; }
-  if (newRole === currentRole) { toast('Role unchanged'); return; }
-  const { error } = await db.from('admin_users').update({ role: newRole }).eq('id', id);
-  if (!error) { toast(`✅ @${username} is now ${ROLE_LABELS[newRole]}`); loadDevSuperAdmins(); }
-  else toast('Error: ' + error.message);
-}
-
-async function devToggleSA(id, cur) {
+async function devToggleAcct(id, cur) {
   const { error } = await db.from('admin_users').update({ is_active: !cur }).eq('id', id);
-  if (!error) { toast(cur ? 'Account deactivated' : 'Account reactivated'); loadDevSuperAdmins(); }
+  if (!error) { toast(cur?'Account deactivated':'Account reactivated'); loadDevAccounts(); }
 }
 
-async function devResetAdminPw(id, username) {
-  const pw = prompt(`Set new password for @${username}:`);
-  if (!pw) return;
-  if (pw.length < 6) { toast('Password must be at least 6 characters.'); return; }
-  const { error } = await db.from('admin_users').update({ password_hash: pw }).eq('id', id);
-  if (!error) toast(`✅ Password updated for @${username}`);
-  else toast('Error: ' + error.message);
+// ── Dev: Workers ──────────────────────────────
+async function loadDevWorkers() {
+  const el  = document.getElementById('dev-workers-list');
+  const sel = document.getElementById('dev-filter-co-wk');
+  if (sel.options.length <= 1) {
+    const { data: cos } = await db.from('companies').select('id,name').eq('is_active',true).order('name');
+    sel.innerHTML = '<option value="">Select a company…</option>' +
+      (cos||[]).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  }
+  const cid = sel.value;
+  if (!cid) { el.innerHTML = '<div class="empty">Select a company above</div>'; return; }
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  const { data, error } = await db.from('workers').select('*').eq('company_id', cid).order('name');
+  if (error || !data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
+  if (!data.length)   { el.innerHTML = '<div class="empty">No workers in this company</div>'; return; }
+  data.forEach(w => { _wCache[w.id] = { ...w, _ctx:'dev' }; });
+  el.innerHTML = '<div class="list-rows">' + data.map(w => `
+    <div class="list-row">
+      <div class="row-info">
+        <div class="avatar av-sm">${initials(w.name)}</div>
+        <div>
+          <div class="row-name">${w.name}</div>
+          <div class="row-meta">${w.employee_id}${w.job_title?' · '+w.job_title:''}${w.biometric_enabled?' · 🔏':''}${w.face_descriptor?' · 🤳':''}${!w.is_active?' · <em>Inactive</em>':''}</div>
+        </div>
+      </div>
+      <div class="row-btns">
+        <button class="icon-btn" title="Edit"      onclick="openEditWorker('${w.id}')">✏️</button>
+        <button class="icon-btn" title="Enrol Face" onclick="adminEnrollFace('${w.id}','${escQ(w.name)}','dev')">🤳</button>
+        <button class="icon-btn" title="${w.is_active?'Deactivate':'Reactivate'}" onclick="devToggleWorker('${w.id}',${w.is_active})">${w.is_active?'🚫':'✅'}</button>
+      </div>
+    </div>`).join('') + '</div>';
 }
 
-async function loadDevInfo() {
-  const el = document.getElementById('dev-account-info');
+async function devToggleWorker(id, cur) {
+  const { error } = await db.from('workers').update({ is_active: !cur }).eq('id', id);
+  if (!error) { toast(cur?'Worker deactivated':'Worker reactivated'); loadDevWorkers(); }
+}
+
+// ── Dev: System ───────────────────────────────
+function loadDevSystem() {
+  const el = document.getElementById('dev-acct-info');
   if (!S.admin) return;
   el.innerHTML = `
     <div class="info-row"><span class="info-lbl">Username</span><span>@${S.admin.username}</span></div>
@@ -1393,7 +1335,7 @@ async function loadDevInfo() {
       <input id="dev-profile-name" type="text" class="input" value="${(S.admin.full_name||'').replace(/"/g,'&quot;')}" placeholder="Full Name">
     </div>
     <div class="field"><label>Email</label>
-      <input id="dev-profile-email" type="email" class="input" value="${(S.admin.email||'').replace(/"/g,'&quot;')}" placeholder="Email address">
+      <input id="dev-profile-email" type="email" class="input" value="${(S.admin.email||'').replace(/"/g,'&quot;')}" placeholder="Email">
     </div>
     <button class="btn btn-outline btn-full" onclick="saveDevProfile()" style="margin-top:4px">Save Profile</button>
     <div id="dev-profile-msg" class="msg hidden"></div>`;
@@ -1402,449 +1344,145 @@ async function loadDevInfo() {
 async function saveDevProfile() {
   const name  = (document.getElementById('dev-profile-name').value  || '').trim();
   const email = (document.getElementById('dev-profile-email').value || '').trim();
-  if (!name) { showMsg('dev-profile-msg', 'Full name is required.', 'err'); return; }
-  const { error } = await db.from('admin_users').update({ full_name: name, email: email || null }).eq('id', S.admin.id);
-  if (error) { showMsg('dev-profile-msg', 'Failed: ' + error.message, 'err'); return; }
+  if (!name) { showMsg('dev-profile-msg','Full name required.','err'); return; }
+  const { error } = await db.from('admin_users').update({ full_name:name, email:email||null }).eq('id', S.admin.id);
+  if (error) { showMsg('dev-profile-msg','Failed: '+error.message,'err'); return; }
   S.admin.full_name = name; S.admin.email = email;
-  showMsg('dev-profile-msg', '✅ Profile updated!', 'ok');
+  showMsg('dev-profile-msg','✅ Profile updated!','ok');
 }
 
 async function changeDevPw() {
   const pw = document.getElementById('dev-new-pw').value;
   if (!pw || pw.length < 6) { showMsg('dev-pw-msg','Password must be at least 6 characters.','err'); return; }
-  const { error } = await db.from('admin_users').update({ password_hash: pw }).eq('id', S.admin.id);
+  const { error } = await db.from('admin_users').update({ password_hash:pw }).eq('id', S.admin.id);
   if (error) showMsg('dev-pw-msg','Failed: '+error.message,'err');
   else { showMsg('dev-pw-msg','✅ Password updated!','ok'); document.getElementById('dev-new-pw').value=''; }
 }
 
-// ── Super Admin: manage company admins ───────────────
-function toggleAddCompanyAdmin() {
-  const p = document.getElementById('add-company-admin-panel');
-  p.classList.toggle('hidden');
-  if (!p.classList.contains('hidden')) document.getElementById('ca-name').focus();
-}
-
-async function loadCompanyAdmins() {
-  const el = document.getElementById('company-admins-list');
-  el.innerHTML = '<div class="empty">Loading…</div>';
-  const { data, error } = await db.from('admin_users')
-    .select('*').eq('company_id', S.admin?.company_id).neq('role','developer').order('full_name');
-  if (error || !data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
-  if (!data.length)   { el.innerHTML = '<div class="empty">No admins yet — create one above</div>'; return; }
-  el.innerHTML = '<div class="workers-list">' + data.map(a => `
-    <div class="wr-row">
-      <div class="wr-info">
-        <div class="avatar sm" style="background:${ROLE_COLORS[a.role]||'var(--blue)'}">${(a.full_name||a.username).slice(0,2).toUpperCase()}</div>
-        <div>
-          <div class="wr-name">${a.full_name||a.username} <small style="color:var(--muted)">@${a.username}</small></div>
-          <div class="wr-meta">
-            <span class="role-pill" style="background:${ROLE_COLORS[a.role]||'var(--blue)'}22;color:${ROLE_COLORS[a.role]||'var(--blue)'};">${ROLE_LABELS[a.role]||a.role}</span>
-            ${a.email?' · '+a.email:''}${!a.is_active?' · <em>Inactive</em>':''}
-          </div>
-        </div>
-      </div>
-      <div class="wr-btns">
-        <button class="icon-btn" title="Edit Account" onclick="openEditAccount('${a.id}','${(a.full_name||'').replace(/'/g,"\\'")}','${(a.email||'').replace(/'/g,"\\'")}','${a.role}','sa')">✏️</button>
-        <button class="icon-btn" title="Reset Password" onclick="devResetAdminPw('${a.id}','${a.username}')">🔑</button>
-        <button class="icon-btn" title="${a.is_active?'Deactivate':'Reactivate'}" onclick="caToggle('${a.id}',${a.is_active})">${a.is_active?'🚫':'✅'}</button>
-      </div>
-    </div>`).join('') + '</div>';
-}
-
-async function addCompanyAdmin() {
-  const name  = (document.getElementById('ca-name').value  || '').trim();
-  const user  = (document.getElementById('ca-user').value  || '').trim().toLowerCase();
-  const pass  = (document.getElementById('ca-pass').value  || '').trim();
-  const email = (document.getElementById('ca-email').value || '').trim();
-  const role  =  document.getElementById('ca-role').value  || 'admin';
-  if (!name||!user||!pass) { showMsg('ca-msg','Name, username and password are required.','err'); return; }
-  if (pass.length < 6)     { showMsg('ca-msg','Password must be at least 6 characters.','err'); return; }
-  if (!/^[a-z0-9_]+$/.test(user)) { showMsg('ca-msg','Username may only contain letters, numbers and underscores.','err'); return; }
-  const { error } = await db.from('admin_users').insert({
-    username: user, password_hash: pass, full_name: name,
-    email: email||null, role, company_id: S.admin?.company_id, is_active: true,
-  });
-  if (error) { showMsg('ca-msg', error.code==='23505'?'Username already exists.':error.message,'err'); return; }
-  showMsg('ca-msg',`✅ ${ROLE_LABELS[role]||role} "@${user}" created!`,'ok');
-  ['ca-name','ca-user','ca-pass','ca-email'].forEach(id => document.getElementById(id).value='');
-  setTimeout(() => { toggleAddCompanyAdmin(); loadCompanyAdmins(); }, 1400);
-}
-
-async function caToggle(id, cur) {
-  const { error } = await db.from('admin_users').update({ is_active: !cur }).eq('id', id);
-  if (!error) { toast(cur?'Admin deactivated':'Admin reactivated'); loadCompanyAdmins(); }
-}
-
-// ── Edit Account Modal (developer + super admin) ─────
-// ctx: 'dev' = developer panel (shows role, reloads devSA list)
-//      'sa'  = company admins tab (shows role, reloads company admins list)
-//      'admin' = plain admin edit (hides role, reloads company admins list)
-let _editCtx = null;
-
-function openEditAccount(id, name, email, role, ctx) {
-  // Support old boolean callers: true → 'dev', false → 'admin'
-  if (ctx === true)  ctx = 'dev';
-  if (ctx === false) ctx = 'admin';
-  _editCtx = ctx;
-  document.getElementById('edit-acct-id').value    = id;
-  document.getElementById('edit-acct-name').value  = name;
-  document.getElementById('edit-acct-email').value = email;
-  document.getElementById('edit-acct-pw').value    = '';
-  document.getElementById('edit-acct-msg').classList.add('hidden');
-  const roleWrap = document.getElementById('edit-acct-role-wrap');
-  if (ctx === 'dev' || ctx === 'sa') {
-    roleWrap.classList.remove('hidden');
-    document.getElementById('edit-acct-role').value = role;
-  } else {
-    roleWrap.classList.add('hidden');
-  }
-  document.getElementById('edit-account-modal').classList.remove('hidden');
-}
-
-function closeEditAccount(e) {
-  if (!e || e.target === document.getElementById('edit-account-modal'))
-    document.getElementById('edit-account-modal').classList.add('hidden');
-}
-
-async function saveEditAccount() {
-  const id    = document.getElementById('edit-acct-id').value;
-  const name  = (document.getElementById('edit-acct-name').value  || '').trim();
-  const email = (document.getElementById('edit-acct-email').value || '').trim();
-  const pw    = (document.getElementById('edit-acct-pw').value    || '').trim();
-  const roleWrap = document.getElementById('edit-acct-role-wrap');
-
-  if (!name) { showMsg('edit-acct-msg', 'Full name is required.', 'err'); return; }
-  if (pw && pw.length < 6) { showMsg('edit-acct-msg', 'Password must be at least 6 characters.', 'err'); return; }
-
-  const updates = { full_name: name, email: email || null };
-  if (pw) updates.password_hash = pw;
-  if (!roleWrap.classList.contains('hidden')) updates.role = document.getElementById('edit-acct-role').value;
-
-  const { error } = await db.from('admin_users').update(updates).eq('id', id);
-  if (error) { showMsg('edit-acct-msg', 'Failed: ' + error.message, 'err'); return; }
-
-  showMsg('edit-acct-msg', '✅ Account updated!', 'ok');
-  setTimeout(() => {
-    closeEditAccount();
-    if (_editCtx === 'dev') loadDevSuperAdmins();
-    else loadCompanyAdmins();
-  }, 1200);
-}
-
-// ── Edit Company (developer) ─────────────────────────
-function openEditCompanyById(id) {
-  const c = _cCache[id];
-  if (!c) return;
-  document.getElementById('edit-co-id').value   = id;
-  document.getElementById('edit-co-name').value = c.name || '';
-  document.getElementById('edit-co-code').value = c.code || '';
-  document.getElementById('edit-co-msg').classList.add('hidden');
-  document.getElementById('edit-company-modal').classList.remove('hidden');
-}
-
-function closeEditCompany(e) {
-  if (!e || e.target === document.getElementById('edit-company-modal'))
-    document.getElementById('edit-company-modal').classList.add('hidden');
-}
-
-async function saveEditCompany() {
-  const id   = document.getElementById('edit-co-id').value;
-  const name = (document.getElementById('edit-co-name').value || '').trim();
-  const code = (document.getElementById('edit-co-code').value || '').trim().toUpperCase().replace(/\s+/g, '');
-  if (!name || !code) { showMsg('edit-co-msg', 'Name and Code are required.', 'err'); return; }
-  if (!/^[A-Z0-9_]+$/.test(code)) { showMsg('edit-co-msg', 'Code may only contain letters, numbers and underscores.', 'err'); return; }
-  const { error } = await db.from('companies').update({ name, code }).eq('id', id);
-  if (error) { showMsg('edit-co-msg', error.code === '23505' ? 'Company code already exists.' : error.message, 'err'); return; }
-  showMsg('edit-co-msg', '✅ Company updated!', 'ok');
-  setTimeout(() => { closeEditCompany(); loadDevCompanies(); }, 1200);
-}
-
-// ── Edit Worker (employer + developer) ───────────────
-function openEditWorkerById(id) {
-  const w = _wCache[id];
-  if (!w) return;
-  document.getElementById('edit-wk-id').value       = id;
-  document.getElementById('edit-wk-ctx').value      = w._ctx || 'admin';
-  document.getElementById('edit-wk-empid').value    = w.employee_id || '';
-  document.getElementById('edit-wk-name').value     = w.name || '';
-  document.getElementById('edit-wk-jobtitle').value = w.job_title || '';
-  document.getElementById('edit-wk-phone').value    = w.phone || '';
-  document.getElementById('edit-wk-email').value    = w.email || '';
-  document.getElementById('edit-wk-pin').value      = '';
-  document.getElementById('edit-wk-msg').classList.add('hidden');
-  document.getElementById('edit-worker-modal').classList.remove('hidden');
-}
-
-function closeEditWorker(e) {
-  if (!e || e.target === document.getElementById('edit-worker-modal'))
-    document.getElementById('edit-worker-modal').classList.add('hidden');
-}
-
-async function saveEditWorker() {
-  const id       = document.getElementById('edit-wk-id').value;
-  const ctx      = document.getElementById('edit-wk-ctx').value;
-  const empId    = (document.getElementById('edit-wk-empid').value    || '').trim().toUpperCase();
-  const name     = (document.getElementById('edit-wk-name').value     || '').trim();
-  const jobTitle = (document.getElementById('edit-wk-jobtitle').value || '').trim();
-  const phone    = (document.getElementById('edit-wk-phone').value    || '').trim();
-  const email    = (document.getElementById('edit-wk-email').value    || '').trim();
-  const pin      = (document.getElementById('edit-wk-pin').value      || '').trim();
-
-  if (!empId || !name) { showMsg('edit-wk-msg', 'Employee ID and Name are required.', 'err'); return; }
-  if (pin && pin.length < 4) { showMsg('edit-wk-msg', 'PIN must be at least 4 digits.', 'err'); return; }
-
-  const updates = { employee_id: empId, name, job_title: jobTitle || null, phone: phone || null, email: email || null };
-  if (pin) updates.pin = pin;
-
-  const { error } = await db.from('workers').update(updates).eq('id', id);
-  if (error) { showMsg('edit-wk-msg', error.code === '23505' ? 'Employee ID already in use.' : error.message, 'err'); return; }
-  showMsg('edit-wk-msg', '✅ Worker updated!', 'ok');
-  setTimeout(() => {
-    closeEditWorker();
-    if (ctx === 'dev') loadDevWorkers(); else loadWorkers();
-  }, 1200);
-}
-
-// ── Developer: Workers tab ────────────────────────────
-async function loadDevWorkers() {
-  const el        = document.getElementById('dev-workers-list');
-  const filterSel = document.getElementById('dev-filter-company-wk');
-
-  if (filterSel.options.length <= 1) {
-    const { data: cos } = await db.from('companies').select('id,name').eq('is_active', true).order('name');
-    filterSel.innerHTML = '<option value="">Select a company…</option>' +
-      (cos || []).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-  }
-
-  const cid = filterSel.value;
-  if (!cid) { el.innerHTML = '<div class="empty">Select a company above to view its workers</div>'; return; }
-
-  el.innerHTML = '<div class="empty">Loading…</div>';
-  const { data, error } = await db.from('workers').select('*').eq('company_id', cid).order('name');
-  if (error || !data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
-  if (!data.length)   { el.innerHTML = '<div class="empty">No workers in this company</div>'; return; }
-
-  data.forEach(w => { _wCache[w.id] = { ...w, _ctx: 'dev' }; });
-
-  el.innerHTML = '<div class="workers-list">' + data.map(w => `
-    <div class="wr-row">
-      <div class="wr-info">
-        <div class="avatar sm">${initials(w.name)}</div>
-        <div>
-          <div class="wr-name">${w.name}</div>
-          <div class="wr-meta">${w.employee_id}${w.job_title?' · '+w.job_title:''}${w.biometric_enabled?' · 🔏':''}${w.face_descriptor?' · 🤳':''}${!w.is_active?' · <em>Inactive</em>':''}</div>
-        </div>
-      </div>
-      <div class="wr-btns">
-        <button class="icon-btn" title="Edit Worker" onclick="openEditWorkerById('${w.id}')">✏️</button>
-        <button class="icon-btn" title="Enrol Face" onclick="adminEnrollFace('${w.id}','${w.name.replace(/'/g,"\\'")}','dev')">🤳</button>
-        <button class="icon-btn" title="${w.is_active?'Deactivate':'Reactivate'}" onclick="devToggleWorker('${w.id}',${w.is_active})">${w.is_active?'🚫':'✅'}</button>
-      </div>
-    </div>`).join('') + '</div>';
-}
-
-async function devToggleWorker(id, cur) {
-  const { error } = await db.from('workers').update({ is_active: !cur }).eq('id', id);
-  if (!error) { toast(cur ? 'Worker deactivated' : 'Worker reactivated'); loadDevWorkers(); }
-}
-
-// ════════════════════════════════════════════════════
-//  FACE RECOGNITION  (face-api.js)
-// ════════════════════════════════════════════════════
-const FACE_MODELS_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
+// ═══════════════════════════════════════════════
+//  FACE RECOGNITION
+// ═══════════════════════════════════════════════
+const FACE_MODELS = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
 let _faceModelsLoaded = false;
 let _faceLoadPromise  = null;
 
 async function loadFaceModels() {
-  if (typeof faceapi === 'undefined') throw new Error('face-api.js not loaded yet — please wait a moment and try again');
+  if (typeof faceapi === 'undefined') throw new Error('Face recognition library not loaded yet — please wait a moment');
   if (_faceModelsLoaded) return;
   if (_faceLoadPromise) return _faceLoadPromise;
   _faceLoadPromise = Promise.all([
-    faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODELS_URL),
-    faceapi.nets.faceLandmark68TinyNet.loadFromUri(FACE_MODELS_URL),
-    faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODELS_URL),
-  ]).then(() => {
-    _faceModelsLoaded = true;
-  }).catch(err => {
-    _faceLoadPromise = null;
-    throw err;
-  });
+    faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODELS),
+    faceapi.nets.faceLandmark68TinyNet.loadFromUri(FACE_MODELS),
+    faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODELS),
+  ]).then(() => { _faceModelsLoaded = true; }).catch(err => { _faceLoadPromise = null; throw err; });
   return _faceLoadPromise;
 }
 
-const faceOpts = () => new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 });
+const faceOpts = () => new faceapi.TinyFaceDetectorOptions({ inputSize:320, scoreThreshold:.5 });
 
-// ── Face recognition clock-in ─────────────────────────
 let _faceStream    = null;
 let _faceRunning   = false;
 let _faceMatcher   = null;
 let _faceWorkerMap = {};
 
-async function openFaceRecognition() {
+async function openFaceRecog() {
   showPage('face-scan');
-  const statusEl = document.getElementById('face-status');
+  const statusEl = document.getElementById('face-recog-status');
   const oval     = document.getElementById('face-oval');
-  oval.classList.remove('face-found');
+  oval.classList.remove('found');
 
   if (!S.companyId) {
-    statusEl.textContent = '⚠️ No company linked — open the employer's clock-in link first.';
-    return;
+    statusEl.textContent = '⚠️ No company linked — open your employer's clock-in link first.'; return;
   }
-
-  statusEl.textContent = '⏳ Loading face models (first time may take a moment)…';
-  try {
-    await loadFaceModels();
-  } catch {
-    statusEl.textContent = '❌ Could not load face models — check your internet connection.';
-    return;
-  }
+  statusEl.textContent = '⏳ Loading face recognition (first time may take a moment)…';
+  try { await loadFaceModels(); }
+  catch { statusEl.textContent = '❌ Could not load models — check your internet connection.'; return; }
 
   statusEl.textContent = 'Loading enrolled faces…';
   const { data: workers } = await db.from('workers')
-    .select('id, name, employee_id, face_descriptor')
-    .eq('company_id', S.companyId)
-    .eq('is_active', true)
+    .select('id,name,employee_id,face_descriptor')
+    .eq('company_id', S.companyId).eq('is_active', true)
     .not('face_descriptor', 'is', null);
 
-  if (!workers?.length) {
-    statusEl.textContent = '⚠️ No faces enrolled yet — ask your admin to enrol your face first.';
-    return;
-  }
+  if (!workers?.length) { statusEl.textContent = '⚠️ No faces enrolled — ask your admin to enrol faces first.'; return; }
 
-  const labeled = [];
-  _faceWorkerMap = {};
+  const labeled = []; _faceWorkerMap = {};
   for (const w of workers) {
     try {
-      const arr = JSON.parse(w.face_descriptor);
-      labeled.push(new faceapi.LabeledFaceDescriptors(w.id, [new Float32Array(arr)]));
+      labeled.push(new faceapi.LabeledFaceDescriptors(w.id, [new Float32Array(JSON.parse(w.face_descriptor))]));
       _faceWorkerMap[w.id] = w;
-    } catch { /* skip corrupt entries */ }
+    } catch {}
   }
-
-  if (!labeled.length) {
-    statusEl.textContent = '⚠️ Face data invalid — ask admin to re-enrol your face.';
-    return;
-  }
-
+  if (!labeled.length) { statusEl.textContent = '⚠️ Face data invalid — ask admin to re-enrol.'; return; }
   _faceMatcher = new faceapi.FaceMatcher(labeled, 0.50);
 
   statusEl.textContent = 'Position your face inside the oval…';
   try {
-    _faceStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
-    });
+    _faceStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user', width:{ideal:640}, height:{ideal:480} } });
     const video = document.getElementById('face-video');
-    video.srcObject = _faceStream;
-    await video.play();
-    _faceRunning = true;
-    requestAnimationFrame(faceRecognitionFrame);
+    video.srcObject = _faceStream; await video.play();
+    _faceRunning = true; requestAnimationFrame(faceFrame);
   } catch (err) {
-    statusEl.textContent = err.name === 'NotAllowedError'
-      ? '❌ Camera access denied — allow camera in your browser settings'
-      : '❌ Camera error: ' + err.message;
+    statusEl.textContent = err.name === 'NotAllowedError' ? '❌ Camera access denied' : '❌ ' + err.message;
   }
 }
 
-async function faceRecognitionFrame() {
+async function faceFrame() {
   if (!_faceRunning) return;
   const video    = document.getElementById('face-video');
-  const statusEl = document.getElementById('face-status');
+  const statusEl = document.getElementById('face-recog-status');
   const oval     = document.getElementById('face-oval');
-
-  if (video.readyState !== video.HAVE_ENOUGH_DATA) {
-    requestAnimationFrame(faceRecognitionFrame);
-    return;
-  }
-
+  if (video.readyState !== video.HAVE_ENOUGH_DATA) { requestAnimationFrame(faceFrame); return; }
   try {
-    const det = await faceapi
-      .detectSingleFace(video, faceOpts())
-      .withFaceLandmarks(true)
-      .withFaceDescriptor();
-
-    if (!det) {
-      oval.classList.remove('face-found');
-      requestAnimationFrame(faceRecognitionFrame);
-      return;
-    }
-
+    const det = await faceapi.detectSingleFace(video, faceOpts()).withFaceLandmarks(true).withFaceDescriptor();
+    if (!det) { oval.classList.remove('found'); requestAnimationFrame(faceFrame); return; }
     const match = _faceMatcher.findBestMatch(det.descriptor);
-
     if (match.label === 'unknown') {
-      oval.classList.remove('face-found');
-      statusEl.textContent = '❓ Face not recognised — try again or use Employee ID';
+      oval.classList.remove('found'); statusEl.textContent = '❓ Face not recognised — try again or use Employee ID';
       await new Promise(r => setTimeout(r, 1500));
       if (_faceRunning) statusEl.textContent = 'Position your face inside the oval…';
-      requestAnimationFrame(faceRecognitionFrame);
-      return;
+      requestAnimationFrame(faceFrame); return;
     }
-
-    // ── Match found ──────────────────────────────────
-    _faceRunning = false;
-    oval.classList.add('face-found');
+    _faceRunning = false; oval.classList.add('found');
     const matched = _faceWorkerMap[match.label];
-    statusEl.textContent = `✅ Recognised: ${matched?.name || 'Unknown'}`;
-    vibrate([50, 30, 100]);
-
+    statusEl.textContent = '✅ Recognised: ' + (matched?.name || 'Unknown');
+    vibrate([50,30,100]);
     if (_faceStream) { _faceStream.getTracks().forEach(t => t.stop()); _faceStream = null; }
-
-    const { data } = await db.from('workers')
-      .select('*, workplace:workplaces(*)')
+    const { data } = await db.from('workers').select('*, workplace:workplaces(*)')
       .eq('id', match.label).eq('is_active', true).maybeSingle();
-
-    if (!data) {
-      statusEl.textContent = '❌ Account not found — contact your admin.';
-      setTimeout(() => showPage('home'), 2500);
-      return;
-    }
-    S.worker     = data;
-    S.authMethod = 'biometric';
-    S.authSource = 'face';
+    if (!data) { statusEl.textContent = '❌ Account not found.'; setTimeout(() => showPage('home'), 2500); return; }
+    S.worker = data; S.authMethod = 'face'; S.authSource = 'face';
     setTimeout(() => enterClockScreen(), 900);
-
-  } catch {
-    requestAnimationFrame(faceRecognitionFrame);
-  }
+  } catch { requestAnimationFrame(faceFrame); }
 }
 
-function stopFaceRecognition() {
+function stopFaceRecog() {
   _faceRunning = false;
   if (_faceStream) { _faceStream.getTracks().forEach(t => t.stop()); _faceStream = null; }
   showPage('home');
 }
 
-// ── Face enrolment ────────────────────────────────────
+// ── Face Enrolment ──────────────────────────
 let _enrollStream = null;
-let _enrollTarget = null; // { id, name, ctx }
+let _enrollTarget = null;
 
 async function adminEnrollFace(workerId, workerName, ctx) {
-  _enrollTarget = { id: workerId, name: workerName, ctx: ctx || 'admin' };
-  document.getElementById('face-enroll-title').textContent  = `Enrol Face — ${workerName}`;
-  document.getElementById('enroll-face-status').textContent = '⏳ Loading models…';
-  document.getElementById('enroll-face-snap-btn').disabled  = true;
-  document.getElementById('face-enroll-modal').classList.remove('hidden');
-
+  _enrollTarget = { id:workerId, name:workerName, ctx:ctx||'admin' };
+  document.getElementById('face-enroll-title').textContent  = 'Enrol Face — ' + workerName;
+  document.getElementById('enroll-status').textContent      = '⏳ Loading models…';
+  document.getElementById('enroll-snap-btn').disabled       = true;
+  document.getElementById('modal-face-enroll').classList.remove('hidden');
+  try { await loadFaceModels(); }
+  catch { document.getElementById('enroll-status').textContent = '❌ Could not load models.'; return; }
+  document.getElementById('enroll-status').textContent = 'Opening camera…';
   try {
-    await loadFaceModels();
-  } catch {
-    document.getElementById('enroll-face-status').textContent = '❌ Could not load models — check internet.';
-    return;
-  }
-
-  document.getElementById('enroll-face-status').textContent = 'Opening camera…';
-  try {
-    _enrollStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
-    });
-    const video = document.getElementById('enroll-video');
-    video.srcObject = _enrollStream;
-    await video.play();
-    document.getElementById('enroll-face-status').textContent =
-      `Position ${workerName}'s face clearly in the frame, then tap Capture.`;
-    document.getElementById('enroll-face-snap-btn').disabled = false;
+    _enrollStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user', width:{ideal:640}, height:{ideal:480} } });
+    const video   = document.getElementById('enroll-video');
+    video.srcObject = _enrollStream; await video.play();
+    document.getElementById('enroll-status').textContent = 'Position ' + workerName + "'s face clearly, then tap Capture.";
+    document.getElementById('enroll-snap-btn').disabled  = false;
   } catch (err) {
-    document.getElementById('enroll-face-status').textContent = err.name === 'NotAllowedError'
-      ? '❌ Camera access denied' : '❌ ' + err.message;
+    document.getElementById('enroll-status').textContent = err.name === 'NotAllowedError' ? '❌ Camera access denied' : '❌ ' + err.message;
   }
 }
 
@@ -1853,119 +1491,76 @@ function workerEnrollFace() {
   adminEnrollFace(S.worker.id, S.worker.name, 'worker');
 }
 
-async function captureFaceEnroll() {
-  const statusEl = document.getElementById('enroll-face-status');
-  const btn      = document.getElementById('enroll-face-snap-btn');
-  btn.disabled   = true;
-  statusEl.textContent = 'Detecting face…';
-
-  const video = document.getElementById('enroll-video');
+async function captureEnroll() {
+  const statusEl = document.getElementById('enroll-status');
+  const btn      = document.getElementById('enroll-snap-btn');
+  btn.disabled   = true; statusEl.textContent = 'Detecting face…';
+  const video    = document.getElementById('enroll-video');
   try {
-    const det = await faceapi
-      .detectSingleFace(video, faceOpts())
-      .withFaceLandmarks(true)
-      .withFaceDescriptor();
-
-    if (!det) {
-      statusEl.textContent = '❌ No face detected — ensure good lighting and face is fully visible.';
-      btn.disabled = false;
-      return;
-    }
-
+    const det = await faceapi.detectSingleFace(video, faceOpts()).withFaceLandmarks(true).withFaceDescriptor();
+    if (!det) { statusEl.textContent = '❌ No face detected — ensure good lighting and face fully visible.'; btn.disabled=false; return; }
     const descriptor = JSON.stringify(Array.from(det.descriptor));
-    const { error } = await db.from('workers')
-      .update({ face_descriptor: descriptor }).eq('id', _enrollTarget.id);
-
-    if (error) {
-      statusEl.textContent = '❌ Save failed: ' + error.message;
-      btn.disabled = false;
-      return;
-    }
-
-    vibrate([50, 30, 100]);
-    statusEl.textContent = `✅ Face enrolled for ${_enrollTarget.name}!`;
-
+    const { error }  = await db.from('workers').update({ face_descriptor:descriptor }).eq('id', _enrollTarget.id);
+    if (error) { statusEl.textContent = '❌ Save failed: ' + error.message; btn.disabled=false; return; }
+    vibrate([50,30,100]); statusEl.textContent = '✅ Face enrolled for ' + _enrollTarget.name + '!';
     if (_enrollTarget.ctx === 'worker') {
       S.worker.face_descriptor = descriptor;
       document.getElementById('face-reg-card').style.display = 'none';
     }
-
     setTimeout(() => {
-      closeFaceEnrollModal();
-      if (_enrollTarget.ctx === 'dev')   loadDevWorkers();
+      closeFaceEnroll();
+      if (_enrollTarget.ctx === 'dev')        loadDevWorkers();
       else if (_enrollTarget.ctx === 'admin') loadWorkers();
     }, 1400);
-
-  } catch (err) {
-    statusEl.textContent = '❌ Detection error: ' + err.message;
-    btn.disabled = false;
-  }
+  } catch (err) { statusEl.textContent = '❌ ' + err.message; btn.disabled=false; }
 }
 
-function closeFaceEnrollModal() {
+function closeFaceEnroll() {
   if (_enrollStream) { _enrollStream.getTracks().forEach(t => t.stop()); _enrollStream = null; }
-  document.getElementById('face-enroll-modal').classList.add('hidden');
+  document.getElementById('modal-face-enroll').classList.add('hidden');
 }
 
-// ── PWA Install ──────────────────────────────────────
+// ═══════════════════════════════════════════════
+//  PWA INSTALL
+// ═══════════════════════════════════════════════
 let _installPrompt = null;
 
 window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault();
-  _installPrompt = e;
-  // Show install banner once home page is visible
-  setTimeout(() => {
-    const banner = document.getElementById('install-banner');
-    if (banner) banner.classList.remove('hidden');
-  }, 2000);
+  e.preventDefault(); _installPrompt = e;
+  setTimeout(() => { const b = document.getElementById('install-banner'); if (b) b.classList.remove('hidden'); }, 3000);
 });
 
 window.addEventListener('appinstalled', () => {
-  const banner = document.getElementById('install-banner');
-  if (banner) banner.classList.add('hidden');
-  _installPrompt = null;
-  toast('✅ WorkClock installed! Find it on your home screen.');
+  const b = document.getElementById('install-banner'); if (b) b.classList.add('hidden');
+  _installPrompt = null; toast('✅ WorkClock installed!');
 });
 
-async function installApp() {
+async function installPWA() {
   if (!_installPrompt) return;
   _installPrompt.prompt();
   const { outcome } = await _installPrompt.userChoice;
-  if (outcome === 'accepted') {
-    document.getElementById('install-banner').classList.add('hidden');
-    _installPrompt = null;
-  }
+  if (outcome === 'accepted') { document.getElementById('install-banner').classList.add('hidden'); _installPrompt = null; }
 }
 
 function checkIOSInstall() {
-  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  const isStandalone = window.navigator.standalone === true;
-  if (isIOS && !isStandalone) {
-    setTimeout(() => {
-      const b = document.getElementById('ios-install-banner');
-      if (b) b.classList.remove('hidden');
-    }, 2000);
+  if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !window.navigator.standalone) {
+    setTimeout(() => { const b = document.getElementById('ios-banner'); if (b) b.classList.remove('hidden'); }, 3000);
   }
 }
 
-// ── Bootstrap ────────────────────────────────────────
+// ═══════════════════════════════════════════════
+//  BOOTSTRAP
+// ═══════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
   checkIOSInstall();
 
-  // CSS already shows home after 2 s even if nothing below runs.
-  // JS shows it faster (1 s) and also restores a saved worker session.
   let done = false;
+  const finish = () => { if (done) return; done = true; showPage('home'); };
 
-  const finish = () => {
-    if (done) return;
-    done = true;
-    showPage('home');
-  };
-
-  // Hard deadline — home ALWAYS shows within 1 s
+  // Hard 1-second deadline — home page always shows within 1s
   setTimeout(finish, 1000);
 
-  // Try to restore session in background
+  // Background async init
   (async () => {
     try { await withTimeout(initCompany(), 3000); } catch {}
 
@@ -1983,8 +1578,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!S.companyId) {
           try {
             const { data: co } = await withTimeout(
-              db.from('companies').select('*').eq('id', data.company_id).maybeSingle(),
-              4000
+              db.from('companies').select('*').eq('id', data.company_id).maybeSingle(), 3000
             );
             if (co) setCompany(co, false);
           } catch {}

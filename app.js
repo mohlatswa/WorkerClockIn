@@ -13,15 +13,7 @@ const S = {
 const _wCache = {};
 const _cCache = {};
 
-// ── Splash removal ────────────────────────────────────
-window.addEventListener('load', () => {
-  const splash = document.getElementById('splash');
-  if (!splash) return;
-  setTimeout(() => {
-    splash.style.opacity = '0';
-    setTimeout(() => { splash.style.display = 'none'; }, 320);
-  }, 900);
-});
+// Splash is removed inside DOMContentLoaded — see Bootstrap section below.
 
 // ── Page navigation ───────────────────────────────────
 function showPg(id) {
@@ -1211,10 +1203,23 @@ async function changeDevPw() {
 
 // ── Face Recognition ──────────────────────────────────
 const FACE_MODELS='https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
-let _faceModelsLoaded=false, _faceLoadPromise=null;
+let _faceModelsLoaded=false, _faceLoadPromise=null, _faceApiLoading=null;
+
+function ensureFaceApi() {
+  if (typeof faceapi !== 'undefined') return Promise.resolve();
+  if (_faceApiLoading) return _faceApiLoading;
+  _faceApiLoading = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js';
+    s.onload  = resolve;
+    s.onerror = () => reject(new Error('Could not load face recognition library — check internet'));
+    document.head.appendChild(s);
+  });
+  return _faceApiLoading;
+}
 
 async function loadFaceModels() {
-  if (typeof faceapi==='undefined') throw new Error('Face recognition library not loaded yet');
+  await ensureFaceApi();
   if (_faceModelsLoaded) return;
   if (_faceLoadPromise) return _faceLoadPromise;
   _faceLoadPromise=Promise.all([
@@ -1353,6 +1358,15 @@ function checkIOSInstall() {
 
 // ── Bootstrap ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  // Remove splash after 1.1 s — do NOT wait for window.load (CDN scripts can delay it)
+  const splash = document.getElementById('splash');
+  if (splash) {
+    setTimeout(() => {
+      splash.style.opacity = '0';
+      setTimeout(() => { splash.style.display = 'none'; }, 350);
+    }, 1100);
+  }
+
   checkIOSInstall();
 
   let done=false;

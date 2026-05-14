@@ -536,6 +536,12 @@
         <div class="field"><label>Username *</label><input id="ca-user" type="text" class="input" placeholder="e.g. jane_admin" autocapitalize="none"></div>
         <div class="field"><label>Password *</label><input id="ca-pass" type="password" class="input" placeholder="Min 6 characters"></div>
         <div class="field"><label>Email</label><input id="ca-email" type="email" class="input" placeholder="Email address"></div>
+        <div class="field"><label>Role *</label>
+          <select id="ca-role" class="input">
+            <option value="admin">Admin — workers &amp; attendance</option>
+            <option value="super_admin">Super Admin — full company access</option>
+          </select>
+        </div>
         <div class="btn-row">
           <button class="btn btn-primary" onclick="addCompanyAdmin()">Create Admin</button>
           <button class="btn btn-outline" onclick="toggleAddCompanyAdmin()">Cancel</button>

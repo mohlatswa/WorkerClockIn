@@ -703,10 +703,10 @@ async function adminLogin() {
     } else {
       // Scope all operations to this admin's company
       document.getElementById('admin-company-label').textContent = data.co?.name || '';
-      // Show/hide super_admin-only tabs
+      // Admins tab: super_admin only. Setup tab: all admin roles get it.
       const isSA = data.role === 'super_admin';
       document.getElementById('tab-btn-admins').classList.toggle('hidden', !isSA);
-      document.getElementById('tab-btn-setup').classList.toggle('hidden', !isSA);
+      document.getElementById('tab-btn-setup').classList.remove('hidden');
       showPage('admin');
       loadDashboard();
     }
@@ -785,8 +785,9 @@ async function applyNewPassword() {
 }
 
 function switchTab(name, btn) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); btn.classList.add('active');
-  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('#admin-tabs .tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('#page-admin .tab-pane').forEach(p => p.classList.remove('active'));
   document.getElementById(`tab-${name}`).classList.add('active');
   if (name === 'workers')         loadWorkers();
   if (name === 'company-admins')  loadCompanyAdmins();
@@ -1427,39 +1428,44 @@ async function loadCompanyAdmins() {
   const el = document.getElementById('company-admins-list');
   el.innerHTML = '<div class="empty">Loading…</div>';
   const { data, error } = await db.from('admin_users')
-    .select('*').eq('company_id', S.admin?.company_id).eq('role','admin').order('username');
+    .select('*').eq('company_id', S.admin?.company_id).neq('role','developer').order('full_name');
   if (error || !data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
   if (!data.length)   { el.innerHTML = '<div class="empty">No admins yet — create one above</div>'; return; }
   el.innerHTML = '<div class="workers-list">' + data.map(a => `
     <div class="wr-row">
       <div class="wr-info">
-        <div class="avatar sm">${(a.full_name||a.username).slice(0,2).toUpperCase()}</div>
+        <div class="avatar sm" style="background:${ROLE_COLORS[a.role]||'var(--blue)'}">${(a.full_name||a.username).slice(0,2).toUpperCase()}</div>
         <div>
-          <div class="wr-name">${a.full_name||a.username}</div>
-          <div class="wr-meta">@${a.username}${a.email?' · '+a.email:''}${!a.is_active?' · <em>Inactive</em>':''}</div>
+          <div class="wr-name">${a.full_name||a.username} <small style="color:var(--muted)">@${a.username}</small></div>
+          <div class="wr-meta">
+            <span class="role-pill" style="background:${ROLE_COLORS[a.role]||'var(--blue)'}22;color:${ROLE_COLORS[a.role]||'var(--blue)'};">${ROLE_LABELS[a.role]||a.role}</span>
+            ${a.email?' · '+a.email:''}${!a.is_active?' · <em>Inactive</em>':''}
+          </div>
         </div>
       </div>
       <div class="wr-btns">
-        <button class="icon-btn" title="Edit Profile" onclick="openEditAccount('${a.id}','${(a.full_name||'').replace(/'/g,"\\'")}','${(a.email||'').replace(/'/g,"\\'")}','${a.role}',false)">✏️</button>
+        <button class="icon-btn" title="Edit Account" onclick="openEditAccount('${a.id}','${(a.full_name||'').replace(/'/g,"\\'")}','${(a.email||'').replace(/'/g,"\\'")}','${a.role}','sa')">✏️</button>
         <button class="icon-btn" title="Reset Password" onclick="devResetAdminPw('${a.id}','${a.username}')">🔑</button>
-        <button class="icon-btn" onclick="caToggle('${a.id}',${a.is_active})">${a.is_active?'🚫':'✅'}</button>
+        <button class="icon-btn" title="${a.is_active?'Deactivate':'Reactivate'}" onclick="caToggle('${a.id}',${a.is_active})">${a.is_active?'🚫':'✅'}</button>
       </div>
     </div>`).join('') + '</div>';
 }
 
 async function addCompanyAdmin() {
-  const name  = (document.getElementById('ca-name').value || '').trim();
-  const user  = (document.getElementById('ca-user').value || '').trim().toLowerCase();
-  const pass  = (document.getElementById('ca-pass').value || '').trim();
-  const email = (document.getElementById('ca-email').value|| '').trim();
+  const name  = (document.getElementById('ca-name').value  || '').trim();
+  const user  = (document.getElementById('ca-user').value  || '').trim().toLowerCase();
+  const pass  = (document.getElementById('ca-pass').value  || '').trim();
+  const email = (document.getElementById('ca-email').value || '').trim();
+  const role  =  document.getElementById('ca-role').value  || 'admin';
   if (!name||!user||!pass) { showMsg('ca-msg','Name, username and password are required.','err'); return; }
   if (pass.length < 6)     { showMsg('ca-msg','Password must be at least 6 characters.','err'); return; }
+  if (!/^[a-z0-9_]+$/.test(user)) { showMsg('ca-msg','Username may only contain letters, numbers and underscores.','err'); return; }
   const { error } = await db.from('admin_users').insert({
     username: user, password_hash: pass, full_name: name,
-    email: email||null, role: 'admin', company_id: S.admin?.company_id, is_active: true,
+    email: email||null, role, company_id: S.admin?.company_id, is_active: true,
   });
   if (error) { showMsg('ca-msg', error.code==='23505'?'Username already exists.':error.message,'err'); return; }
-  showMsg('ca-msg',`✅ Admin "@${user}" created!`,'ok');
+  showMsg('ca-msg',`✅ ${ROLE_LABELS[role]||role} "@${user}" created!`,'ok');
   ['ca-name','ca-user','ca-pass','ca-email'].forEach(id => document.getElementById(id).value='');
   setTimeout(() => { toggleAddCompanyAdmin(); loadCompanyAdmins(); }, 1400);
 }
@@ -1470,17 +1476,23 @@ async function caToggle(id, cur) {
 }
 
 // ── Edit Account Modal (developer + super admin) ─────
-let _editCtx = null; // 'dev' or 'admin'
+// ctx: 'dev' = developer panel (shows role, reloads devSA list)
+//      'sa'  = company admins tab (shows role, reloads company admins list)
+//      'admin' = plain admin edit (hides role, reloads company admins list)
+let _editCtx = null;
 
-function openEditAccount(id, name, email, role, isDevCtx) {
-  _editCtx = isDevCtx ? 'dev' : 'admin';
+function openEditAccount(id, name, email, role, ctx) {
+  // Support old boolean callers: true → 'dev', false → 'admin'
+  if (ctx === true)  ctx = 'dev';
+  if (ctx === false) ctx = 'admin';
+  _editCtx = ctx;
   document.getElementById('edit-acct-id').value    = id;
   document.getElementById('edit-acct-name').value  = name;
   document.getElementById('edit-acct-email').value = email;
   document.getElementById('edit-acct-pw').value    = '';
   document.getElementById('edit-acct-msg').classList.add('hidden');
   const roleWrap = document.getElementById('edit-acct-role-wrap');
-  if (isDevCtx) {
+  if (ctx === 'dev' || ctx === 'sa') {
     roleWrap.classList.remove('hidden');
     document.getElementById('edit-acct-role').value = role;
   } else {

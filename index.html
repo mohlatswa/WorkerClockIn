@@ -309,16 +309,43 @@
           </div>
           <p class="msg hidden" id="nw-msg"></p>
         </div>
-        <!-- Step 2: Enrol clock-in methods -->
+        <!-- Step 2: Choose clock-in methods -->
         <div id="nw-step2" class="hidden">
           <div style="text-align:center;margin-bottom:16px">
-            <div style="font-size:2.2rem;margin-bottom:4px">✅</div>
-            <div id="nw-s2-name" style="font-weight:700;font-size:1.05rem;margin-bottom:4px"></div>
-            <div style="font-size:.82rem;color:var(--muted)">Worker saved! Set up additional clock-in methods (optional):</div>
+            <div style="font-size:2rem;margin-bottom:4px">✅</div>
+            <div id="nw-s2-name" style="font-weight:700;font-size:1.05rem;margin:2px 0"></div>
+            <div id="nw-s2-empid" style="font-size:.8rem;color:var(--muted);margin-bottom:4px"></div>
+            <div style="font-size:.78rem;color:var(--muted)">Worker saved — choose clock-in methods:</div>
           </div>
-          <button class="btn btn-outline btn-full" style="margin-bottom:10px" onclick="nwEnrollFace()">📷 Capture Face for Face Recognition</button>
-          <button class="btn btn-outline btn-full" style="margin-bottom:16px" onclick="nwEnrollBio()">🖐 Register Fingerprint / Face ID</button>
-          <button class="btn btn-primary btn-full" onclick="nwDone()">✓ Done</button>
+
+          <div class="method-row method-done">
+            <div class="method-icon">🔢</div>
+            <div class="method-info">
+              <div class="method-name">Employee ID + PIN</div>
+              <div class="method-sub">Ready — linked to their Employee ID</div>
+            </div>
+            <span class="method-check">✅</span>
+          </div>
+
+          <div class="method-row" id="nw-face-row">
+            <div class="method-icon">📷</div>
+            <div class="method-info">
+              <div class="method-name">Facial Recognition</div>
+              <div class="method-sub" id="nw-face-sub">Capture worker's face to enable</div>
+            </div>
+            <button class="btn btn-outline btn-sm" id="nw-face-btn" onclick="nwEnrollFace()">Capture</button>
+          </div>
+
+          <div class="method-row" id="nw-bio-row">
+            <div class="method-icon">🖐</div>
+            <div class="method-info">
+              <div class="method-name">Fingerprint / Face ID</div>
+              <div class="method-sub" id="nw-bio-sub">Worker must be on this device</div>
+            </div>
+            <button class="btn btn-outline btn-sm" id="nw-bio-btn" onclick="nwEnrollBio()">Register</button>
+          </div>
+
+          <button class="btn btn-primary btn-full" style="margin-top:14px" onclick="nwDone()">✓ Complete Enrollment</button>
         </div>
       </div>
       <div id="workers-list"><div class="empty">Loading…</div></div>

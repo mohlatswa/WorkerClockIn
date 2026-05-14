@@ -698,6 +698,7 @@ async function captureEnroll() {
       closeFaceEnroll();
       if (_enrollTarget.ctx === 'dev') loadDevWorkers();
       else if (_enrollTarget.ctx === 'admin') loadWorkers();
+      else if (_enrollTarget.ctx === 'nw') nwMarkFaceDone();
     }, 1400);
   } catch (e) { statusEl.textContent = '❌ ' + e.message; btn.disabled = false; }
 }
@@ -856,14 +857,14 @@ async function loadWorkers() {
     }).join('') + '</div>';
   } catch (e) { el.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
 }
-var _newWorkerId = null, _newWorkerName = '';
+var _newWorkerId = null, _newWorkerName = '', _newWorkerEmpId = '';
 function toggleAddWorker() {
   var p = document.getElementById('add-worker-panel'); p.classList.toggle('hidden');
   if (!p.classList.contains('hidden')) {
     document.getElementById('nw-step1').classList.remove('hidden');
     document.getElementById('nw-step2').classList.add('hidden');
     document.getElementById('nw-id').focus();
-    _newWorkerId = null; _newWorkerName = '';
+    _newWorkerId = null; _newWorkerName = ''; _newWorkerEmpId = '';
   }
 }
 async function addWorker() {
@@ -884,29 +885,49 @@ async function addWorker() {
       workplace_id: (wpR.data && wpR.data[0]) ? wpR.data[0].id : null,
       company_id:   cid,
       is_active:    true
-    }).select('id,name').single(), 5000);
+    }).select('id,name,employee_id').single(), 5000);
     if (r.error) {
       showMsg('nw-msg', r.error.message.includes('unique') ? 'Employee ID already exists.' : r.error.message, 'err'); return;
     }
     _newWorkerId   = r.data.id;
     _newWorkerName = r.data.name;
+    _newWorkerEmpId = r.data.employee_id;
     ['nw-id', 'nw-name', 'nw-job', 'nw-pin'].forEach(function(id) { document.getElementById(id).value = ''; });
-    document.getElementById('nw-s2-name').textContent = _newWorkerName;
+    document.getElementById('nw-s2-name').textContent  = _newWorkerName;
+    document.getElementById('nw-s2-empid').textContent = 'Employee ID: ' + _newWorkerEmpId;
+    document.getElementById('nw-face-row').classList.remove('method-done');
+    document.getElementById('nw-bio-row').classList.remove('method-done');
+    document.getElementById('nw-face-btn').disabled = false;
+    document.getElementById('nw-bio-btn').disabled  = false;
+    document.getElementById('nw-face-sub').textContent = 'Capture worker\'s face to enable';
+    document.getElementById('nw-bio-sub').textContent  = 'Worker must be on this device';
     document.getElementById('nw-step1').classList.add('hidden');
     document.getElementById('nw-step2').classList.remove('hidden');
   } catch (e) { showMsg('nw-msg', 'Error: ' + e.message, 'err'); }
 }
 function nwEnrollFace() {
-  if (_newWorkerId) adminEnrollFace(_newWorkerId, _newWorkerName, 'admin');
+  if (_newWorkerId) adminEnrollFace(_newWorkerId, _newWorkerName, 'nw');
 }
 function nwEnrollBio() {
-  if (_newWorkerId) adminRegBio(_newWorkerId, _newWorkerName);
+  if (_newWorkerId) adminRegBio(_newWorkerId, _newWorkerName, 'nw');
+}
+function nwMarkFaceDone() {
+  var row = document.getElementById('nw-face-row'); if (!row) return;
+  row.classList.add('method-done');
+  document.getElementById('nw-face-sub').textContent = 'Face enrolled — linked to ' + _newWorkerName;
+  var btn = document.getElementById('nw-face-btn'); btn.textContent = '✅'; btn.disabled = true;
+}
+function nwMarkBioDone() {
+  var row = document.getElementById('nw-bio-row'); if (!row) return;
+  row.classList.add('method-done');
+  document.getElementById('nw-bio-sub').textContent = 'Biometric registered — linked to ' + _newWorkerName;
+  var btn = document.getElementById('nw-bio-btn'); btn.textContent = '✅'; btn.disabled = true;
 }
 function nwDone() {
   document.getElementById('add-worker-panel').classList.add('hidden');
   document.getElementById('nw-step1').classList.remove('hidden');
   document.getElementById('nw-step2').classList.add('hidden');
-  _newWorkerId = null; _newWorkerName = '';
+  _newWorkerId = null; _newWorkerName = ''; _newWorkerEmpId = '';
   loadWorkers();
 }
 async function toggleWorker(id, cur) {
@@ -924,9 +945,9 @@ async function resetWorkerSecurity(id, name) {
     toast('Security reset for ' + name); loadWorkers();
   } catch(e) { toast('Error: ' + e.message); }
 }
-async function adminRegBio(workerId, workerName) {
+async function adminRegBio(workerId, workerName, ctx) {
   if (!window.PublicKeyCredential) { toast('WebAuthn not supported here'); return; }
-  if (!confirm('Register biometric for "' + workerName + '"?\n\nThe worker must be present on this device.')) return;
+  if (ctx !== 'nw' && !confirm('Register biometric for "' + workerName + '"?\n\nThe worker must be present on this device.')) return;
   try {
     var cred = await navigator.credentials.create({ publicKey: {
       challenge: crypto.getRandomValues(new Uint8Array(32)),
@@ -939,6 +960,7 @@ async function adminRegBio(workerId, workerName) {
     if (!cred) return;
     var r = await withTimeout(db.from('workers').update({ biometric_credential_id: b64(cred.rawId), biometric_enabled: true }).eq('id', workerId), 5000);
     if (r.error) throw r.error;
+    if (ctx === 'nw') { nwMarkBioDone(); return; }
     toast('✅ Biometric registered for ' + workerName); loadWorkers();
   } catch (e) { toast(e.name === 'NotAllowedError' ? 'Cancelled.' : '❌ ' + e.message); }
 }

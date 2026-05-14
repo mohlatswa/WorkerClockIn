@@ -128,6 +128,47 @@ function startClock() {
   tick(); setInterval(tick, 1000);
 }
 
+// ── Security Utilities ────────────────────────────────────
+function getDeviceId() {
+  var id = localStorage.getItem('wc_device_id');
+  if (!id) {
+    if (typeof crypto.randomUUID === 'function') {
+      id = crypto.randomUUID();
+    } else {
+      var arr = crypto.getRandomValues(new Uint8Array(16));
+      arr[6] = (arr[6] & 0x0f) | 0x40; arr[8] = (arr[8] & 0x3f) | 0x80;
+      id = Array.from(arr).map(function(b, i) {
+        return ([4,6,8,10].indexOf(i) !== -1 ? '-' : '') + b.toString(16).padStart(2,'0');
+      }).join('');
+    }
+    localStorage.setItem('wc_device_id', id);
+  }
+  return id;
+}
+function genToken() {
+  var arr = crypto.getRandomValues(new Uint8Array(32));
+  return Array.from(arr).map(function(b) { return b.toString(16).padStart(2,'0'); }).join('');
+}
+async function secureSignIn(method) {
+  var w = S.worker;
+  if (!w) return;
+  var deviceId = getDeviceId();
+  // Device binding: reject if registered to a different device
+  if (w.device_id && w.device_id !== deviceId) {
+    showErr('err-pin', '🔒 This account is bound to another device. Ask your administrator to reset it.');
+    setTimeout(function() { S.worker = null; showPg('wlogin'); }, 3000);
+    return;
+  }
+  // Issue a new session token and register device on first sign-in
+  var sessionToken = genToken();
+  var updates = { session_token: sessionToken, failed_attempts: 0, locked_until: null };
+  if (!w.device_id) updates.device_id = deviceId;
+  try { await withTimeout(db.from('workers').update(updates).eq('id', w.id), 5000); } catch(e) {}
+  localStorage.setItem('wc_session_token', sessionToken);
+  S.authMethod = method;
+  enterWorkerDashboard();
+}
+
 // ── Worker Lookup ─────────────────────────────────────────
 async function findWorker() {
   var id = (document.getElementById('inp-empid').value || '').trim().toUpperCase();
@@ -174,12 +215,32 @@ function renderDots() {
     if (d) d.classList.toggle('filled', i < S.npPin.length);
   }
 }
-function verifyPin() {
+async function verifyPin() {
   if (!S.worker) return;
-  if (S.npPin.join('') !== String(S.worker.pin)) {
-    vibrate([50, 30, 50]); showErr('err-pin', 'Incorrect PIN — try again'); npReset(); return;
+  // Check account lockout
+  if (S.worker.locked_until && new Date(S.worker.locked_until) > new Date()) {
+    var mins = Math.ceil((new Date(S.worker.locked_until) - new Date()) / 60000);
+    showErr('err-pin', '🔒 Account locked. Try again in ' + mins + ' minute(s).');
+    npReset(); return;
   }
-  S.authMethod = 'pin'; enterWorkerDashboard();
+  if (S.npPin.join('') !== String(S.worker.pin)) {
+    vibrate([50, 30, 50]);
+    var attempts = (S.worker.failed_attempts || 0) + 1;
+    var upd = { failed_attempts: attempts };
+    var msg;
+    if (attempts >= 5) {
+      upd.locked_until    = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+      upd.failed_attempts = 0;
+      msg = '🔒 Too many failed attempts — account locked for 30 minutes.';
+    } else {
+      msg = 'Incorrect PIN. ' + (5 - attempts) + ' attempt(s) remaining.';
+    }
+    try { await withTimeout(db.from('workers').update(upd).eq('id', S.worker.id), 3000); } catch(e) {}
+    S.worker.failed_attempts = upd.failed_attempts;
+    if (upd.locked_until) S.worker.locked_until = upd.locked_until;
+    showErr('err-pin', msg); npReset(); return;
+  }
+  await secureSignIn('pin');
 }
 
 // ── Biometric ─────────────────────────────────────────────
@@ -198,7 +259,7 @@ async function homeBiometric() {
       5000
     );
     if (!r.data) { toast('Account not found.'); return; }
-    S.worker = r.data; S.authMethod = 'biometric'; enterWorkerDashboard();
+    S.worker = r.data; await secureSignIn('biometric');
   } catch (e) { if (e.name !== 'NotAllowedError') toast('Biometric error: ' + e.message); }
 }
 async function authBiometric() {
@@ -210,7 +271,7 @@ async function authBiometric() {
       allowCredentials: [{ id: unb64(S.worker.biometric_credential_id), type: 'public-key' }],
       userVerification: 'required', timeout: 60000
     }});
-    if (cred) { S.authMethod = 'biometric'; enterWorkerDashboard(); }
+    if (cred) await secureSignIn('biometric');
   } catch (e) { if (e.name !== 'NotAllowedError') showErr('err-pin', 'Error: ' + e.message); }
 }
 async function workerRegBio() {
@@ -480,10 +541,14 @@ function showSuccess(action) {
 }
 
 // ── Worker Sign Out ───────────────────────────────────────
-function logoutWorker() {
+async function logoutWorker() {
   if (S.geoWatcher) { navigator.geolocation.clearWatch(S.geoWatcher); S.geoWatcher = null; }
+  if (S.worker) {
+    try { await withTimeout(db.from('workers').update({ session_token: null }).eq('id', S.worker.id), 3000); } catch(e) {}
+  }
   S.worker = null; S.userLoc = null; S.clockStatus = 'out'; S.attendanceId = null;
   localStorage.removeItem('wc_worker_id');
+  localStorage.removeItem('wc_session_token');
   var inp = document.getElementById('inp-empid');
   if (inp) inp.value = '';
   showPg('home');
@@ -582,8 +647,8 @@ async function faceFrame() {
         5000
       );
       if (!r.data) { statusEl.textContent = '❌ Account not found.'; setTimeout(function() { showPg('home'); }, 2000); return; }
-      S.worker = r.data; S.authMethod = 'face';
-      setTimeout(function() { enterWorkerDashboard(); }, 900);
+      S.worker = r.data;
+      setTimeout(function() { secureSignIn('face'); }, 900);
     } catch (e) { statusEl.textContent = '❌ Connection error'; setTimeout(function() { showPg('home'); }, 2000); }
   } catch (e) { requestAnimationFrame(faceFrame); }
 }
@@ -650,13 +715,44 @@ async function adminLogin() {
   var btn = document.getElementById('login-btn');
   btn.disabled = true; btn.textContent = 'Logging in…';
   try {
+    // Lookup account to check lockout before verifying password
+    var lookR = await withTimeout(
+      db.from('admin_users').select('id,is_active,failed_attempts,locked_until').eq('username', user).maybeSingle(),
+      5000
+    );
+    if (lookR.data) {
+      if (!lookR.data.is_active) { showErr('err-admin', 'Account disabled. Contact your system administrator.'); return; }
+      if (lookR.data.locked_until && new Date(lookR.data.locked_until) > new Date()) {
+        var mins = Math.ceil((new Date(lookR.data.locked_until) - new Date()) / 60000);
+        showErr('err-admin', '🔒 Account locked. Try again in ' + mins + ' minute(s).'); return;
+      }
+    }
     var r = await withTimeout(
       db.from('admin_users').select('*, co:companies(name,code)')
         .eq('username', user).eq('password_hash', pass).eq('is_active', true).maybeSingle(),
       8000
     );
     if (r.error) { showErr('err-admin', 'Database error: ' + r.error.message); return; }
-    if (!r.data)  { showErr('err-admin', 'Invalid username or password.'); return; }
+    if (!r.data) {
+      // Track failed attempt
+      if (lookR.data) {
+        var attempts = (lookR.data.failed_attempts || 0) + 1;
+        var upd = { failed_attempts: attempts };
+        if (attempts >= 5) {
+          upd.locked_until    = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+          upd.failed_attempts = 0;
+          showErr('err-admin', '🔒 Too many failed attempts. Account locked for 30 minutes.');
+        } else {
+          showErr('err-admin', 'Invalid username or password. ' + (5 - attempts) + ' attempt(s) remaining.');
+        }
+        try { await withTimeout(db.from('admin_users').update(upd).eq('id', lookR.data.id), 3000); } catch(e) {}
+      } else {
+        showErr('err-admin', 'Invalid username or password.');
+      }
+      return;
+    }
+    // Success — clear lockout
+    try { await withTimeout(db.from('admin_users').update({ failed_attempts: 0, locked_until: null }).eq('id', r.data.id), 3000); } catch(e) {}
     S.admin = r.data;
     document.getElementById('inp-auser').value = '';
     document.getElementById('inp-apass').value = '';
@@ -741,17 +837,21 @@ async function loadWorkers() {
     if (!r.data.length) { el.innerHTML = '<div class="empty">No workers yet — add one above</div>'; return; }
     r.data.forEach(function(w) { _wCache[w.id] = Object.assign({}, w, { _ctx: 'admin' }); });
     el.innerHTML = '<div class="card" style="padding:0 18px">' + r.data.map(function(w) {
+      var isLocked = w.locked_until && new Date(w.locked_until) > new Date();
+      var meta = w.employee_id + (w.job_title ? ' · ' + w.job_title : '')
+        + (w.biometric_enabled ? ' · 🔏' : '') + (w.face_descriptor ? ' · 🤳' : '')
+        + (w.device_id         ? ' · 📱' : '') + (isLocked ? ' · 🔒' : '')
+        + (!w.is_active ? ' · <em>Inactive</em>' : '');
       return '<div class="list-row">' +
         '<div class="row-info"><div class="av av-sm">' + initials(w.name) + '</div>' +
         '<div><div class="row-name">' + w.name + '</div>' +
-        '<div class="row-meta">' + w.employee_id + (w.job_title ? ' · ' + w.job_title : '') +
-          (w.biometric_enabled ? ' · 🔏' : '') + (w.face_descriptor ? ' · 🤳' : '') +
-          (!w.is_active ? ' · <em>Inactive</em>' : '') + '</div></div></div>' +
+        '<div class="row-meta">' + meta + '</div></div></div>' +
         '<div class="row-btns">' +
-        '<button class="icon-btn" onclick="openEditWorker(\'' + w.id + '\')">✏️</button>' +
-        '<button class="icon-btn" onclick="adminEnrollFace(\'' + w.id + '\',\'' + escQ(w.name) + '\',\'admin\')">🤳</button>' +
-        '<button class="icon-btn" onclick="adminRegBio(\'' + w.id + '\',\'' + escQ(w.name) + '\')">🔏</button>' +
-        '<button class="icon-btn" onclick="toggleWorker(\'' + w.id + '\',' + w.is_active + ')">' + (w.is_active ? '🚫' : '✅') + '</button>' +
+        '<button class="icon-btn" title="Edit" onclick="openEditWorker(\'' + w.id + '\')">✏️</button>' +
+        '<button class="icon-btn" title="Enrol face" onclick="adminEnrollFace(\'' + w.id + '\',\'' + escQ(w.name) + '\',\'admin\')">🤳</button>' +
+        '<button class="icon-btn" title="Register biometric" onclick="adminRegBio(\'' + w.id + '\',\'' + escQ(w.name) + '\')">🔏</button>' +
+        '<button class="icon-btn" title="Reset device &amp; unlock" onclick="resetWorkerSecurity(\'' + w.id + '\',\'' + escQ(w.name) + '\')">🛡</button>' +
+        '<button class="icon-btn" title="' + (w.is_active ? 'Deactivate' : 'Activate') + '" onclick="toggleWorker(\'' + w.id + '\',' + w.is_active + ')">' + (w.is_active ? '🚫' : '✅') + '</button>' +
         '</div></div>';
     }).join('') + '</div>';
   } catch (e) { el.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
@@ -812,6 +912,17 @@ function nwDone() {
 async function toggleWorker(id, cur) {
   var r = await withTimeout(db.from('workers').update({ is_active: !cur }).eq('id', id), 5000);
   if (!r.error) { toast(cur ? 'Worker deactivated' : 'Worker reactivated'); loadWorkers(); }
+}
+async function resetWorkerSecurity(id, name) {
+  if (!confirm('Reset security for "' + name + '"?\n\n• Removes device binding (they can register a new device)\n• Clears any account lockout\n• Invalidates active session')) return;
+  try {
+    var r = await withTimeout(
+      db.from('workers').update({ device_id: null, session_token: null, failed_attempts: 0, locked_until: null }).eq('id', id),
+      5000
+    );
+    if (r.error) { toast('Error: ' + r.error.message); return; }
+    toast('Security reset for ' + name); loadWorkers();
+  } catch(e) { toast('Error: ' + e.message); }
 }
 async function adminRegBio(workerId, workerName) {
   if (!window.PublicKeyCredential) { toast('WebAuthn not supported here'); return; }
@@ -1445,12 +1556,21 @@ document.addEventListener('DOMContentLoaded', function() {
         5000
       );
       if (r.data) {
+        var savedToken  = localStorage.getItem('wc_session_token');
+        var savedDevice = localStorage.getItem('wc_device_id');
+        // Reject if session token was invalidated (signed out elsewhere)
+        if (r.data.session_token && savedToken && r.data.session_token !== savedToken) {
+          localStorage.removeItem('wc_worker_id'); localStorage.removeItem('wc_session_token'); return;
+        }
+        // Reject if this is not the registered device
+        if (r.data.device_id && savedDevice && r.data.device_id !== savedDevice) {
+          localStorage.removeItem('wc_worker_id'); localStorage.removeItem('wc_session_token'); return;
+        }
         S.worker = r.data;
-        // enterWorkerDashboard always resolves company from worker.company_id
         enterWorkerDashboard();
       } else {
-        localStorage.removeItem('wc_worker_id');
+        localStorage.removeItem('wc_worker_id'); localStorage.removeItem('wc_session_token');
       }
-    } catch (e) { localStorage.removeItem('wc_worker_id'); }
+    } catch (e) { localStorage.removeItem('wc_worker_id'); localStorage.removeItem('wc_session_token'); }
   })();
 });

@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Guide — WorkClock</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue:   #2563EB;
+      --dark:   #1E3A8A;
+      --green:  #16A34A;
+      --bg:     #F1F5F9;
+      --text:   #1E293B;
+      --muted:  #64748B;
+      --border: #E2E8F0;
+      --white:  #ffffff;
+      --sidebar-w: 260px;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* ── Top Bar ── */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #064E3B;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 24px;
+      height: 56px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    }
+    .topbar a { color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px; }
+    .topbar a:hover { color: #fff; }
+    .topbar-title { font-size: 15px; font-weight: 700; color: #fff; margin-right: auto; }
+    .topbar-badge { font-size: 11px; background: rgba(255,255,255,0.15); border-radius: 20px; padding: 3px 10px; }
+
+    /* ── Layout ── */
+    .layout { display: flex; max-width: 1200px; margin: 0 auto; min-height: calc(100vh - 56px); }
+
+    /* ── Sidebar ── */
+    aside {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      background: var(--white);
+      border-right: 1px solid var(--border);
+      position: sticky;
+      top: 56px;
+      height: calc(100vh - 56px);
+      overflow-y: auto;
+      padding: 20px 0;
+    }
+    .nav-section {
+      padding: 6px 20px 4px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: #94A3B8;
+      margin-top: 12px;
+    }
+    aside a {
+      display: block;
+      padding: 7px 20px;
+      font-size: 13.5px;
+      color: var(--muted);
+      text-decoration: none;
+      border-left: 3px solid transparent;
+      transition: all 0.12s;
+    }
+    aside a:hover { color: var(--green); background: #F0FDF4; border-left-color: var(--green); }
+
+    /* ── Page Header ── */
+    .page-header {
+      background: linear-gradient(135deg, #064E3B 0%, #16A34A 100%);
+      color: #fff;
+      padding: 36px 48px;
+    }
+    .page-header .tag {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      opacity: 0.7;
+      margin-bottom: 8px;
+    }
+    .page-header h1 { color: #fff; font-size: 32px; margin-bottom: 8px; letter-spacing: -0.5px; }
+    .page-header p { color: rgba(255,255,255,0.85); margin-bottom: 0; font-size: 15px; }
+
+    /* ── Content ── */
+    .content { flex: 1; padding: 40px 48px; max-width: 860px; }
+    .content > section { margin-bottom: 56px; }
+    h2 {
+      font-size: 22px; font-weight: 700; margin-bottom: 16px;
+      padding-bottom: 10px; border-bottom: 2px solid var(--border); color: var(--text);
+    }
+    h3 { font-size: 16px; font-weight: 700; margin: 24px 0 10px; color: var(--text); }
+    h4 { font-size: 13px; font-weight: 700; margin: 18px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    p { margin-bottom: 14px; font-size: 14.5px; color: #334155; }
+    ul, ol { padding-left: 20px; margin-bottom: 14px; }
+    li { font-size: 14.5px; color: #334155; margin-bottom: 6px; }
+    strong { color: var(--text); }
+    code {
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 12.5px;
+      background: #EFF6FF;
+      color: #1D4ED8;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    /* ── Callout ── */
+    .callout {
+      border-radius: 10px; padding: 14px 18px;
+      margin-bottom: 18px; font-size: 14px;
+      display: flex; gap: 12px;
+    }
+    .callout.info   { background: #EFF6FF;  border-left: 4px solid var(--blue); }
+    .callout.green  { background: #F0FDF4;  border-left: 4px solid var(--green); }
+    .callout.warn   { background: #FFFBEB;  border-left: 4px solid #F59E0B; }
+    .callout.danger { background: #FEF2F2;  border-left: 4px solid #EF4444; }
+    .callout-icon   { font-size: 18px; flex-shrink: 0; line-height: 1.4; }
+    .callout-body   { color: #334155; line-height: 1.6; }
+    .callout-body p { margin: 0; font-size: 14px; }
+
+    /* ── Role Cards ── */
+    .role-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .role-card { background: var(--white); border-radius: 12px; border: 1px solid var(--border); padding: 20px; }
+    .role-name { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+    .role-sub  { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+    .role-perms { font-size: 13px; color: #334155; }
+    .role-perms li { margin-bottom: 4px; }
+    .badge-blue   { color: var(--blue); }
+    .badge-green  { color: var(--green); }
+    .badge-purple { color: #7C3AED; }
+
+    /* ── Steps ── */
+    .steps { counter-reset: st; display: flex; flex-direction: column; gap: 10px; }
+    .step {
+      display: flex; gap: 14px; align-items: flex-start;
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 18px;
+    }
+    .step::before {
+      counter-increment: st;
+      content: counter(st);
+      width: 26px; height: 26px;
+      background: var(--green); color: #fff;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; flex-shrink: 0;
+    }
+    .step p { margin: 0; font-size: 14px; }
+
+    /* ── Tab Description ── */
+    .tab-card {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px 22px; margin-bottom: 14px;
+    }
+    .tab-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+    .tab-card p  { margin-bottom: 0; font-size: 14px; }
+
+    /* ── Troubleshoot Table ── */
+    .table-wrap { overflow-x: auto; margin-bottom: 20px; }
+    table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+    th {
+      background: #F8FAFC; border: 1px solid var(--border);
+      padding: 9px 14px; text-align: left; font-weight: 700;
+      color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    td { border: 1px solid var(--border); padding: 9px 14px; color: #334155; vertical-align: top; }
+    tr:nth-child(even) td { background: #F8FAFC; }
+    .fix { color: #15803D; }
+
+    /* ── Icon pills ── */
+    .icon-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #F8FAFC; border: 1px solid var(--border);
+      border-radius: 8px; padding: 4px 10px; font-size: 13px;
+      margin: 2px 0;
+    }
+
+    /* ── Footer ── */
+    footer {
+      background: var(--white); border-top: 1px solid var(--border);
+      padding: 22px 48px; text-align: center; font-size: 13px; color: #94A3B8;
+    }
+
+    @media (max-width: 768px) {
+      aside { display: none; }
+      .content { padding: 24px 20px; }
+      .page-header { padding: 28px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="topbar-title">WorkClock &mdash; Admin Guide</span>
+  <a href="index.html">&larr; Docs Home</a>
+  <span class="topbar-badge">For Admins</span>
+</div>
+
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside>
+    <div class="nav-section">Introduction</div>
+    <a href="#what-is">What is WorkClock</a>
+    <a href="#roles">Admin Roles</a>
+    <a href="#login">Logging In</a>
+
+    <div class="nav-section">Admin Panel Tabs</div>
+    <a href="#tab-dashboard">Dashboard</a>
+    <a href="#tab-workers">Workers Tab</a>
+    <a href="#tab-attendance">Attendance Tab</a>
+    <a href="#tab-admins">Admins Tab</a>
+    <a href="#tab-setup">Setup Tab</a>
+
+    <div class="nav-section">Worker Management</div>
+    <a href="#add-worker">Adding a Worker</a>
+    <a href="#edit-worker">Editing a Worker</a>
+    <a href="#deactivate">Deactivating a Worker</a>
+    <a href="#enrolment">Enrolment Methods</a>
+
+    <div class="nav-section">Security</div>
+    <a href="#device-binding">Device Binding</a>
+    <a href="#lockout">Account Lockout</a>
+    <a href="#reset-security">Resetting Security</a>
+
+    <div class="nav-section">Help</div>
+    <a href="#troubleshoot">Troubleshooting</a>
+  </aside>
+
+  <div style="flex:1; display:flex; flex-direction:column;">
+
+    <div class="page-header">
+      <div class="tag">Admin Guide</div>
+      <h1>WorkClock Administration Guide</h1>
+      <p>Everything you need to manage workers, monitor attendance, and keep the system running smoothly.</p>
+    </div>
+
+    <div class="content">
+
+      <!-- ── What is WorkClock ── -->
+      <section id="what-is">
+        <h2>What is WorkClock?</h2>
+        <p>WorkClock is a <strong>staff attendance system</strong> that lets your workers clock in and out using their smartphone — from anywhere with internet access, as long as they are physically at the registered workplace location.</p>
+        <p>When a worker clocks in, the app records their GPS coordinates, the time, and how they authenticated (PIN, fingerprint, or face recognition). You can view all attendance records in the admin panel, filter by date or worker, and export to CSV for payroll.</p>
+        <p>Workers access the app through a company-specific link you share with them. The admin panel is accessible from the same app by scrolling to the bottom of the home screen and tapping <strong>Admin Login</strong>.</p>
+
+        <div class="callout green">
+          <span class="callout-icon">&#128279;</span>
+          <div class="callout-body">
+            <p><strong>Your Worker Portal Link:</strong><br>
+            <code>https://mohlatswa.github.io/WorkerClockIn/?c=YOURCODE</code><br>
+            Find your company code in the <strong>Setup</strong> tab of the admin panel.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Roles ── -->
+      <section id="roles">
+        <h2>Admin Roles Explained</h2>
+        <p>WorkClock has three admin roles. Your role determines what you can see and do.</p>
+        <div class="role-grid">
+          <div class="role-card">
+            <div class="role-name badge-purple">Developer</div>
+            <div class="role-sub">Full system access</div>
+            <ul class="role-perms">
+              <li>Manage all companies</li>
+              <li>Manage all admin accounts</li>
+              <li>Access all workers across companies</li>
+              <li>System configuration</li>
+            </ul>
+          </div>
+          <div class="role-card">
+            <div class="role-name badge-green">Super Admin</div>
+            <div class="role-sub">Your company only</div>
+            <ul class="role-perms">
+              <li>Manage your company's workers</li>
+              <li>View all attendance records</li>
+              <li>Create and manage Admin accounts</li>
+              <li>Configure workplaces</li>
+            </ul>
+          </div>
+          <div class="role-card">
+            <div class="role-name badge-blue">Admin</div>
+            <div class="role-sub">Day-to-day operations</div>
+            <ul class="role-perms">
+              <li>Manage workers (add, edit, reset)</li>
+              <li>View attendance records</li>
+              <li>Export attendance CSV</li>
+              <li>Cannot create Admin accounts</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout info">
+          <span class="callout-icon">&#8505;</span>
+          <div class="callout-body"><p>The <strong>Admins</strong> tab is only visible to Super Admin accounts. Regular Admin accounts will not see this tab.</p></div>
+        </div>
+      </section>
+
+      <!-- ── Login ── -->
+      <section id="login">
+        <h2>Logging In to the Admin Panel</h2>
+        <div class="steps">
+          <div class="step"><p>Open the worker portal link in your browser: <code>https://mohlatswa.github.io/WorkerClockIn/</code></p></div>
+          <div class="step"><p>Scroll down on the home screen until you see the <strong>Admin Login</strong> button, or look for a small "Admin" link at the bottom. Tap it.</p></div>
+          <div class="step"><p>Enter your <strong>username</strong> and <strong>password</strong>, then tap <strong>Login</strong>.</p></div>
+          <div class="step"><p>You will be taken to the admin panel. If you are a Super Admin, you will see four tabs: Dashboard, Workers, Attendance, Admins, and Setup. Regular Admins see all except Admins.</p></div>
+        </div>
+
+        <div class="callout warn">
+          <span class="callout-icon">&#128274;</span>
+          <div class="callout-body"><p><strong>Account lockout:</strong> After 5 incorrect password attempts, your account is locked for 30 minutes. If this happens, wait or contact the system developer to unlock it.</p></div>
+        </div>
+        <div class="callout info">
+          <span class="callout-icon">&#8505;</span>
+          <div class="callout-body"><p>To log out, scroll to the bottom of any admin tab and tap <strong>Logout</strong>. You are returned to the home screen.</p></div>
+        </div>
+      </section>
+
+      <!-- ── Dashboard ── -->
+      <section id="tab-dashboard">
+        <h2>Dashboard Tab</h2>
+        <div class="tab-card">
+          <h3>Today at a Glance</h3>
+          <p>The Dashboard shows four stat tiles for today's date:</p>
+        </div>
+        <ul>
+          <li><strong>Present:</strong> Number of workers who have clocked in today (at least one clock-in record).</li>
+          <li><strong>Total Workers:</strong> Total active workers registered to your company.</li>
+          <li><strong>Absent:</strong> Total Workers minus Present (approximate — based on today's records).</li>
+          <li><strong>Still In:</strong> Workers with an active clock-in (not yet clocked out).</li>
+        </ul>
+        <p>Below the stats tiles is the <strong>Today's Activity Feed</strong> — a live list of today's clock-in and clock-out events, showing the worker's name, time, and whether they are still in or have clocked out. The most recent events appear at the top.</p>
+        <p>The dashboard reloads automatically each time you click the Dashboard tab. To see the latest data, click the tab again.</p>
+      </section>
+
+      <!-- ── Workers Tab ── -->
+      <section id="tab-workers">
+        <h2>Workers Tab</h2>
+        <p>This is where you manage your company's workforce. You can see all workers, their status, and what authentication methods they have enrolled.</p>
+
+        <h3>Reading the Worker List</h3>
+        <p>Each worker row shows their name, Employee ID, and a set of status indicators:</p>
+        <ul>
+          <li><strong>&#128274;</strong> — Account is locked (too many wrong PINs)</li>
+          <li><strong>&#128207;</strong> — Biometric (fingerprint/Face ID) is enrolled</li>
+          <li><strong>&#129331;</strong> — Face is enrolled for face recognition</li>
+          <li><strong>&#128241;</strong> — Device is bound (they have signed in from a registered device)</li>
+          <li><em>Inactive</em> — Worker account is disabled</li>
+        </ul>
+
+        <h3>Action Buttons</h3>
+        <p>Each worker row has five action buttons on the right:</p>
+        <div style="margin-bottom:12px;">
+          <span class="icon-pill">&#9999; Edit</span> — Edit the worker's details (name, Employee ID, job title, PIN, workplace, phone, email).
+        </div>
+        <div style="margin-bottom:12px;">
+          <span class="icon-pill">&#129331; Face</span> — Open the face enrolment camera to enrol or re-enrol this worker's face.
+        </div>
+        <div style="margin-bottom:12px;">
+          <span class="icon-pill">&#128207; Biometric</span> — Register a fingerprint or Face ID credential for this worker. The worker must be physically present on the device you are using.
+        </div>
+        <div style="margin-bottom:12px;">
+          <span class="icon-pill">&#127965; Reset Security</span> — Clear device binding, active session, and any account lockout. Use when a worker changes phone or is locked out.
+        </div>
+        <div style="margin-bottom:12px;">
+          <span class="icon-pill">&#128683; / &#9989;</span> — Deactivate or reactivate the worker account.
+        </div>
+      </section>
+
+      <!-- ── Add Worker ── -->
+      <section id="add-worker">
+        <h2>Adding a Worker (Step by Step)</h2>
+        <p>Tap the <strong>+ Add Worker</strong> button at the top of the Workers tab to expand the add-worker panel.</p>
+
+        <h3>Step 1 — Basic Details</h3>
+        <div class="steps">
+          <div class="step"><p>Enter the <strong>Employee ID</strong> — a unique identifier for this worker (e.g. <code>EMP001</code>). This is what they type on the sign-in screen. Must be unique across all workers.</p></div>
+          <div class="step"><p>Enter the worker's <strong>Full Name</strong> as it should appear on records and greetings.</p></div>
+          <div class="step"><p>Optionally enter their <strong>Job Title</strong> (shown in the worker portal and attendance records).</p></div>
+          <div class="step"><p>Enter a <strong>PIN</strong> — minimum 4 digits, maximum 10 digits. Give this to the worker privately. They will use it to clock in.</p></div>
+          <div class="step"><p>Tap <strong>Add Worker</strong>. If successful, the form advances to Step 2 for optional enrolment.</p></div>
+        </div>
+
+        <h3>Step 2 — Optional Enrolment</h3>
+        <p>After the basic record is created, you can immediately enrol authentication methods:</p>
+        <ul>
+          <li><strong>Enrol Face:</strong> Opens the camera. Position the worker's face clearly in the frame and tap <strong>Capture</strong>. A single clear photo is all that is needed.</li>
+          <li><strong>Register Biometric:</strong> Triggers a fingerprint/Face ID registration prompt. The worker must be present on this device and must complete the biometric prompt.</li>
+        </ul>
+        <p>Both steps are optional. Tap <strong>Done</strong> to finish. The worker will appear in the list immediately.</p>
+
+        <div class="callout info">
+          <span class="callout-icon">&#8505;</span>
+          <div class="callout-body"><p>You can always come back and enrol biometrics later using the &#129331; and &#128207; buttons on the worker row. The worker can also self-enrol their face and biometric from their own worker dashboard after signing in.</p></div>
+        </div>
+      </section>
+
+      <section id="edit-worker">
+        <h2>Editing a Worker</h2>
+        <p>Tap the <strong>&#9999; Edit</strong> button on the worker's row. A modal will open with their current details. You can update:</p>
+        <ul>
+          <li>Full Name</li>
+          <li>Employee ID (must remain unique)</li>
+          <li>Job Title</li>
+          <li>PIN (leave blank to keep the existing PIN)</li>
+          <li>Assigned Workplace</li>
+          <li>Phone number</li>
+          <li>Email address</li>
+        </ul>
+        <p>Tap <strong>Save</strong> to apply changes. The worker list will refresh automatically.</p>
+      </section>
+
+      <section id="deactivate">
+        <h2>Deactivating a Worker</h2>
+        <p>Tap the <strong>&#128683;</strong> button to deactivate a worker. A deactivated worker cannot sign in — the system will return "Employee ID not found" even if the ID is correct. Their attendance history is preserved.</p>
+        <p>Tap <strong>&#9989;</strong> to reactivate them. This is immediate.</p>
+        <div class="callout warn">
+          <span class="callout-icon">&#9888;</span>
+          <div class="callout-body"><p>Deactivating a worker does not automatically clock them out if they are currently clocked in. Check the Dashboard for any active sessions before deactivating.</p></div>
+        </div>
+      </section>
+
+      <section id="enrolment">
+        <h2>Enrolment Methods in Detail</h2>
+
+        <h3>Face Enrolment</h3>
+        <p>Face enrolment captures a single still frame from the camera and extracts a 128-point facial embedding. Tips for best results:</p>
+        <ul>
+          <li>Ensure the worker is in good lighting — avoid backlighting or harsh shadows.</li>
+          <li>The worker should face the camera directly, with a neutral expression.</li>
+          <li>The face should fill most of the oval guide on screen.</li>
+          <li>Glasses are acceptable but may reduce recognition accuracy slightly.</li>
+          <li>Re-enrol if the worker's appearance changes significantly (new glasses, beard, etc.).</li>
+        </ul>
+
+        <h3>Biometric Enrolment</h3>
+        <p>Biometric enrolment uses the device's built-in authenticator (fingerprint scanner, Face ID, or Windows Hello). This process must be done on the <strong>same type of device and browser</strong> the worker will use to clock in, because the credential is tied to the platform.</p>
+        <ul>
+          <li>The worker must be physically present.</li>
+          <li>The device must have biometrics enabled in its settings.</li>
+          <li>iOS Safari, Android Chrome, and desktop Chrome/Edge all support this.</li>
+          <li>If the worker changes their device, they need to be re-enrolled and their security reset first.</li>
+        </ul>
+
+        <h3>Re-Enrolment</h3>
+        <p>To re-enrol either method, simply use the &#129331; (face) or &#128207; (biometric) button again. The new data will overwrite the old data.</p>
+      </section>
+
+      <!-- ── Attendance Tab ── -->
+      <section id="tab-attendance">
+        <h2>Attendance Tab</h2>
+        <p>The Attendance tab is your reporting centre. Use the filters to find exactly the records you need.</p>
+
+        <h3>Filters</h3>
+        <ul>
+          <li><strong>From / To:</strong> Date range for the records. Defaults to the past month when you open the tab.</li>
+          <li><strong>Worker:</strong> Filter to a specific worker. Defaults to "All Workers".</li>
+          <li><strong>Method:</strong> Filter by authentication method — All, PIN, Biometric, or Face.</li>
+        </ul>
+        <p>Tap <strong>Search</strong> to apply filters. The summary bar at the top of results shows total records, total hours, and how many workers are still clocked in.</p>
+
+        <h3>Reading Attendance Records</h3>
+        <p>Each record shows:</p>
+        <ul>
+          <li><strong>Worker name</strong>, Employee ID, and Job Title</li>
+          <li><strong>Date</strong> of the record</li>
+          <li><strong>Clock In time</strong> (green chip)</li>
+          <li><strong>Clock Out time</strong> — shows "Still in" if the worker has not yet clocked out (red chip)</li>
+          <li><strong>Hours worked</strong> (calculated difference)</li>
+          <li><strong>Auth method</strong> used (PIN / Biometric / Face)</li>
+        </ul>
+
+        <h3>Exporting to CSV</h3>
+        <p>With filters applied, tap <strong>Download CSV</strong> to export all matching records. The CSV file is named <code>attendance_YYYY-MM-DD_to_YYYY-MM-DD.csv</code> and includes: Worker Name, Employee ID, Job Title, Date, Clock In, Clock Out, Hours, Auth Method, and Status. It opens correctly in Microsoft Excel and Google Sheets.</p>
+      </section>
+
+      <!-- ── Admins Tab ── -->
+      <section id="tab-admins">
+        <h2>Admins Tab (Super Admin Only)</h2>
+        <p>This tab is only visible if you have the <strong>super_admin</strong> role. It lets you manage admin accounts for your company.</p>
+
+        <h3>Adding an Admin Account</h3>
+        <div class="steps">
+          <div class="step"><p>Click <strong>+ Add Admin</strong> to expand the form.</p></div>
+          <div class="step"><p>Enter the admin's <strong>Full Name</strong> — this is their display name.</p></div>
+          <div class="step"><p>Choose a <strong>Username</strong> — lowercase letters, numbers, and underscores only (e.g. <code>jane_ops</code>).</p></div>
+          <div class="step"><p>Set a <strong>Password</strong> — minimum 6 characters. Share this securely with the admin. They can use the password reset feature later.</p></div>
+          <div class="step"><p>Optionally enter an <strong>Email</strong> address (used for password reset OTP if configured).</p></div>
+          <div class="step"><p>Select a <strong>Role</strong>: <em>Admin</em> (day-to-day) or <em>Super Admin</em> (full company access). As a super_admin you can create both types.</p></div>
+          <div class="step"><p>Tap <strong>Create Admin</strong>. The account will appear in the list immediately.</p></div>
+        </div>
+
+        <h3>Managing Existing Admins</h3>
+        <p>Each admin row has action buttons:</p>
+        <ul>
+          <li><strong>&#9999; Edit</strong> — Update name, email, and role.</li>
+          <li><strong>&#128273; Reset Password</strong> — Set a new password for the account (direct update, no email required).</li>
+          <li><strong>&#128683; / &#9989;</strong> — Deactivate or reactivate the admin account.</li>
+        </ul>
+      </section>
+
+      <!-- ── Setup Tab ── -->
+      <section id="tab-setup">
+        <h2>Setup Tab</h2>
+        <p>The Setup tab shows your company's configuration and gives you the Worker Portal Link to share with staff.</p>
+
+        <h3>Worker Portal Link</h3>
+        <p>The portal link is in the format:</p>
+        <p><code>https://mohlatswa.github.io/WorkerClockIn/?c=YOURCODE</code></p>
+        <p>Replace <code>YOURCODE</code> with your company's code as shown in the Setup tab. Share this link with all workers. When a worker opens this link, the app automatically knows which company they belong to — they just need to enter their Employee ID.</p>
+        <div class="callout green">
+          <span class="callout-icon">&#128241;</span>
+          <div class="callout-body"><p>You can add this link to a WhatsApp group, email it, print it as a QR code, or add it to a shared phone as a shortcut. Workers can also install it as an app on their phone (see the Worker Guide).</p></div>
+        </div>
+
+        <h3>Workplaces</h3>
+        <p>Workplaces define the physical locations where workers are allowed to clock in. Each workplace has a GPS coordinate and a radius (in metres). Workers must be within the radius to activate the Clock In button.</p>
+        <p>To configure a workplace, add a row to the <code>workplaces</code> table in Supabase with the correct latitude, longitude, and radius. Then assign workers to that workplace by editing each worker record. Contact your system developer to set this up initially.</p>
+      </section>
+
+      <!-- ── Security ── -->
+      <section id="device-binding">
+        <h2>Security — Device Binding</h2>
+        <p>When a worker signs in for the first time, their device is automatically <strong>bound</strong> to their account. This means their account can only be used from that one device. If they try to sign in from a different phone, they will see a message saying the account is bound to another device.</p>
+        <p>This prevents workers from sharing accounts or logging in remotely from a location outside the workplace.</p>
+        <p><strong>When does a worker need their device reset?</strong></p>
+        <ul>
+          <li>They got a new phone</li>
+          <li>They cleared their browser's data/storage</li>
+          <li>They are using a shared kiosk device and the original device is no longer available</li>
+        </ul>
+      </section>
+
+      <section id="lockout">
+        <h2>Security — Account Lockout</h2>
+        <p>After <strong>5 incorrect PIN attempts</strong>, a worker's account is locked for <strong>30 minutes</strong>. The worker will see a message telling them how long they need to wait. After 30 minutes the lock expires automatically and they can try again.</p>
+        <p>Similarly, admin accounts lock after 5 incorrect password attempts.</p>
+        <p>You can unlock a worker's account immediately using the security reset button — without waiting for the 30 minutes to expire.</p>
+      </section>
+
+      <section id="reset-security">
+        <h2>Resetting Worker Security</h2>
+        <p>The <strong>&#127965; Reset Security</strong> button (shield icon) in the Workers tab does the following in a single operation:</p>
+        <ul>
+          <li>Removes the device binding (so a new device can be registered)</li>
+          <li>Clears any active session token (signs the worker out of any active session)</li>
+          <li>Clears the failed attempts counter</li>
+          <li>Removes any lockout (so the worker can sign in immediately)</li>
+        </ul>
+        <p>A confirmation dialog will appear before the reset is performed. After the reset, the next time the worker signs in from any device, that device becomes the new registered device.</p>
+        <div class="callout warn">
+          <span class="callout-icon">&#9888;</span>
+          <div class="callout-body"><p>After a security reset, if the worker was currently clocked in, their session is invalidated but their attendance record is <em>not</em> automatically closed. You may need to manually note the clock-out time in the attendance records.</p></div>
+        </div>
+      </section>
+
+      <!-- ── Troubleshooting ── -->
+      <section id="troubleshoot">
+        <h2>Troubleshooting</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Problem</th><th>Likely Cause</th><th class="fix">Solution</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Worker says "Employee ID not found"</td>
+                <td>Wrong Employee ID, or worker is deactivated, or opened the wrong company link</td>
+                <td class="fix">Check the Employee ID spelling. Check the worker is active (not deactivated). Make sure they used your company's link (<code>?c=YOURCODE</code>).</td>
+              </tr>
+              <tr>
+                <td>Worker says "Account is bound to another device"</td>
+                <td>Worker is on a new phone or cleared their browser storage</td>
+                <td class="fix">Tap the &#127965; Reset Security button for that worker. They can then sign in from their new device.</td>
+              </tr>
+              <tr>
+                <td>Worker is locked out (too many wrong PINs)</td>
+                <td>5 incorrect PIN attempts</td>
+                <td class="fix">Tap &#127965; Reset Security. Alternatively, wait 30 minutes for the lock to expire automatically.</td>
+              </tr>
+              <tr>
+                <td>Clock In button stays grey ("Checking Location")</td>
+                <td>GPS is slow to lock, or location permission was denied</td>
+                <td class="fix">Ask the worker to allow location access in their browser settings. On iOS, go to Settings &rarr; Safari &rarr; Location. Wait 30–60 seconds for GPS to lock after allowing permission.</td>
+              </tr>
+              <tr>
+                <td>Clock In button shows "Too far from workplace"</td>
+                <td>Worker is outside the geofence radius</td>
+                <td class="fix">Verify the worker is at the correct location. If the workplace coordinates are incorrect, contact the developer to update them. You can also increase the radius in the workplaces table.</td>
+              </tr>
+              <tr>
+                <td>Face recognition keeps saying "Face not recognised"</td>
+                <td>Poor lighting, bad enrolment photo, or threshold too strict</td>
+                <td class="fix">Re-enrol the worker in better lighting conditions. Ensure the face is well-lit and fills the oval frame. Glasses or significant appearance changes since enrolment can cause failures.</td>
+              </tr>
+              <tr>
+                <td>Biometric button does not appear for a worker</td>
+                <td>Biometric not yet enrolled, or device does not support WebAuthn</td>
+                <td class="fix">Check that the worker's device supports fingerprint or Face ID. Enrol using the &#128207; button — the worker must be present on the device.</td>
+              </tr>
+              <tr>
+                <td>Attendance shows worker clocked in but not out</td>
+                <td>Worker forgot to clock out, or session was interrupted</td>
+                <td class="fix">These records remain with status "active". The attendance CSV will show "Still In" for clock-out time. Manually note the actual clock-out time for payroll purposes.</td>
+              </tr>
+              <tr>
+                <td>Admin login says "Account disabled"</td>
+                <td>Admin account was deactivated</td>
+                <td class="fix">A super_admin or developer must reactivate the account in the Admins tab.</td>
+              </tr>
+              <tr>
+                <td>Workers list shows no workers</td>
+                <td>No workers added yet, or you are logged in as the wrong company</td>
+                <td class="fix">Verify you are logged into the correct admin account. Add workers using the + Add Worker button.</td>
+              </tr>
+              <tr>
+                <td>CSV download is empty or shows "No records found"</td>
+                <td>Date range too narrow, or no attendance records match filters</td>
+                <td class="fix">Widen the date range. Try selecting "All Workers" and "All Methods". Check that workers have actually clocked in during the selected period.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </div><!-- /content -->
+
+    <footer>
+      <strong>Developed by Reatlegile Solutions</strong> &copy; 2026 &nbsp;&middot;&nbsp; WorkClock Staff Attendance System &nbsp;&middot;&nbsp; <a href="index.html" style="color:#94A3B8">Docs Home</a>
+    </footer>
+
+  </div>
+</div>
+</body>
+</html>

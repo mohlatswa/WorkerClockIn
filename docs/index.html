@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WorkClock Documentation — Reatlegile Solutions</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #F1F5F9;
+      color: #1E293B;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%);
+      color: #fff;
+      padding: 0 24px;
+    }
+    .header-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 0 40px;
+    }
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .brand-icon {
+      width: 56px;
+      height: 56px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      flex-shrink: 0;
+    }
+    .brand-name {
+      font-size: 14px;
+      opacity: 0.8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 2px;
+    }
+    .brand-product {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    header h1 {
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      margin-bottom: 10px;
+    }
+    header p {
+      font-size: 17px;
+      opacity: 0.85;
+      max-width: 600px;
+      line-height: 1.6;
+    }
+    .header-badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 13px;
+      margin-top: 14px;
+    }
+
+    /* ── Main ── */
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 48px 24px;
+      flex: 1;
+    }
+
+    .section-label {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #64748B;
+      margin-bottom: 20px;
+    }
+
+    /* ── Cards ── */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+      gap: 24px;
+      margin-bottom: 56px;
+    }
+    .doc-card {
+      background: #fff;
+      border-radius: 16px;
+      border: 1px solid #E2E8F0;
+      padding: 28px;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+      transition: box-shadow 0.18s, transform 0.18s;
+    }
+    .doc-card:hover {
+      box-shadow: 0 8px 32px rgba(37,99,235,0.12);
+      transform: translateY(-3px);
+    }
+    .card-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 18px;
+      flex-shrink: 0;
+    }
+    .card-icon.blue   { background: #EFF6FF; }
+    .card-icon.green  { background: #F0FDF4; }
+    .card-icon.amber  { background: #FFFBEB; }
+    .doc-card h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #1E293B;
+    }
+    .doc-card p {
+      font-size: 14px;
+      color: #64748B;
+      line-height: 1.6;
+      flex: 1;
+    }
+    .card-audience {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      margin-top: 18px;
+      align-self: flex-start;
+    }
+    .aud-dev   { background: #EFF6FF; color: #2563EB; }
+    .aud-admin { background: #F0FDF4; color: #16A34A; }
+    .aud-user  { background: #FFFBEB; color: #D97706; }
+    .card-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #2563EB;
+    }
+
+    /* ── Info Grid ── */
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 48px;
+    }
+    .info-tile {
+      background: #fff;
+      border-radius: 12px;
+      border: 1px solid #E2E8F0;
+      padding: 20px;
+    }
+    .info-tile .label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #94A3B8;
+      margin-bottom: 6px;
+    }
+    .info-tile .value {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1E293B;
+      word-break: break-all;
+    }
+    .info-tile .value a {
+      color: #2563EB;
+      text-decoration: none;
+    }
+    .info-tile .value a:hover { text-decoration: underline; }
+
+    /* ── Quick Start ── */
+    .quick-start {
+      background: #fff;
+      border-radius: 16px;
+      border: 1px solid #E2E8F0;
+      padding: 28px;
+      margin-bottom: 48px;
+    }
+    .quick-start h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: #1E293B;
+    }
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .step {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .step-num {
+      width: 28px;
+      height: 28px;
+      background: #EFF6FF;
+      color: #2563EB;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .step-text {
+      font-size: 14px;
+      line-height: 1.6;
+      color: #475569;
+      padding-top: 4px;
+    }
+    .step-text strong { color: #1E293B; }
+
+    /* ── Footer ── */
+    footer {
+      background: #fff;
+      border-top: 1px solid #E2E8F0;
+      padding: 24px;
+      text-align: center;
+      font-size: 13px;
+      color: #94A3B8;
+    }
+    footer strong { color: #475569; }
+
+    @media (max-width: 600px) {
+      header h1 { font-size: 26px; }
+      .cards { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="brand-row">
+      <div class="brand-icon">&#128339;</div>
+      <div>
+        <div class="brand-name">Reatlegile Solutions</div>
+        <div class="brand-product">WorkClock</div>
+      </div>
+    </div>
+    <h1>Documentation</h1>
+    <p>Complete guides for developers, administrators, and workers using the WorkClock Staff Attendance system.</p>
+    <span class="header-badge">Version 1.0 &nbsp;&middot;&nbsp; 2026</span>
+  </div>
+</header>
+
+<main>
+
+  <div class="section-label">Choose a Guide</div>
+
+  <div class="cards">
+
+    <a class="doc-card" href="developer.html">
+      <div class="card-icon blue">&#9881;</div>
+      <h2>Developer Reference</h2>
+      <p>System architecture, database schema, authentication flows, security implementation, JavaScript function reference, and deployment instructions.</p>
+      <span class="card-audience aud-dev">For Developers</span>
+      <div class="card-arrow"><span>Read guide</span><span>&rarr;</span></div>
+    </a>
+
+    <a class="doc-card" href="admin-guide.html">
+      <div class="card-icon green">&#128101;</div>
+      <h2>Admin Guide</h2>
+      <p>How to manage workers, view attendance, configure workplaces, create admin accounts, handle security resets, and troubleshoot common issues.</p>
+      <span class="card-audience aud-admin">For Admins</span>
+      <div class="card-arrow"><span>Read guide</span><span>&rarr;</span></div>
+    </a>
+
+    <a class="doc-card" href="user-guide.html">
+      <div class="card-icon amber">&#128100;</div>
+      <h2>Worker Guide</h2>
+      <p>How to clock in and out, set up fingerprint sign-in, view your attendance history, install the app on your phone, and what to do if you get locked out.</p>
+      <span class="card-audience aud-user">For Workers</span>
+      <div class="card-arrow"><span>Read guide</span><span>&rarr;</span></div>
+    </a>
+
+  </div>
+
+  <!-- System Overview -->
+  <div class="section-label">System Overview</div>
+  <div class="info-grid">
+    <div class="info-tile">
+      <div class="label">Live App URL</div>
+      <div class="value"><a href="https://mohlatswa.github.io/WorkerClockIn/" target="_blank">mohlatswa.github.io/WorkerClockIn</a></div>
+    </div>
+    <div class="info-tile">
+      <div class="label">Platform</div>
+      <div class="value">Progressive Web App (PWA)</div>
+    </div>
+    <div class="info-tile">
+      <div class="label">Backend</div>
+      <div class="value">Supabase (PostgreSQL)</div>
+    </div>
+    <div class="info-tile">
+      <div class="label">Hosting</div>
+      <div class="value">GitHub Pages</div>
+    </div>
+    <div class="info-tile">
+      <div class="label">Supabase Project</div>
+      <div class="value">uwxnbaicwfbygvkiyhcf</div>
+    </div>
+    <div class="info-tile">
+      <div class="label">Clock-in Methods</div>
+      <div class="value">PIN &bull; Biometric &bull; Face ID</div>
+    </div>
+  </div>
+
+  <!-- Quick Start -->
+  <div class="section-label">Quick Start</div>
+  <div class="quick-start">
+    <h3>Get a worker clocked in for the first time</h3>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">Admin logs in and navigates to the <strong>Workers</strong> tab. Click <strong>+ Add Worker</strong> and fill in Employee ID, Name, Job Title, and PIN.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">Optionally enrol the worker's <strong>face</strong> (camera capture) or <strong>fingerprint</strong> (WebAuthn) for passwordless clock-in.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">From the <strong>Setup</strong> tab, copy the Worker Portal Link (e.g. <code>https://mohlatswa.github.io/WorkerClockIn/?c=COMPANYCODE</code>) and send it to the worker.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-text">The worker opens the link, enters their Employee ID, then taps their PIN. On the first sign-in the device is <strong>registered</strong> automatically.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-text">The app checks the worker's GPS distance from the configured workplace. If within range, the <strong>Clock In</strong> button becomes active.</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <strong>Developed by Reatlegile Solutions</strong> &copy; 2026 &nbsp;&middot;&nbsp; WorkClock Staff Attendance System
+</footer>
+
+</body>
+</html>

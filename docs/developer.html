@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Developer Reference — WorkClock</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue:   #2563EB;
+      --dark:   #1E3A8A;
+      --bg:     #F1F5F9;
+      --text:   #1E293B;
+      --muted:  #64748B;
+      --border: #E2E8F0;
+      --white:  #ffffff;
+      --sidebar-w: 260px;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* ── Top Bar ── */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--dark);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 24px;
+      height: 56px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    }
+    .topbar a { color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px; }
+    .topbar a:hover { color: #fff; }
+    .topbar-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      margin-right: auto;
+    }
+    .topbar-badge {
+      font-size: 11px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 20px;
+      padding: 3px 10px;
+    }
+
+    /* ── Layout ── */
+    .layout {
+      display: flex;
+      max-width: 1200px;
+      margin: 0 auto;
+      min-height: calc(100vh - 56px);
+    }
+
+    /* ── Sidebar ── */
+    aside {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      background: var(--white);
+      border-right: 1px solid var(--border);
+      position: sticky;
+      top: 56px;
+      height: calc(100vh - 56px);
+      overflow-y: auto;
+      padding: 20px 0;
+    }
+    .nav-section {
+      padding: 6px 20px 4px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: #94A3B8;
+      margin-top: 12px;
+    }
+    aside a {
+      display: block;
+      padding: 7px 20px;
+      font-size: 13.5px;
+      color: var(--muted);
+      text-decoration: none;
+      border-left: 3px solid transparent;
+      transition: all 0.12s;
+    }
+    aside a:hover {
+      color: var(--blue);
+      background: #EFF6FF;
+      border-left-color: var(--blue);
+    }
+
+    /* ── Content ── */
+    .content {
+      flex: 1;
+      padding: 40px 48px;
+      max-width: 860px;
+    }
+    .content > section {
+      margin-bottom: 56px;
+    }
+    h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 10px; }
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--border);
+      color: var(--text);
+    }
+    h3 { font-size: 16px; font-weight: 700; margin: 24px 0 10px; color: var(--text); }
+    h4 { font-size: 14px; font-weight: 700; margin: 18px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    p { margin-bottom: 14px; font-size: 14.5px; color: #334155; }
+    ul, ol { padding-left: 20px; margin-bottom: 14px; }
+    li { font-size: 14.5px; color: #334155; margin-bottom: 5px; }
+    strong { color: var(--text); }
+
+    /* ── Code ── */
+    code {
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+      font-size: 12.5px;
+      background: #EFF6FF;
+      color: #1D4ED8;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    pre {
+      background: #0F172A;
+      color: #E2E8F0;
+      border-radius: 10px;
+      padding: 20px 22px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.65;
+      margin: 14px 0 20px;
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+    }
+    pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+    .comment { color: #64748B; }
+    .kw  { color: #93C5FD; }
+    .str { color: #86EFAC; }
+    .num { color: #FCA5A5; }
+    .fn  { color: #FDE68A; }
+
+    /* ── Tables ── */
+    .table-wrap { overflow-x: auto; margin-bottom: 20px; }
+    table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+    th {
+      background: #F8FAFC;
+      border: 1px solid var(--border);
+      padding: 9px 14px;
+      text-align: left;
+      font-weight: 700;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    td { border: 1px solid var(--border); padding: 9px 14px; color: #334155; vertical-align: top; }
+    tr:nth-child(even) td { background: #F8FAFC; }
+    .pk  { color: #7C3AED; font-weight: 700; font-size: 11px; background: #F5F3FF; padding: 2px 6px; border-radius: 4px; }
+    .fk  { color: #D97706; font-weight: 700; font-size: 11px; background: #FFFBEB; padding: 2px 6px; border-radius: 4px; }
+
+    /* ── Callout ── */
+    .callout {
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 18px;
+      font-size: 14px;
+      display: flex;
+      gap: 12px;
+    }
+    .callout.info  { background: #EFF6FF; border-left: 4px solid var(--blue); }
+    .callout.warn  { background: #FFFBEB; border-left: 4px solid #F59E0B; }
+    .callout.danger { background: #FEF2F2; border-left: 4px solid #EF4444; }
+    .callout-icon { font-size: 18px; flex-shrink: 0; line-height: 1.4; }
+    .callout-body { color: #334155; }
+
+    /* ── Page Header ── */
+    .page-header {
+      background: linear-gradient(135deg, var(--dark) 0%, var(--blue) 100%);
+      color: #fff;
+      padding: 36px 48px;
+    }
+    .page-header .tag {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      opacity: 0.7;
+      margin-bottom: 8px;
+    }
+    .page-header h1 { color: #fff; font-size: 32px; margin-bottom: 8px; }
+    .page-header p { color: rgba(255,255,255,0.8); margin-bottom: 0; font-size: 15px; }
+
+    /* ── Flow Steps ── */
+    .flow { counter-reset: step; display: flex; flex-direction: column; gap: 10px; }
+    .flow-step {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 18px;
+    }
+    .flow-step::before {
+      counter-increment: step;
+      content: counter(step);
+      width: 26px;
+      height: 26px;
+      background: var(--blue);
+      color: #fff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .flow-step p { margin: 0; font-size: 14px; }
+
+    /* ── Footer ── */
+    footer {
+      background: var(--white);
+      border-top: 1px solid var(--border);
+      padding: 22px 48px;
+      text-align: center;
+      font-size: 13px;
+      color: #94A3B8;
+    }
+
+    @media (max-width: 768px) {
+      aside { display: none; }
+      .content { padding: 24px 20px; }
+      .page-header { padding: 28px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="topbar-title">WorkClock &mdash; Developer Reference</span>
+  <a href="index.html">&larr; Docs Home</a>
+  <span class="topbar-badge">v1.0</span>
+</div>
+
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside>
+    <div class="nav-section">Overview</div>
+    <a href="#overview">System Overview</a>
+    <a href="#stack">Technology Stack</a>
+    <a href="#files">File Structure</a>
+
+    <div class="nav-section">Database</div>
+    <a href="#schema">Schema Overview</a>
+    <a href="#tbl-companies">companies</a>
+    <a href="#tbl-admin-users">admin_users</a>
+    <a href="#tbl-workers">workers</a>
+    <a href="#tbl-workplaces">workplaces</a>
+    <a href="#tbl-attendance">attendance</a>
+    <a href="#indexes">Indexes</a>
+
+    <div class="nav-section">Authentication</div>
+    <a href="#auth-worker-pin">Worker PIN Flow</a>
+    <a href="#auth-worker-bio">Worker Biometric Flow</a>
+    <a href="#auth-worker-face">Worker Face Flow</a>
+    <a href="#auth-admin">Admin Login Flow</a>
+
+    <div class="nav-section">Security</div>
+    <a href="#device-binding">Device Binding</a>
+    <a href="#session-tokens">Session Tokens</a>
+    <a href="#lockout">Account Lockout</a>
+
+    <div class="nav-section">Features</div>
+    <a href="#clock-methods">Clock-in Methods</a>
+    <a href="#geolocation">Geolocation</a>
+    <a href="#face-recog">Face Recognition</a>
+    <a href="#pwa">PWA Details</a>
+
+    <div class="nav-section">Functions</div>
+    <a href="#fn-ref">JS Function Reference</a>
+
+    <div class="nav-section">Setup</div>
+    <a href="#config">config.js</a>
+    <a href="#deployment">Deployment</a>
+    <a href="#local-dev">Local Development</a>
+    <a href="#add-company">Adding a Company</a>
+    <a href="#extending">Extending the System</a>
+  </aside>
+
+  <!-- Main Content -->
+  <div style="flex:1; display:flex; flex-direction:column;">
+
+    <div class="page-header">
+      <div class="tag">Developer Reference</div>
+      <h1>WorkClock — Technical Documentation</h1>
+      <p>Architecture, database schema, authentication flows, security model, and function reference for the WorkClock Staff Attendance PWA.</p>
+    </div>
+
+    <div class="content">
+
+      <!-- ── Overview ── -->
+      <section id="overview">
+        <h2>System Overview &amp; Architecture</h2>
+        <p>WorkClock is a <strong>Progressive Web App</strong> that enables staff to clock in and out using GPS-verified location, with three supported authentication methods: PIN, WebAuthn biometrics (fingerprint / Face ID), and server-side facial recognition via face-api.js.</p>
+        <p>The application is entirely <strong>front-end</strong>: a single HTML page (<code>index.html</code>) with no build step, no bundler, and no server-side runtime. All data is persisted in a <strong>Supabase (PostgreSQL)</strong> hosted database via the Supabase JavaScript SDK (anon key, client-side).</p>
+        <p>Multi-tenancy is achieved through a <strong>companies</strong> table. Each company receives a short URL code; workers open the portal via <code>?c=COMPANYCODE</code>. Admins are scoped to a single company (except for the <code>developer</code> super-role which spans all companies).</p>
+
+        <h3>Architecture Summary</h3>
+        <ul>
+          <li><strong>Front-end:</strong> Vanilla HTML5 / CSS3 / ES5-compatible JavaScript (no transpiler)</li>
+          <li><strong>State:</strong> Single global object <code>S</code> (no framework, no reactive system)</li>
+          <li><strong>Routing:</strong> Single-page with visible panels toggled via <code>showPg(id)</code></li>
+          <li><strong>Backend:</strong> Supabase — PostgreSQL database, auto-generated REST API (PostgREST), anon key access</li>
+          <li><strong>Hosting:</strong> GitHub Pages (static files, main branch)</li>
+          <li><strong>Auth:</strong> Custom (PIN stored as plain text in DB, WebAuthn credentials stored as base64 rawId, face descriptors as JSON float arrays)</li>
+          <li><strong>Security boundary:</strong> Device ID + session token stored in <code>localStorage</code>; server-side lockout enforced via <code>locked_until</code> column</li>
+        </ul>
+
+        <div class="callout warn">
+          <span class="callout-icon">&#9888;</span>
+          <div class="callout-body"><strong>Note on PIN storage:</strong> PINs are currently stored as plain text in the workers table. For production hardening, consider hashing PINs server-side using a Supabase Edge Function or PostgreSQL trigger with <code>pgcrypto</code>.</div>
+        </div>
+      </section>
+
+      <!-- ── Stack ── -->
+      <section id="stack">
+        <h2>Technology Stack</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Technology</th><th>Role</th><th>Version / Notes</th></tr></thead>
+            <tbody>
+              <tr><td>HTML / CSS / JS</td><td>Front-end UI, logic</td><td>Vanilla, ES5-compatible syntax</td></tr>
+              <tr><td>Supabase JS SDK</td><td>Database client</td><td>Bundled as <code>supabase.min.js</code> (local)</td></tr>
+              <tr><td>face-api.js</td><td>Client-side face detection &amp; recognition</td><td>v0.22.2, loaded on demand from jsDelivr CDN</td></tr>
+              <tr><td>WebAuthn API</td><td>Platform biometric (fingerprint / Face ID)</td><td>Browser native — <code>navigator.credentials</code></td></tr>
+              <tr><td>Geolocation API</td><td>GPS clock-in validation</td><td>Browser native — <code>navigator.geolocation</code></td></tr>
+              <tr><td>Supabase (PostgreSQL)</td><td>Database &amp; REST API</td><td>Project: <code>uwxnbaicwfbygvkiyhcf</code></td></tr>
+              <tr><td>GitHub Pages</td><td>Static hosting</td><td>Auto-deploys from <code>main</code> branch</td></tr>
+              <tr><td>Service Worker</td><td>PWA install support (minimal)</td><td><code>sw.js</code> clears old caches and unregisters itself</td></tr>
+              <tr><td>EmailJS</td><td>Admin OTP password reset (optional)</td><td>Configured in <code>config.js</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── Files ── -->
+      <section id="files">
+        <h2>File Structure</h2>
+        <pre><code>WorkerClockIn/
+├── index.html          <span class="comment"># Main app shell — all pages rendered here as hidden divs</span>
+├── app.js              <span class="comment"># All application logic (~1200+ lines, plain JS)</span>
+├── style.css           <span class="comment"># All styles — layout, components, animations</span>
+├── config.js           <span class="comment"># Supabase URL, anon key, EmailJS keys</span>
+├── manifest.json       <span class="comment"># PWA manifest — name, icons, theme colour</span>
+├── sw.js               <span class="comment"># Service worker — clears old caches on activate</span>
+├── supabase.min.js     <span class="comment"># Bundled Supabase JS SDK (local copy, no CDN dependency)</span>
+├── jsQR.js             <span class="comment"># QR code parser (for future QR-based clock-in)</span>
+├── icon-192.png        <span class="comment"># PWA icon 192×192</span>
+├── icon-512.png        <span class="comment"># PWA icon 512×512</span>
+├── schema.sql          <span class="comment"># Database DDL — run once in Supabase SQL Editor</span>
+├── generate-icons.html <span class="comment"># Developer utility: regenerate PNG icons</span>
+├── clear.html          <span class="comment"># Developer utility: clear localStorage</span>
+├── worker.html         <span class="comment"># Standalone worker portal (alternative entry)</span>
+└── docs/               <span class="comment"># This documentation folder</span>
+    ├── index.html
+    ├── developer.html
+    ├── admin-guide.html
+    └── user-guide.html</code></pre>
+
+        <h3>Key File Descriptions</h3>
+        <h4>index.html</h4>
+        <p>Contains every page as a <code>&lt;div class="pg"&gt;</code> element. The active page has the <code>active</code> class added by <code>showPg(id)</code>. Pages include: <code>home</code>, <code>wlogin</code>, <code>auth</code>, <code>worker</code>, <code>face-scan</code>, <code>admin-login</code>, <code>admin</code>, <code>developer</code>.</p>
+
+        <h4>app.js</h4>
+        <p>All application logic in a single file. Uses a global state object <code>S</code>. Functions are globally scoped so they can be called from <code>onclick</code> attributes in the HTML. Supabase queries use the <code>db</code> client (initialised in <code>config.js</code>). All async operations are wrapped with <code>withTimeout(promise, ms)</code> to prevent indefinite hangs.</p>
+
+        <h4>config.js</h4>
+        <p>Loaded before <code>app.js</code>. Creates the global <code>db</code> Supabase client. Also declares EmailJS constants for the optional admin password-reset OTP feature.</p>
+
+        <h4>sw.js</h4>
+        <p>A self-destructing service worker: on <code>activate</code> it deletes all caches, unregisters itself, and refreshes all open tabs. This is intentional — the app no longer relies on a service worker cache for offline support.</p>
+      </section>
+
+      <!-- ── Schema Overview ── -->
+      <section id="schema">
+        <h2>Database Schema</h2>
+        <p>The Supabase PostgreSQL database contains five tables. Row Level Security (RLS) is currently disabled; all access goes through the anon key. For production, RLS policies should be added.</p>
+
+        <div class="callout info">
+          <span class="callout-icon">&#128202;</span>
+          <div class="callout-body">Run <code>schema.sql</code> in the Supabase SQL Editor to initialise all tables and indexes. The file is idempotent (uses <code>CREATE TABLE IF NOT EXISTS</code>).</div>
+        </div>
+      </section>
+
+      <!-- companies -->
+      <section id="tbl-companies">
+        <h2>Table: <code>companies</code></h2>
+        <p>Top-level tenant table. Every worker and admin belongs to one company.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Column</th><th>Type</th><th>Constraints</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><span class="pk">PK</span> id</td><td>UUID</td><td>DEFAULT gen_random_uuid()</td><td>Primary key</td></tr>
+              <tr><td>name</td><td>VARCHAR(255)</td><td>NOT NULL</td><td>Company display name</td></tr>
+              <tr><td>code</td><td>VARCHAR(20)</td><td>UNIQUE NOT NULL</td><td>Short uppercase code used in the worker portal URL, e.g. <code>ACME</code></td></tr>
+              <tr><td>is_active</td><td>BOOLEAN</td><td>DEFAULT TRUE</td><td>Whether the company can be used. Inactive companies are rejected at URL lookup.</td></tr>
+              <tr><td>clock_methods</td><td>TEXT[]</td><td></td><td>Array of allowed methods for this company: <code>['pin','biometric','face']</code></td></tr>
+              <tr><td>created_at</td><td>TIMESTAMPTZ</td><td>DEFAULT NOW()</td><td>Record creation timestamp</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- admin_users -->
+      <section id="tbl-admin-users">
+        <h2>Table: <code>admin_users</code></h2>
+        <p>Admin panel user accounts. Three roles exist with different scopes.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Column</th><th>Type</th><th>Constraints</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><span class="pk">PK</span> id</td><td>UUID</td><td>DEFAULT gen_random_uuid()</td><td>Primary key</td></tr>
+              <tr><td>username</td><td>VARCHAR(50)</td><td>UNIQUE NOT NULL</td><td>Login username (lowercase, alphanumeric + underscore)</td></tr>
+              <tr><td>password_hash</td><td>TEXT</td><td>NOT NULL</td><td>Password (currently plain text — field name retained for future hashing)</td></tr>
+              <tr><td>full_name</td><td>VARCHAR(255)</td><td></td><td>Admin's display name</td></tr>
+              <tr><td>email</td><td>VARCHAR(255)</td><td></td><td>Email address (used for OTP password reset)</td></tr>
+              <tr><td>role</td><td>VARCHAR(20)</td><td>CHECK IN ('developer','super_admin','admin')</td><td>Access level — see Roles section</td></tr>
+              <tr><td><span class="fk">FK</span> company_id</td><td>UUID</td><td>REFERENCES companies(id)</td><td>Company this admin belongs to. NULL for developer role.</td></tr>
+              <tr><td>is_active</td><td>BOOLEAN</td><td>DEFAULT TRUE</td><td>Disabled accounts cannot log in</td></tr>
+              <tr><td>failed_attempts</td><td>INTEGER</td><td>DEFAULT 0</td><td>Consecutive failed login count. Resets to 0 on success or after lockout expires.</td></tr>
+              <tr><td>locked_until</td><td>TIMESTAMPTZ</td><td></td><td>If set and in the future, login is blocked. Set to NOW() + 30 min after 5 failures.</td></tr>
+              <tr><td>created_at</td><td>TIMESTAMPTZ</td><td>DEFAULT NOW()</td><td>Record creation timestamp</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h4>Admin Roles</h4>
+        <ul>
+          <li><strong>developer:</strong> Full system access. Manages all companies, all admin accounts, all workers. Sees the Developer panel on login.</li>
+          <li><strong>super_admin:</strong> Manages their own company only. Can add/edit workers, view attendance, create admin and regular admin accounts within the company.</li>
+          <li><strong>admin:</strong> Manages their own company workers and attendance. Cannot create other admin accounts. The Admins tab is hidden.</li>
+        </ul>
+      </section>
+
+      <!-- workers -->
+      <section id="tbl-workers">
+        <h2>Table: <code>workers</code></h2>
+        <p>Individual staff members who use the clock-in portal.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Column</th><th>Type</th><th>Constraints</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><span class="pk">PK</span> id</td><td>UUID</td><td>DEFAULT gen_random_uuid()</td><td>Primary key</td></tr>
+              <tr><td>employee_id</td><td>VARCHAR(50)</td><td>UNIQUE NOT NULL</td><td>Human-readable employee identifier entered on the sign-in screen</td></tr>
+              <tr><td>name</td><td>VARCHAR(255)</td><td>NOT NULL</td><td>Full name (shown in greetings and attendance records)</td></tr>
+              <tr><td>job_title</td><td>VARCHAR(255)</td><td></td><td>Optional job title shown in the worker portal and admin lists</td></tr>
+              <tr><td>phone</td><td>VARCHAR(20)</td><td></td><td>Contact phone number (informational)</td></tr>
+              <tr><td>email</td><td>VARCHAR(255)</td><td></td><td>Contact email (informational)</td></tr>
+              <tr><td><span class="fk">FK</span> company_id</td><td>UUID</td><td>REFERENCES companies(id)</td><td>Owning company</td></tr>
+              <tr><td><span class="fk">FK</span> workplace_id</td><td>UUID</td><td>REFERENCES workplaces(id) ON DELETE SET NULL</td><td>Assigned workplace for GPS radius check. NULL = no geofence enforced.</td></tr>
+              <tr><td>pin</td><td>VARCHAR(10)</td><td>NOT NULL</td><td>4–10 digit PIN for clock-in. Stored as plain text currently.</td></tr>
+              <tr><td>biometric_credential_id</td><td>TEXT</td><td></td><td>Base64-encoded WebAuthn credential <code>rawId</code> registered via platform authenticator</td></tr>
+              <tr><td>biometric_enabled</td><td>BOOLEAN</td><td>DEFAULT FALSE</td><td>True if a credential has been successfully registered</td></tr>
+              <tr><td>face_descriptor</td><td>TEXT</td><td></td><td>JSON string of a Float32Array(128) face embedding from face-api.js</td></tr>
+              <tr><td>device_id</td><td>TEXT</td><td></td><td>UUID generated in browser localStorage on first sign-in. One device per account.</td></tr>
+              <tr><td>session_token</td><td>TEXT</td><td></td><td>64-char hex token written to localStorage and DB on each sign-in. Cleared on sign-out.</td></tr>
+              <tr><td>failed_attempts</td><td>INTEGER</td><td>DEFAULT 0</td><td>Consecutive wrong PINs. Resets to 0 on success or after lockout.</td></tr>
+              <tr><td>locked_until</td><td>TIMESTAMPTZ</td><td></td><td>Account locked until this timestamp (30 min after 5 wrong PINs)</td></tr>
+              <tr><td>is_active</td><td>BOOLEAN</td><td>DEFAULT TRUE</td><td>Inactive workers cannot sign in</td></tr>
+              <tr><td>created_at</td><td>TIMESTAMPTZ</td><td>DEFAULT NOW()</td><td>Record creation timestamp</td></tr>
+              <tr><td>updated_at</td><td>TIMESTAMPTZ</td><td>DEFAULT NOW()</td><td>Last update timestamp</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- workplaces -->
+      <section id="tbl-workplaces">
+        <h2>Table: <code>workplaces</code></h2>
+        <p>Physical locations with GPS coordinates and a geofence radius. Workers must be within the radius to clock in.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Column</th><th>Type</th><th>Constraints</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><span class="pk">PK</span> id</td><td>UUID</td><td>DEFAULT gen_random_uuid()</td><td>Primary key</td></tr>
+              <tr><td>name</td><td>VARCHAR(255)</td><td>NOT NULL</td><td>Location display name, e.g. "Head Office"</td></tr>
+              <tr><td>address</td><td>TEXT</td><td></td><td>Physical address (informational)</td></tr>
+              <tr><td>latitude</td><td>DECIMAL(10,8)</td><td>NOT NULL</td><td>Geofence centre latitude</td></tr>
+              <tr><td>longitude</td><td>DECIMAL(11,8)</td><td>NOT NULL</td><td>Geofence centre longitude</td></tr>
+              <tr><td>radius_meters</td><td>INTEGER</td><td>DEFAULT 100</td><td>Acceptable distance from centre in metres. Worker must be within this radius.</td></tr>
+              <tr><td><span class="fk">FK</span> company_id</td><td>UUID</td><td>REFERENCES companies(id)</td><td>Owning company</td></tr>
+              <tr><td>created_at</td><td>TIMESTAMPTZ</td><td>DEFAULT NOW()</td><td>Record creation timestamp</td></tr>
+              <tr><td>updated_at</td><td>TIMESTAMPTZ</td><td>DEFAULT NOW()</td><td>Last update timestamp</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- attendance -->
+      <section id="tbl-attendance">
+        <h2>Table: <code>attendance</code></h2>
+        <p>One row per clock-in event. Status transitions from <code>active</code> to <code>completed</code> when the worker clocks out.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Column</th><th>Type</th><th>Constraints</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><span class="pk">PK</span> id</td><td>UUID</td><td>DEFAULT gen_random_uuid()</td><td>Primary key</td></tr>
+              <tr><td><span class="fk">FK</span> worker_id</td><td>UUID</td><td>NOT NULL REFERENCES workers(id) ON DELETE CASCADE</td><td>Worker who clocked in</td></tr>
+              <tr><td><span class="fk">FK</span> workplace_id</td><td>UUID</td><td>REFERENCES workplaces(id) ON DELETE SET NULL</td><td>Workplace at time of clock-in</td></tr>
+              <tr><td>clock_in_time</td><td>TIMESTAMPTZ</td><td></td><td>Timestamp when the worker clocked in</td></tr>
+              <tr><td>clock_out_time</td><td>TIMESTAMPTZ</td><td></td><td>Timestamp when the worker clocked out. NULL while still clocked in.</td></tr>
+              <tr><td>clock_in_latitude</td><td>DECIMAL(10,8)</td><td></td><td>GPS latitude at clock-in</td></tr>
+              <tr><td>clock_in_longitude</td><td>DECIMAL(11,8)</td><td></td><td>GPS longitude at clock-in</td></tr>
+              <tr><td>clock_out_latitude</td><td>DECIMAL(10,8)</td><td></td><td>GPS latitude at clock-out</td></tr>
+              <tr><td>clock_out_longitude</td><td>DECIMAL(11,8)</td><td></td><td>GPS longitude at clock-out</td></tr>
+              <tr><td>auth_method</td><td>VARCHAR(20)</td><td>CHECK IN ('pin','biometric','face')</td><td>Method used to authenticate the clock-in session</td></tr>
+              <tr><td>status</td><td>VARCHAR(20)</td><td>DEFAULT 'active' CHECK IN ('active','completed')</td><td>active = currently clocked in; completed = clocked out</td></tr>
+              <tr><td>notes</td><td>TEXT</td><td></td><td>Free-text notes (reserved for future use)</td></tr>
+              <tr><td>created_at</td><td>TIMESTAMPTZ</td><td>DEFAULT NOW()</td><td>Record creation timestamp</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Indexes -->
+      <section id="indexes">
+        <h2>Indexes</h2>
+        <pre><code>CREATE INDEX idx_attendance_worker_id  ON attendance(worker_id);
+CREATE INDEX idx_attendance_clock_in   ON attendance(clock_in_time);
+CREATE INDEX idx_workers_employee_id   ON workers(employee_id);
+CREATE INDEX idx_workers_workplace_id  ON workers(workplace_id);
+CREATE INDEX idx_workers_active        ON workers(is_active);</code></pre>
+        <p>The <code>employee_id</code> index is the most critical — it backs every worker lookup on the sign-in screen. The <code>clock_in_time</code> index supports the time-range queries in the attendance report.</p>
+      </section>
+
+      <!-- ── Auth Flows ── -->
+      <section id="auth-worker-pin">
+        <h2>Authentication Flow — Worker PIN</h2>
+        <div class="flow">
+          <div class="flow-step"><p>Worker enters Employee ID on the home screen and taps <strong>Continue</strong> &rarr; <code>findWorker()</code> queries <code>workers</code> by <code>employee_id</code> (filtered by <code>company_id</code> if URL has <code>?c=</code>).</p></div>
+          <div class="flow-step"><p>If the account exists and is active, the auth screen is shown with the worker's name and avatar. If biometric is enrolled, the fingerprint button also appears.</p></div>
+          <div class="flow-step"><p>Worker taps PIN digits on the numpad (4–6 digits). After 4+ digits, <code>verifyPin()</code> is called automatically after 600 ms.</p></div>
+          <div class="flow-step"><p><code>verifyPin()</code> checks <code>locked_until</code>. If the account is locked and the timestamp is in the future, the attempt is rejected with a countdown message.</p></div>
+          <div class="flow-step"><p>The entered PIN is compared to <code>S.worker.pin</code> (loaded from DB). On mismatch, <code>failed_attempts</code> is incremented in the DB. After 5 failures, <code>locked_until</code> is set to NOW() + 30 minutes and <code>failed_attempts</code> resets to 0.</p></div>
+          <div class="flow-step"><p>On match, <code>secureSignIn('pin')</code> is called. Device binding is checked; if <code>workers.device_id</code> is set to a different device ID, the sign-in is rejected.</p></div>
+          <div class="flow-step"><p>A new 64-char hex <code>session_token</code> is generated, written to <code>localStorage</code> and to the workers row. If no <code>device_id</code> is set, the current device ID is registered. <code>failed_attempts</code> and <code>locked_until</code> are cleared.</p></div>
+          <div class="flow-step"><p><code>enterWorkerDashboard()</code> is called — worker is now signed in.</p></div>
+        </div>
+      </section>
+
+      <section id="auth-worker-bio">
+        <h2>Authentication Flow — Worker Biometric (WebAuthn)</h2>
+        <div class="flow">
+          <div class="flow-step"><p>Worker taps <strong>Use Fingerprint / Face ID</strong> button on the auth screen (visible only if <code>biometric_enabled = true</code> and <code>window.PublicKeyCredential</code> exists).</p></div>
+          <div class="flow-step"><p><code>authBiometric()</code> calls <code>navigator.credentials.get()</code> with <code>allowCredentials</code> containing the worker's stored <code>biometric_credential_id</code> (decoded from base64).</p></div>
+          <div class="flow-step"><p>The platform authenticator (device fingerprint sensor, Face ID, Windows Hello) prompts the user and returns a signed assertion.</p></div>
+          <div class="flow-step"><p>On success (no server-side signature verification — the credential presence itself is the proof), <code>secureSignIn('biometric')</code> is called and the normal device-binding + session-token flow completes.</p></div>
+        </div>
+        <div class="callout warn">
+          <span class="callout-icon">&#9888;</span>
+          <div class="callout-body">WebAuthn assertions are not cryptographically verified server-side in this implementation. The credential ID match is used as a trust signal. For higher security environments, add server-side assertion verification via a Supabase Edge Function.</div>
+        </div>
+      </section>
+
+      <section id="auth-worker-face">
+        <h2>Authentication Flow — Face Recognition</h2>
+        <div class="flow">
+          <div class="flow-step"><p>Worker taps <strong>Use Face Recognition</strong> from the home screen. <code>openFaceRecog()</code> loads the face-api.js library from jsDelivr CDN (if not already loaded), then loads three neural net models: TinyFaceDetector, FaceLandmark68TinyNet, FaceRecognitionNet.</p></div>
+          <div class="flow-step"><p>All workers in the company with a non-null <code>face_descriptor</code> are fetched. Their stored Float32Array(128) descriptors are decoded from JSON and wrapped as <code>faceapi.LabeledFaceDescriptors</code> keyed by worker UUID.</p></div>
+          <div class="flow-step"><p>A <code>FaceMatcher</code> is created with a distance threshold of <strong>0.50</strong>. Distances below this threshold are considered a match (lower = more strict).</p></div>
+          <div class="flow-step"><p>The front camera is opened. Each animation frame, <code>faceFrame()</code> runs <code>faceapi.detectSingleFace(video, TinyFaceDetectorOptions).withFaceLandmarks(true).withFaceDescriptor()</code>.</p></div>
+          <div class="flow-step"><p>The detected descriptor is compared against enrolled descriptors. If the best match distance is &le; 0.50, the worker is identified. The camera stops, and <code>secureSignIn('face')</code> is called after a 900 ms confirmation delay.</p></div>
+        </div>
+      </section>
+
+      <section id="auth-admin">
+        <h2>Authentication Flow — Admin Login</h2>
+        <div class="flow">
+          <div class="flow-step"><p>Admin enters username and password on the Admin Login page and clicks <strong>Login</strong> &rarr; <code>adminLogin()</code>.</p></div>
+          <div class="flow-step"><p>First, a lockout pre-check: the account row is fetched by username to read <code>is_active</code>, <code>failed_attempts</code>, and <code>locked_until</code>. If locked, the attempt is rejected immediately without a DB password comparison.</p></div>
+          <div class="flow-step"><p>Full query: <code>admin_users WHERE username = ? AND password_hash = ? AND is_active = true</code>.</p></div>
+          <div class="flow-step"><p>On failure, <code>failed_attempts</code> is incremented. At 5 failures, <code>locked_until</code> = NOW() + 30 min and <code>failed_attempts</code> resets to 0.</p></div>
+          <div class="flow-step"><p>On success, <code>failed_attempts</code> and <code>locked_until</code> are cleared. <code>S.admin</code> is set. Role-based routing: <code>developer</code> goes to <code>pg-developer</code>, others go to <code>pg-admin</code>. The Admins tab is hidden for <code>admin</code> role.</p></div>
+        </div>
+      </section>
+
+      <!-- ── Security ── -->
+      <section id="device-binding">
+        <h2>Security — Device Binding</h2>
+        <p>When a worker first signs in successfully, a UUID (generated via <code>crypto.randomUUID()</code> or a polyfill) is stored in <code>localStorage</code> under <code>wc_device_id</code> and written to <code>workers.device_id</code> in the database.</p>
+        <p>On every subsequent sign-in, <code>secureSignIn()</code> compares the current device's localStorage UUID with the stored <code>device_id</code>. If they differ, sign-in is rejected:</p>
+        <pre><code><span class="kw">if</span> (w.device_id &amp;&amp; w.device_id !== deviceId) {
+  showErr(<span class="str">'err-pin'</span>, <span class="str">'🔒 This account is bound to another device.'</span>);
+  setTimeout(<span class="kw">function</span>() { S.worker = <span class="kw">null</span>; showPg(<span class="str">'wlogin'</span>); }, <span class="num">3000</span>);
+  <span class="kw">return</span>;
+}</code></pre>
+        <p>An admin can reset device binding using the <strong>&#127965; Reset Security</strong> button (shield icon) in the Workers tab. This sets <code>device_id</code>, <code>session_token</code>, <code>failed_attempts</code>, and <code>locked_until</code> to null/0.</p>
+      </section>
+
+      <section id="session-tokens">
+        <h2>Security — Session Tokens</h2>
+        <p>On every successful sign-in (PIN, biometric, or face), a new 64-character cryptographically random hex token is generated:</p>
+        <pre><code><span class="kw">function</span> <span class="fn">genToken</span>() {
+  <span class="kw">var</span> arr = crypto.getRandomValues(<span class="kw">new</span> Uint8Array(<span class="num">32</span>));
+  <span class="kw">return</span> Array.from(arr).map(<span class="kw">function</span>(b) { <span class="kw">return</span> b.toString(<span class="num">16</span>).padStart(<span class="num">2</span>, <span class="str">'0'</span>); }).join(<span class="str">''</span>);
+}</code></pre>
+        <p>The token is stored in both <code>localStorage</code> (<code>wc_session_token</code>) and <code>workers.session_token</code>. On sign-out, the DB column is set to NULL and the localStorage entry is removed. This invalidates any other active sessions for that worker immediately.</p>
+      </section>
+
+      <section id="lockout">
+        <h2>Security — Account Lockout Algorithm</h2>
+        <p>The same algorithm is used for both workers (PIN) and admins (password):</p>
+        <ul>
+          <li>Each failed attempt increments <code>failed_attempts</code> in the DB</li>
+          <li>At exactly 5 failures: <code>locked_until</code> = NOW() + 30 minutes, <code>failed_attempts</code> resets to 0</li>
+          <li>While <code>locked_until</code> is in the future, all attempts are rejected immediately</li>
+          <li>On successful authentication: <code>failed_attempts = 0</code>, <code>locked_until = null</code></li>
+          <li>Admin can reset worker lockout via the security reset button (clears both <code>failed_attempts</code> and <code>locked_until</code>)</li>
+        </ul>
+        <div class="callout info">
+          <span class="callout-icon">&#128274;</span>
+          <div class="callout-body">The lockout check for admins is done in two stages: a pre-check reads lockout state before the password comparison, so the lockout message is shown immediately without revealing whether the username exists.</div>
+        </div>
+      </section>
+
+      <!-- ── Clock Methods ── -->
+      <section id="clock-methods">
+        <h2>Clock-in Methods</h2>
+        <h3>1 — Employee ID + PIN</h3>
+        <p>The default method. Worker enters their <code>employee_id</code>, then taps a 4–6 digit PIN on a custom numpad. The PIN is auto-submitted 600 ms after the 4th digit. The <code>auth_method</code> value written to attendance is <code>'pin'</code>.</p>
+
+        <h3>2 — Fingerprint / Face ID (WebAuthn)</h3>
+        <p>Uses the W3C WebAuthn platform authenticator API. Credentials are registered with <code>authenticatorAttachment: 'platform'</code>, <code>residentKey: 'required'</code>, and <code>userVerification: 'required'</code>. The credential's <code>rawId</code> is base64-encoded and stored in <code>workers.biometric_credential_id</code>. The worker's UUID is the WebAuthn user ID. The <code>auth_method</code> value is <code>'biometric'</code>.</p>
+
+        <h3>3 — Facial Recognition (face-api.js)</h3>
+        <p>Client-side only. face-api.js v0.22.2 runs in the browser using TensorFlow.js under the hood. The TinyFaceDetector model (fast, lightweight) is used for detection. A 128-float embedding vector is generated from the face. During recognition, cosine distance against stored embeddings is computed. Threshold is 0.50. The <code>auth_method</code> value is <code>'face'</code>.</p>
+
+        <h3>Geolocation Enforcement</h3>
+        <p>Regardless of authentication method, the Clock In/Out button is only enabled when the worker's GPS coordinates are within <code>workplaces.radius_meters</code> of the workplace centre. Distance is calculated using the Haversine formula in <code>haversineM()</code>. The location is polled every ~15 seconds via <code>navigator.geolocation.watchPosition()</code>.</p>
+      </section>
+
+      <section id="geolocation">
+        <h2>Geolocation Detail</h2>
+        <pre><code><span class="kw">function</span> <span class="fn">haversineM</span>(la1, lo1, la2, lo2) {
+  <span class="kw">var</span> R = <span class="num">6371000</span>; <span class="comment">// Earth radius in metres</span>
+  <span class="kw">var</span> r = <span class="kw">function</span>(d) { <span class="kw">return</span> d * Math.PI / <span class="num">180</span>; };
+  <span class="kw">var</span> a = Math.pow(Math.sin(r(la2-la1)/<span class="num">2</span>),<span class="num">2</span>)
+        + Math.cos(r(la1)) * Math.cos(r(la2))
+        * Math.pow(Math.sin(r(lo2-lo1)/<span class="num">2</span>),<span class="num">2</span>);
+  <span class="kw">return</span> R * <span class="num">2</span> * Math.atan2(Math.sqrt(a), Math.sqrt(<span class="num">1</span>-a));
+}</code></pre>
+        <p>The GPS coordinates at clock-in and clock-out are stored in the attendance record. If a worker's workplace is not configured (<code>workplace_id = NULL</code>), a warning is shown but clock-in is still permitted.</p>
+      </section>
+
+      <section id="face-recog">
+        <h2>Face Recognition Detail</h2>
+        <p>Models are loaded lazily from jsDelivr CDN (<code>https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights</code>) and cached in memory for the session. Three models are required:</p>
+        <ul>
+          <li><code>tinyFaceDetector</code> — Fast face detection (input 320px, score threshold 0.5)</li>
+          <li><code>faceLandmark68TinyNet</code> — 68-point facial landmark detection</li>
+          <li><code>faceRecognitionNet</code> — 128-float embedding generation</li>
+        </ul>
+        <p>Enrolment: The admin (or worker) captures a single image frame, runs detection+embedding, and stores the JSON-serialised Float32Array in <code>workers.face_descriptor</code>.</p>
+        <p>Recognition: All active workers' descriptors are loaded and used to build a <code>FaceMatcher</code>. Recognition runs per-animation-frame until a match is found or the user cancels.</p>
+      </section>
+
+      <section id="pwa">
+        <h2>PWA Details</h2>
+        <p>WorkClock is installable as a Progressive Web App via the browser's "Add to Home Screen" prompt. The manifest declares:</p>
+        <ul>
+          <li><code>display: "standalone"</code> — no browser chrome when launched from home screen</li>
+          <li><code>orientation: "portrait-primary"</code> — locked to portrait</li>
+          <li><code>theme_color: "#2563EB"</code> — blue status bar on Android</li>
+          <li><code>start_url: "./index.html"</code></li>
+          <li>Shortcut: <em>Clock In / Out</em> &rarr; <code>./index.html#home</code></li>
+        </ul>
+        <p>The service worker (<code>sw.js</code>) is self-destructing: it deletes all caches and unregisters itself on activation. The app does not cache resources for offline use — an internet connection is required to reach Supabase.</p>
+      </section>
+
+      <!-- ── JS Function Reference ── -->
+      <section id="fn-ref">
+        <h2>Key JavaScript Functions Reference</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Function</th><th>Description</th><th>Called from</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>findWorker()</code></td>
+                <td>Reads Employee ID input, queries <code>workers</code> table (filtered by company if URL-based), loads worker into <code>S.worker</code>, and navigates to the auth page.</td>
+                <td>Employee ID form submit</td>
+              </tr>
+              <tr>
+                <td><code>secureSignIn(method)</code></td>
+                <td>Validates device binding, generates a new session token, writes it to DB and localStorage, sets <code>S.authMethod</code>, then calls <code>enterWorkerDashboard()</code>.</td>
+                <td>verifyPin, authBiometric, faceFrame</td>
+              </tr>
+              <tr>
+                <td><code>clockAction()</code></td>
+                <td>Inserts a new attendance record (clock in) or updates the existing active record with clock-out time and coordinates. Calls <code>loadTodayRecord()</code> and <code>loadAttendanceHistory()</code> after.</td>
+                <td>Clock In/Out button</td>
+              </tr>
+              <tr>
+                <td><code>enterWorkerDashboard()</code></td>
+                <td>Populates worker portal header, resolves company name, shows bio/face enrolment cards if needed, calls <code>loadTodayRecord()</code>, <code>loadAttendanceHistory()</code>, and <code>startLocationWatch()</code>.</td>
+                <td>secureSignIn</td>
+              </tr>
+              <tr>
+                <td><code>adminLogin()</code></td>
+                <td>Two-phase admin authentication: lockout pre-check, then full credential query. On success, routes to developer panel or admin panel based on role.</td>
+                <td>Admin login form</td>
+              </tr>
+              <tr>
+                <td><code>addWorker()</code></td>
+                <td>Validates form fields, inserts a new workers row, then transitions the add-worker panel to step 2 for optional biometric/face enrolment.</td>
+                <td>Add Worker form submit</td>
+              </tr>
+              <tr>
+                <td><code>addAdmin()</code></td>
+                <td>Validates new admin form (name, username, password ≥ 6 chars, alphanumeric username), inserts into <code>admin_users</code> with the current admin's <code>company_id</code>.</td>
+                <td>Add Admin form submit (super_admin only)</td>
+              </tr>
+              <tr>
+                <td><code>loadWorkers()</code></td>
+                <td>Fetches all workers for the admin's company, renders the workers list with action buttons (edit, face enrol, biometric register, security reset, activate/deactivate).</td>
+                <td>Workers tab activate</td>
+              </tr>
+              <tr>
+                <td><code>loadAttendanceHistory()</code></td>
+                <td>Fetches the last 14 days of attendance for the signed-in worker (max 30 records) and renders the history list in the worker dashboard.</td>
+                <td>enterWorkerDashboard, clockAction</td>
+              </tr>
+              <tr>
+                <td><code>loadAttendance()</code></td>
+                <td>Admin attendance report: applies date range, worker, and auth method filters, fetches matching attendance records, renders a summary and row list, supports CSV export.</td>
+                <td>Attendance tab filters</td>
+              </tr>
+              <tr>
+                <td><code>resetWorkerSecurity(id, name)</code></td>
+                <td>Clears <code>device_id</code>, <code>session_token</code>, <code>failed_attempts</code>, and <code>locked_until</code> for a worker after admin confirmation.</td>
+                <td>Shield button in Workers tab</td>
+              </tr>
+              <tr>
+                <td><code>adminEnrollFace(workerId, workerName, ctx)</code></td>
+                <td>Opens the face enrolment modal, loads face-api.js models, starts the camera. <code>ctx</code> controls post-enrolment refresh ('admin', 'worker', 'nw', 'dev').</td>
+                <td>Face enrol button</td>
+              </tr>
+              <tr>
+                <td><code>captureEnroll()</code></td>
+                <td>Grabs a single video frame, detects and computes the face descriptor, saves JSON to <code>workers.face_descriptor</code>.</td>
+                <td>Capture button in enrolment modal</td>
+              </tr>
+              <tr>
+                <td><code>downloadCSV()</code></td>
+                <td>Re-queries attendance with current filters, builds a UTF-8 BOM CSV with 9 columns, triggers browser download.</td>
+                <td>Download CSV button</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── Config ── -->
+      <section id="config">
+        <h2>config.js</h2>
+        <pre><code><span class="kw">const</span> SUPABASE_URL  = <span class="str">'https://uwxnbaicwfbygvkiyhcf.supabase.co'</span>;
+<span class="kw">const</span> SUPABASE_ANON_KEY = <span class="str">'eyJhbGci...'</span>; <span class="comment">// anon key from Supabase project settings</span>
+
+<span class="kw">var</span> db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+<span class="comment">// EmailJS — optional password reset OTP</span>
+<span class="kw">const</span> EMAILJS_PUBLIC_KEY   = <span class="str">'YOUR_PUBLIC_KEY'</span>;
+<span class="kw">const</span> EMAILJS_SERVICE_ID   = <span class="str">'YOUR_SERVICE_ID'</span>;
+<span class="kw">const</span> EMAILJS_TEMPLATE_ID  = <span class="str">'YOUR_TEMPLATE_ID'</span>;
+<span class="kw">const</span> ADMIN_RECOVERY_EMAIL = <span class="str">'admin@yourdomain.com'</span>;</code></pre>
+        <p>The anon key is safe to expose in client-side code — it can only access Supabase via the PostgREST API (not the management API). RLS policies should be configured to limit what the anon key can do in production.</p>
+        <p>EmailJS is only used if you configure an EmailJS account and fill in the three constants. The admin OTP reset feature calls <code>emailjs.send()</code> with the configured service and template.</p>
+      </section>
+
+      <!-- ── Deployment ── -->
+      <section id="deployment">
+        <h2>Deployment — GitHub Pages</h2>
+        <p>The app is deployed at <code>https://mohlatswa.github.io/WorkerClockIn/</code>. GitHub Pages serves the <code>main</code> branch of the <code>mohlatswa/WorkerClockIn</code> repository.</p>
+        <h3>Deploy a change</h3>
+        <pre><code><span class="comment"># Stage changes</span>
+git add .
+
+<span class="comment"># Commit</span>
+git commit -m "Your change description"
+
+<span class="comment"># Push to main — GitHub Pages deploys automatically (usually within 1–2 minutes)</span>
+git push origin main</code></pre>
+        <p>There is no build step. Changes are live as soon as GitHub Pages refreshes (check the Actions tab for deployment status).</p>
+      </section>
+
+      <section id="local-dev">
+        <h2>Local Development</h2>
+        <p>Because the app is plain HTML/JS, any local HTTP server works. Using Python (built-in):</p>
+        <pre><code><span class="comment"># In the WorkerClockIn directory</span>
+python -m http.server 8080
+<span class="comment"># Open http://localhost:8080</span></code></pre>
+        <p>Or using Node.js <code>npx serve</code>:</p>
+        <pre><code>npx serve . -p 8080</code></pre>
+        <div class="callout warn">
+          <span class="callout-icon">&#9888;</span>
+          <div class="callout-body"><strong>WebAuthn note:</strong> WebAuthn requires HTTPS or <code>localhost</code>. It will not work on a local IP address (e.g. <code>192.168.x.x</code>) unless you set up a self-signed certificate. Use <code>localhost</code> for local biometric testing.</div>
+        </div>
+        <div class="callout info">
+          <span class="callout-icon">&#128273;</span>
+          <div class="callout-body">Use <code>clear.html</code> to wipe your <code>localStorage</code> during development (device ID, session token, company cache).</div>
+        </div>
+      </section>
+
+      <!-- ── Add Company ── -->
+      <section id="add-company">
+        <h2>Adding a New Company (Step by Step)</h2>
+        <ol>
+          <li>Log in to the admin panel as a <code>developer</code> account.</li>
+          <li>On the Developer panel, locate the <strong>Companies</strong> section and click <strong>+ Add Company</strong>.</li>
+          <li>Enter the company name and a short unique code (e.g. <code>REATLEGILE</code>, uppercase, no spaces).</li>
+          <li>The company is created with <code>is_active = true</code>.</li>
+          <li>Create a <code>super_admin</code> account for the company: switch to the <strong>Admin Users</strong> section, click <strong>+ Add Admin</strong>, set role to <code>super_admin</code>, and associate with the new company.</li>
+          <li>Log in as that <code>super_admin</code>. Go to the <strong>Setup</strong> tab and copy the Worker Portal Link: <br><code>https://mohlatswa.github.io/WorkerClockIn/?c=YOURCODE</code></li>
+          <li>Add at least one <strong>Workplace</strong> with GPS coordinates and a radius. Workers assigned to this workplace must be within the radius to clock in.</li>
+          <li>Add workers via the <strong>Workers</strong> tab. Distribute the portal link.</li>
+        </ol>
+      </section>
+
+      <!-- ── Extending ── -->
+      <section id="extending">
+        <h2>Extending the System</h2>
+        <h3>Adding a new page</h3>
+        <p>Add a <code>&lt;div id="pg-mypage" class="pg"&gt;</code> inside <code>index.html</code>. Navigate to it with <code>showPg('mypage')</code>. All existing pages follow this pattern.</p>
+
+        <h3>Adding a new clock-in method</h3>
+        <ol>
+          <li>Add a new button/flow in <code>index.html</code> on the home page or auth page.</li>
+          <li>On success, call <code>secureSignIn('mymethod')</code> after setting <code>S.worker</code>.</li>
+          <li>Add <code>'mymethod'</code> to the <code>auth_method</code> CHECK constraint in the database.</li>
+        </ol>
+
+        <h3>Enabling RLS</h3>
+        <p>Currently RLS is disabled. To enable it, you need to create policies for each table. The anon key should only be able to SELECT/INSERT/UPDATE rows relevant to the requesting session. Consider using Supabase Auth or custom JWT claims for this.</p>
+
+        <h3>Hashing PINs</h3>
+        <p>Add a PostgreSQL trigger using <code>pgcrypto</code>:</p>
+        <pre><code>CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE OR REPLACE FUNCTION hash_pin() RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.pin IS DISTINCT FROM OLD.pin THEN
+    NEW.pin := crypt(NEW.pin, gen_salt('bf'));
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_hash_pin
+BEFORE INSERT OR UPDATE ON workers
+FOR EACH ROW EXECUTE FUNCTION hash_pin();</code></pre>
+        <p>Then update the PIN verification in <code>verifyPin()</code> to use a DB function call instead of a client-side string comparison.</p>
+      </section>
+
+    </div><!-- /content -->
+
+    <footer>
+      <strong>Developed by Reatlegile Solutions</strong> &copy; 2026 &nbsp;&middot;&nbsp; WorkClock Staff Attendance System &nbsp;&middot;&nbsp; <a href="index.html" style="color:#94A3B8">Docs Home</a>
+    </footer>
+
+  </div><!-- /right column -->
+
+</div><!-- /layout -->
+</body>
+</html>

@@ -32,6 +32,8 @@ const _cCache = {};
 // ═══════════════════════════════════════════════
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const splash = document.getElementById('page-loading');
+  if (splash) splash.style.display = 'none';
   const el = document.getElementById('page-' + id);
   if (el) { el.classList.add('active'); window.scrollTo(0, 0); }
 }

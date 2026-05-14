@@ -31,6 +31,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   pointer-events:none;
   animation:splashOut .4s ease-out 1.8s forwards;
 }
+#page-loading,#page-loading *{pointer-events:none}
 @keyframes splashOut{to{opacity:0;visibility:hidden}}
 .splash{text-align:center;color:#fff}
 .splash-ico{font-size:72px;display:block;margin-bottom:14px}

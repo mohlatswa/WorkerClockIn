@@ -166,7 +166,7 @@ async function findWorker() {
   if (!id) { showErr('err-empid', 'Please enter your Employee ID.'); return; }
   try {
     var q = db.from('workers').select('*, workplace:workplaces(*)').eq('employee_id', id).eq('is_active', true);
-    if (S.companyId) q = q.eq('company_id', S.companyId);
+    if (S.companyId && S.fromUrl) q = q.eq('company_id', S.companyId);
     var r = await withTimeout(q.maybeSingle(), 5000);
     if (r.error && r.error.code === 'PGRST116') {
       showErr('err-empid', 'Multiple accounts found — open your employer\'s link.'); return;

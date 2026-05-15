@@ -71,15 +71,7 @@ function setCompany(co, fromUrl) {
   updateHomeUI();
 }
 function updateHomeUI() {
-  var pillEl   = document.getElementById('home-co-pill');
-  var noCard   = document.getElementById('no-co-card');
-  var actions  = document.getElementById('home-actions');
-  // Always show the action buttons — company pill shows only when a company is loaded
-  if (pillEl) {
-    if (S.companyId) { pillEl.textContent = S.companyName || ''; pillEl.classList.remove('hidden'); }
-    else pillEl.classList.add('hidden');
-  }
-  if (noCard)  noCard.classList.add('hidden');
+  var actions = document.getElementById('home-actions');
   if (actions) actions.classList.remove('hidden');
 }
 async function initCompany() {

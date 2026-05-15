@@ -46,6 +46,13 @@ async function sha256(str) {
   var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
   return Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
 }
+function requireAdminCid() {
+  if (!S.admin || !S.admin.company_id) {
+    toast('Session expired — please log in again.');
+    adminLogout(); return null;
+  }
+  return S.admin.company_id;
+}
 
 var _toastT;
 function toast(msg, dur) {
@@ -762,14 +769,14 @@ async function adminLogin() {
       }
     }
     var hashedPass = await sha256(pass);
-    var r = await withTimeout(
-      db.from('admin_users').select('*, co:companies(name,code)')
-        .eq('username', user).eq('password_hash', hashedPass).eq('is_active', true).maybeSingle(),
+    // Use secure RPC — password_hash is never returned to the browser
+    var rpc = await withTimeout(
+      db.rpc('admin_login', { p_username: user, p_password_hash: hashedPass }),
       8000
     );
-    if (r.error) { showErr('err-admin', 'Database error: ' + r.error.message); return; }
-    if (!r.data) {
-      // Track failed attempt
+    if (rpc.error) { showErr('err-admin', 'Database error: ' + rpc.error.message); return; }
+    var row = rpc.data && rpc.data[0];
+    if (!row) {
       if (lookR.data) {
         var attempts = (lookR.data.failed_attempts || 0) + 1;
         var upd = { failed_attempts: attempts };
@@ -786,16 +793,18 @@ async function adminLogin() {
       }
       return;
     }
+    // Rebuild co object from flat RPC columns for compatibility with rest of app
+    row.co = { name: row.co_name, code: row.co_code };
     // Success — clear lockout
-    try { await withTimeout(db.from('admin_users').update({ failed_attempts: 0, locked_until: null }).eq('id', r.data.id), 3000); } catch(e) {}
-    S.admin = r.data;
+    try { await withTimeout(db.from('admin_users').update({ failed_attempts: 0, locked_until: null }).eq('id', row.id), 3000); } catch(e) {}
+    S.admin = row;
     document.getElementById('inp-auser').value = '';
     document.getElementById('inp-apass').value = '';
-    if (r.data.role === 'developer') {
+    if (row.role === 'developer') {
       showPg('developer'); loadDevCos();
     } else {
-      document.getElementById('admin-co-lbl').textContent = r.data.co ? r.data.co.name : '';
-      var isSA = r.data.role === 'super_admin';
+      document.getElementById('admin-co-lbl').textContent = row.co_name || '';
+      var isSA = row.role === 'super_admin';
       document.getElementById('tab-admins-btn').classList.toggle('hidden', !isSA);
       showPg('admin'); loadDashboard();
     }
@@ -826,9 +835,9 @@ function switchTab(btn, name) {
 
 // ── Dashboard ─────────────────────────────────────────────
 async function loadDashboard() {
+  var cid = requireAdminCid(); if (!cid) return;
   var today = new Date(); today.setHours(0, 0, 0, 0);
   var tmrw  = new Date(today); tmrw.setDate(tmrw.getDate() + 1);
-  var cid   = S.admin && S.admin.company_id;
   try {
     var totR = await withTimeout(db.from('workers').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('company_id', cid), 5000);
     var wkrR = await withTimeout(db.from('workers').select('id').eq('company_id', cid), 5000);
@@ -878,10 +887,10 @@ async function loadAbsent() {
   var el = document.getElementById('absent-list');
   var countEl = document.getElementById('absent-count');
   if (!el) return;
+  var cid = requireAdminCid(); if (!cid) return;
   el.innerHTML = '<div class="empty">Loading…</div>';
   var today = new Date(); today.setHours(0, 0, 0, 0);
   var tmrw  = new Date(today); tmrw.setDate(tmrw.getDate() + 1);
-  var cid   = S.admin && S.admin.company_id;
   try {
     var wR = await withTimeout(
       db.from('workers').select('id,name,employee_id,job_title').eq('company_id', cid).eq('is_active', true).order('name'),
@@ -932,8 +941,9 @@ async function forceClockOut(attId, workerName) {
 async function loadWorkers() {
   var el = document.getElementById('workers-list');
   el.innerHTML = '<div class="empty">Loading…</div>';
+  var cid = requireAdminCid(); if (!cid) return;
   try {
-    var r = await withTimeout(db.from('workers').select('*').eq('company_id', S.admin.company_id).order('name'), 5000);
+    var r = await withTimeout(db.from('workers').select('*').eq('company_id', cid).order('name'), 5000);
     if (r.error || !r.data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
     if (!r.data.length) { el.innerHTML = '<div class="empty">No workers yet — add one above</div>'; return; }
     r.data.forEach(function(w) { _wCache[w.id] = Object.assign({}, w, { _ctx: 'admin' }); });
@@ -974,7 +984,7 @@ async function addWorker() {
   var pin   = (document.getElementById('nw-pin').value  || '').trim();
   if (!empId || !name || !pin) { showMsg('nw-msg', 'Employee ID, Name and PIN are required.', 'err'); return; }
   if (pin.length < 4) { showMsg('nw-msg', 'PIN must be at least 4 digits.', 'err'); return; }
-  var cid = S.admin.company_id;
+  var cid = requireAdminCid(); if (!cid) return;
   try {
     var hashedPin = await sha256(pin);
     var wpR = await withTimeout(db.from('workplaces').select('id').eq('company_id', cid).limit(1), 5000);
@@ -1070,9 +1080,10 @@ async function adminRegBio(workerId, workerName, ctx) {
 // ── Attendance Reports ────────────────────────────────────
 async function loadWorkerOptions() {
   var sel = document.getElementById('att-worker');
+  var cid = requireAdminCid(); if (!cid) return;
   try {
     var r = await withTimeout(
-      db.from('workers').select('id,name,employee_id,job_title').eq('company_id', S.admin.company_id).order('name'),
+      db.from('workers').select('id,name,employee_id,job_title').eq('company_id', cid).order('name'),
       5000
     );
     sel.innerHTML = '<option value="">All Workers</option>' + (r.data || []).map(function(w) {
@@ -1088,11 +1099,12 @@ async function loadAttendance() {
   var el   = document.getElementById('att-list');
   var sum  = document.getElementById('att-summary');
   if (!from || !to) { el.innerHTML = '<div class="empty">Select a date range</div>'; return; }
+  var cid = requireAdminCid(); if (!cid) return;
   el.innerHTML = '<div class="empty">Loading…</div>'; sum.classList.add('hidden');
   var start = new Date(from); start.setHours(0, 0, 0, 0);
   var end   = new Date(to);   end.setHours(23, 59, 59, 999);
   try {
-    var cWks    = await withTimeout(db.from('workers').select('id').eq('company_id', S.admin.company_id), 5000);
+    var cWks = await withTimeout(db.from('workers').select('id').eq('company_id', cid), 5000);
     var allowed = wkr ? [wkr] : (cWks.data || []).map(function(w) { return w.id; });
     if (!allowed.length) { el.innerHTML = '<div class="empty">No workers found</div>'; return; }
     var q = db.from('attendance').select('*, w:workers(name,employee_id,job_title)')
@@ -1129,11 +1141,12 @@ async function downloadCSV() {
   var from = document.getElementById('att-from').value;
   var to   = document.getElementById('att-to').value;
   if (!from || !to) { showMsg('csv-msg', 'Select a date range first.', 'err'); return; }
+  var cid = requireAdminCid(); if (!cid) return;
   showMsg('csv-msg', '⏳ Preparing CSV…', 'ok');
   var start = new Date(from); start.setHours(0, 0, 0, 0);
   var end   = new Date(to);   end.setHours(23, 59, 59, 999);
   try {
-    var cWks    = await withTimeout(db.from('workers').select('id').eq('company_id', S.admin.company_id), 5000);
+    var cWks = await withTimeout(db.from('workers').select('id').eq('company_id', cid), 5000);
     var wkr     = document.getElementById('att-worker').value;
     var mth     = document.getElementById('att-method').value;
     var allowed = wkr ? [wkr] : (cWks.data || []).map(function(w) { return w.id; });
@@ -1169,9 +1182,10 @@ async function downloadCSV() {
 async function loadCoAdmins() {
   var el = document.getElementById('co-admins-list');
   el.innerHTML = '<div class="empty">Loading…</div>';
+  var cid = requireAdminCid(); if (!cid) return;
   try {
     var r = await withTimeout(
-      db.from('admin_users').select('*').eq('company_id', S.admin.company_id).neq('role', 'developer').order('full_name'),
+      db.from('admin_users').select('*').eq('company_id', cid).neq('role', 'developer').order('full_name'),
       5000
     );
     if (r.error || !r.data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
@@ -1206,10 +1220,11 @@ async function addAdmin() {
   if (!name || !user || !pass) { showMsg('ca-msg', 'Name, username and password required.', 'err'); return; }
   if (pass.length < 6) { showMsg('ca-msg', 'Password must be at least 6 characters.', 'err'); return; }
   if (!/^[a-z0-9_]+$/.test(user)) { showMsg('ca-msg', 'Username: letters, numbers and underscores only.', 'err'); return; }
+  var cid = requireAdminCid(); if (!cid) return;
   try {
     var r = await withTimeout(db.from('admin_users').insert({
       username: user, password_hash: await sha256(pass), full_name: name, email: email || null,
-      role: role, company_id: S.admin.company_id, is_active: true
+      role: role, company_id: cid, is_active: true
     }), 5000);
     if (r.error) { showMsg('ca-msg', r.error.message.includes('unique') ? 'Username already exists.' : r.error.message, 'err'); return; }
     showMsg('ca-msg', '✅ ' + (ROLE_LABELS[role] || role) + ' "@' + user + '" created!', 'ok');
@@ -1232,7 +1247,7 @@ async function resetPw(id, username) {
 
 // ── Setup ─────────────────────────────────────────────────
 async function loadSetup() {
-  var cid = S.admin.company_id;
+  var cid = requireAdminCid(); if (!cid) return;
   try {
     var wpR = await withTimeout(db.from('workplaces').select('*').eq('company_id', cid).limit(1), 5000);
     if (wpR.data && wpR.data[0]) {
@@ -1261,7 +1276,7 @@ async function saveWorkplace() {
   var lng    = parseFloat(document.getElementById('wp-lng').value);
   var radius = parseInt(document.getElementById('wp-radius').value) || 100;
   if (!name || isNaN(lat) || isNaN(lng)) { showMsg('wp-msg', 'Name, Latitude and Longitude are required.', 'err'); return; }
-  var cid = S.admin.company_id;
+  var cid = requireAdminCid(); if (!cid) return;
   try {
     var exR     = await withTimeout(db.from('workplaces').select('id').eq('company_id', cid).limit(1), 5000);
     var payload = { name: name, address: addr, latitude: lat, longitude: lng, radius_meters: radius, company_id: cid };
@@ -1673,25 +1688,24 @@ document.addEventListener('DOMContentLoaded', function() {
   (async function() {
     try { await withTimeout(initCompany(), 4000); } catch (e) {}
 
-    var savedId = localStorage.getItem('wc_worker_id');
-    if (!savedId) return;
+    var savedId    = localStorage.getItem('wc_worker_id');
+    var savedToken = localStorage.getItem('wc_session_token');
+    if (!savedId || !savedToken) return;
     try {
-      var r = await withTimeout(
-        db.from('workers').select('*, workplace:workplaces(*)').eq('id', savedId).eq('is_active', true).maybeSingle(),
+      // Use secure RPC — validates session_token server-side, never exposes it
+      var sR = await withTimeout(
+        db.rpc('restore_worker_session', { p_worker_id: savedId, p_session_token: savedToken }),
         5000
       );
-      if (r.data) {
-        var savedToken  = localStorage.getItem('wc_session_token');
+      var row = sR.data && sR.data[0];
+      if (row) {
         var savedDevice = localStorage.getItem('wc_device_id');
-        // Reject if session token was invalidated (signed out elsewhere)
-        if (r.data.session_token && savedToken && r.data.session_token !== savedToken) {
+        if (row.device_id && savedDevice && row.device_id !== savedDevice) {
           localStorage.removeItem('wc_worker_id'); localStorage.removeItem('wc_session_token'); return;
         }
-        // Reject if this is not the registered device
-        if (r.data.device_id && savedDevice && r.data.device_id !== savedDevice) {
-          localStorage.removeItem('wc_worker_id'); localStorage.removeItem('wc_session_token'); return;
-        }
-        S.worker = r.data;
+        // Reshape workplace into nested object for rest of app
+        row.workplace = row.wp_id ? { id: row.wp_id, name: row.wp_name, latitude: row.wp_latitude, longitude: row.wp_longitude, radius_meters: row.wp_radius } : null;
+        S.worker = row;
         enterWorkerDashboard();
       } else {
         localStorage.removeItem('wc_worker_id'); localStorage.removeItem('wc_session_token');

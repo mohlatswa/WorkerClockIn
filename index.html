@@ -222,6 +222,13 @@
       <p class="msg hidden" id="face-reg-msg"></p>
     </div>
 
+    <!-- Change PIN -->
+    <div class="card" id="change-pin-card">
+      <div class="sec-lbl">🔑 Change PIN</div>
+      <p class="sub" style="margin-bottom:12px">Update your clock-in PIN at any time.</p>
+      <button class="btn-bio" style="background:linear-gradient(135deg,#6366f1,#4f46e5)" onclick="openChangePinModal()">🔑 Change My PIN</button>
+    </div>
+
   </div>
 </div>
 
@@ -247,6 +254,31 @@
       </div>
       <button class="btn btn-primary btn-full" id="login-btn" onclick="adminLogin()">Login</button>
       <p class="err hidden" id="err-admin" style="margin-top:8px"></p>
+      <div style="text-align:center;margin-top:10px">
+        <button onclick="forgotPassword()" style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:.84rem;text-decoration:underline;padding:0">Forgot password?</button>
+      </div>
+      <!-- Forgot Password Panel -->
+      <div id="forgot-pw-panel" class="hidden" style="margin-top:14px;padding-top:14px;border-top:1px solid #e5e7eb">
+        <div id="fpw-step1">
+          <p style="font-size:.82rem;color:var(--muted);margin-bottom:10px">Enter your username to receive a reset code by email.</p>
+          <div class="field"><input id="fpw-username" type="text" class="input" placeholder="Username" autocapitalize="none" autocomplete="off"></div>
+          <div class="btn-row">
+            <button class="btn btn-primary btn-sm" onclick="sendOtp()">Send Code</button>
+            <button class="btn btn-outline btn-sm" onclick="hideForgotPw()">Cancel</button>
+          </div>
+          <p class="msg hidden" id="fpw-send-msg" style="margin-top:8px"></p>
+        </div>
+        <div id="fpw-step2" class="hidden">
+          <p style="font-size:.82rem;color:var(--muted);margin-bottom:10px">Check your email for a 6-digit code, then set your new password.</p>
+          <div class="field"><label>Reset Code</label>    <input id="fpw-otp"   type="text"     class="input" placeholder="6-digit code" maxlength="6" inputmode="numeric"></div>
+          <div class="field"><label>New Password</label>  <input id="fpw-newpw" type="password" class="input" placeholder="Min 6 characters"></div>
+          <div class="btn-row">
+            <button class="btn btn-primary btn-sm" onclick="resetAdminPassword()">Reset Password</button>
+            <button class="btn btn-outline btn-sm" onclick="hideForgotPw()">Cancel</button>
+          </div>
+          <p class="msg hidden" id="fpw-reset-msg" style="margin-top:8px"></p>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -592,6 +624,20 @@
   </div>
 </div>
 
+<!-- MODAL: Worker Change PIN -->
+<div id="modal-change-pin" class="modal-bd hidden" onclick="if(event.target===this)closeModal('modal-change-pin')">
+  <div class="modal-box" style="max-width:360px">
+    <div class="modal-hd"><h3>🔑 Change PIN</h3><button class="modal-close" onclick="closeModal('modal-change-pin')">✕</button></div>
+    <div style="padding:18px">
+      <div class="field"><label>Current PIN</label>         <input id="cp-current" type="password" class="input" placeholder="Enter current PIN"   maxlength="6" inputmode="numeric"></div>
+      <div class="field"><label>New PIN (4–6 digits)</label><input id="cp-new1"    type="password" class="input" placeholder="New PIN"              maxlength="6" inputmode="numeric"></div>
+      <div class="field"><label>Confirm New PIN</label>     <input id="cp-new2"    type="password" class="input" placeholder="Confirm new PIN"      maxlength="6" inputmode="numeric"></div>
+      <p class="msg hidden" id="cp-msg"></p>
+      <button id="cp-save-btn" class="btn btn-primary btn-full" style="margin-top:8px" onclick="saveChangedPin()">Update PIN</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Face Enrolment -->
 <div id="modal-face-enroll" class="modal-bd hidden" onclick="if(event.target===this)closeFaceEnroll()">
   <div class="modal-box">
@@ -682,6 +728,7 @@
 <!-- TOAST -->
 <div id="toast" class="toast hidden"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="supabase.min.js"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>

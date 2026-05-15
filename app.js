@@ -194,6 +194,34 @@ async function saveForcedPin() {
   } catch(e) { showMsg('fp-msg', 'Error: ' + e.message, 'err'); }
   finally { btn.disabled = false; btn.textContent = 'Set PIN'; }
 }
+function openChangePinModal() {
+  document.getElementById('cp-current').value = '';
+  document.getElementById('cp-new1').value    = '';
+  document.getElementById('cp-new2').value    = '';
+  document.getElementById('cp-msg').classList.add('hidden');
+  document.getElementById('modal-change-pin').classList.remove('hidden');
+}
+async function saveChangedPin() {
+  var cur  = (document.getElementById('cp-current').value || '').trim();
+  var new1 = (document.getElementById('cp-new1').value    || '').trim();
+  var new2 = (document.getElementById('cp-new2').value    || '').trim();
+  if (!cur)                      { showMsg('cp-msg', 'Enter your current PIN.', 'err'); return; }
+  if (!new1 || new1.length < 4)  { showMsg('cp-msg', 'New PIN must be at least 4 digits.', 'err'); return; }
+  if (!/^\d+$/.test(new1))       { showMsg('cp-msg', 'PIN must be digits only.', 'err'); return; }
+  if (new1 !== new2)             { showMsg('cp-msg', 'PINs do not match.', 'err'); return; }
+  var btn = document.getElementById('cp-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    if (await sha256(cur) !== S.worker.pin) { showMsg('cp-msg', 'Current PIN is incorrect.', 'err'); return; }
+    var newHash = await sha256(new1);
+    var r = await withTimeout(db.from('workers').update({ pin: newHash }).eq('id', S.worker.id), 5000);
+    if (r.error) { showMsg('cp-msg', 'Error: ' + r.error.message, 'err'); return; }
+    S.worker.pin = newHash;
+    showMsg('cp-msg', '✅ PIN updated successfully!', 'ok');
+    setTimeout(function() { closeModal('modal-change-pin'); }, 1500);
+  } catch(e) { showMsg('cp-msg', 'Error: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Update PIN'; }
+}
 
 // ── Worker Lookup ─────────────────────────────────────────
 async function findWorker() {
@@ -812,6 +840,72 @@ async function adminLogin() {
   finally { btn.disabled = false; btn.textContent = 'Login'; }
 }
 function adminLogout() { S.admin = null; showPg('home'); }
+
+// ── Admin Forgot Password ─────────────────────────────────
+function forgotPassword() {
+  var panel = document.getElementById('forgot-pw-panel');
+  if (panel) { panel.classList.remove('hidden'); document.getElementById('fpw-username').focus(); }
+}
+function hideForgotPw() {
+  var panel = document.getElementById('forgot-pw-panel');
+  if (panel) panel.classList.add('hidden');
+  ['fpw-username', 'fpw-otp', 'fpw-newpw'].forEach(function(id) { var el = document.getElementById(id); if (el) el.value = ''; });
+  ['fpw-send-msg', 'fpw-reset-msg'].forEach(function(id) { var el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+  var s1 = document.getElementById('fpw-step1'); if (s1) s1.classList.remove('hidden');
+  var s2 = document.getElementById('fpw-step2'); if (s2) s2.classList.add('hidden');
+}
+async function sendOtp() {
+  var username = (document.getElementById('fpw-username').value || '').trim().toLowerCase();
+  if (!username) { showMsg('fpw-send-msg', 'Enter your username.', 'err'); return; }
+  showMsg('fpw-send-msg', '⏳ Sending…', 'ok');
+  try {
+    var r = await withTimeout(
+      db.from('admin_users').select('id,email,full_name').eq('username', username).eq('is_active', true).maybeSingle(),
+      5000
+    );
+    if (!r.data)       { showMsg('fpw-send-msg', 'Username not found or account inactive.', 'err'); return; }
+    if (!r.data.email) { showMsg('fpw-send-msg', 'No email on file for this account. Contact your system administrator.', 'err'); return; }
+    var otp     = String(Math.floor(100000 + Math.random() * 900000));
+    var hash    = await sha256(otp);
+    var expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    var upd = await withTimeout(db.from('admin_users').update({ reset_token: hash, reset_expires: expires }).eq('id', r.data.id), 5000);
+    if (upd.error) { showMsg('fpw-send-msg', 'Error: ' + upd.error.message, 'err'); return; }
+    if (typeof emailjs === 'undefined' || EMAILJS_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
+      showMsg('fpw-send-msg', 'Email service not configured — contact your system administrator to reset your password.', 'err'); return;
+    }
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      to_email: r.data.email,
+      to_name:  r.data.full_name || username,
+      otp_code: otp
+    });
+    var s1 = document.getElementById('fpw-step1'); if (s1) s1.classList.add('hidden');
+    var s2 = document.getElementById('fpw-step2'); if (s2) s2.classList.remove('hidden');
+    showMsg('fpw-reset-msg', '✅ Code sent to ' + r.data.email + ' (valid 15 min)', 'ok');
+  } catch(e) { showMsg('fpw-send-msg', 'Error: ' + (e.text || e.message || 'Failed to send'), 'err'); }
+}
+async function resetAdminPassword() {
+  var username = (document.getElementById('fpw-username').value || '').trim().toLowerCase();
+  var otp      = (document.getElementById('fpw-otp').value      || '').trim();
+  var newpw    = (document.getElementById('fpw-newpw').value    || '').trim();
+  if (!otp || otp.length !== 6) { showMsg('fpw-reset-msg', 'Enter the 6-digit code.', 'err'); return; }
+  if (!newpw || newpw.length < 6) { showMsg('fpw-reset-msg', 'New password must be at least 6 characters.', 'err'); return; }
+  showMsg('fpw-reset-msg', '⏳ Verifying…', 'ok');
+  try {
+    var r = await withTimeout(
+      db.from('admin_users').select('id,reset_token,reset_expires').eq('username', username).eq('is_active', true).maybeSingle(),
+      5000
+    );
+    if (!r.data || !r.data.reset_token)           { showMsg('fpw-reset-msg', 'No reset request found — please start over.', 'err'); return; }
+    if (new Date(r.data.reset_expires) < new Date()) { showMsg('fpw-reset-msg', 'Code expired — request a new one.', 'err'); return; }
+    if (await sha256(otp) !== r.data.reset_token)  { showMsg('fpw-reset-msg', 'Incorrect code. Try again.', 'err'); return; }
+    await withTimeout(
+      db.from('admin_users').update({ password_hash: await sha256(newpw), reset_token: null, reset_expires: null }).eq('id', r.data.id),
+      5000
+    );
+    showMsg('fpw-reset-msg', '✅ Password reset! You can now log in.', 'ok');
+    setTimeout(hideForgotPw, 2000);
+  } catch(e) { showMsg('fpw-reset-msg', 'Error: ' + e.message, 'err'); }
+}
 
 // ── Admin Tabs ────────────────────────────────────────────
 function switchTab(btn, name) {
@@ -1671,6 +1765,11 @@ document.addEventListener('DOMContentLoaded', function() {
   // 2. Show home page immediately and start home clock
   showPg('home');
   startHomeClock();
+
+  // Initialize EmailJS if credentials are configured
+  if (typeof emailjs !== 'undefined' && EMAILJS_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY') {
+    emailjs.init(EMAILJS_PUBLIC_KEY);
+  }
 
   // 3. Remove splash — visual fade at 1.5s, hard remove at 3.5s
   var splash = document.getElementById('splash');

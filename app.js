@@ -42,6 +42,10 @@ function fmtDateShort(iso) {
 }
 function vibrate(p) { if (navigator.vibrate) navigator.vibrate(p || 50); }
 function escQ(s) { return (s || '').replace(/'/g, "\\'"); }
+async function sha256(str) {
+  var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+}
 
 var _toastT;
 function toast(msg, dur) {
@@ -156,7 +160,32 @@ async function secureSignIn(method) {
   try { await withTimeout(db.from('workers').update(updates).eq('id', w.id), 5000); } catch(e) {}
   localStorage.setItem('wc_session_token', sessionToken);
   S.authMethod = method;
+  if (S.worker.force_pin_change) {
+    document.getElementById('fp-pin1').value = '';
+    document.getElementById('fp-pin2').value = '';
+    document.getElementById('fp-msg').classList.add('hidden');
+    document.getElementById('modal-pin-change').classList.remove('hidden');
+    return;
+  }
   enterWorkerDashboard();
+}
+async function saveForcedPin() {
+  var p1 = (document.getElementById('fp-pin1').value || '').trim();
+  var p2 = (document.getElementById('fp-pin2').value || '').trim();
+  if (!p1 || p1.length < 4)    { showMsg('fp-msg', 'PIN must be at least 4 digits.', 'err'); return; }
+  if (!/^\d+$/.test(p1))        { showMsg('fp-msg', 'PIN must be digits only.', 'err'); return; }
+  if (p1 !== p2)                 { showMsg('fp-msg', 'PINs do not match.', 'err'); return; }
+  var btn = document.getElementById('fp-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    var hashed = await sha256(p1);
+    var r = await withTimeout(db.from('workers').update({ pin: hashed, force_pin_change: false }).eq('id', S.worker.id), 5000);
+    if (r.error) { showMsg('fp-msg', 'Error: ' + r.error.message, 'err'); return; }
+    S.worker.force_pin_change = false; S.worker.pin = hashed;
+    document.getElementById('modal-pin-change').classList.add('hidden');
+    enterWorkerDashboard();
+  } catch(e) { showMsg('fp-msg', 'Error: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Set PIN'; }
 }
 
 // ── Worker Lookup ─────────────────────────────────────────
@@ -213,7 +242,8 @@ async function verifyPin() {
     showErr('err-pin', '🔒 Account locked. Try again in ' + mins + ' minute(s).');
     npReset(); return;
   }
-  if (S.npPin.join('') !== String(S.worker.pin)) {
+  var enteredHash = await sha256(S.npPin.join(''));
+  if (enteredHash !== S.worker.pin) {
     vibrate([50, 30, 50]);
     var attempts = (S.worker.failed_attempts || 0) + 1;
     var upd = { failed_attempts: attempts };
@@ -495,6 +525,14 @@ async function clockAction() {
   var action = S.clockStatus === 'in' ? 'out' : 'in';
   try {
     if (action === 'in') {
+      var todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+      try {
+        await withTimeout(
+          db.from('attendance').update({ status: 'completed', clock_out_time: todayStart.toISOString() })
+            .eq('worker_id', S.worker.id).eq('status', 'active').lt('clock_in_time', todayStart.toISOString()),
+          5000
+        );
+      } catch(e) {}
       var ins = await withTimeout(db.from('attendance').insert({
         worker_id:           S.worker.id,
         clock_in_time:       new Date().toISOString(),
@@ -723,9 +761,10 @@ async function adminLogin() {
         showErr('err-admin', '🔒 Account locked. Try again in ' + mins + ' minute(s).'); return;
       }
     }
+    var hashedPass = await sha256(pass);
     var r = await withTimeout(
       db.from('admin_users').select('*, co:companies(name,code)')
-        .eq('username', user).eq('password_hash', pass).eq('is_active', true).maybeSingle(),
+        .eq('username', user).eq('password_hash', hashedPass).eq('is_active', true).maybeSingle(),
       8000
     );
     if (r.error) { showErr('err-admin', 'Database error: ' + r.error.message); return; }
@@ -774,6 +813,7 @@ function switchTab(btn, name) {
   if (name === 'a-dash')    loadDashboard();
   if (name === 'a-workers') loadWorkers();
   if (name === 'a-admins')  loadCoAdmins();
+  if (name === 'a-absent')  loadAbsent();
   if (name === 'a-setup')   loadSetup();
   if (name === 'a-att') {
     var today = new Date().toISOString().slice(0, 10);
@@ -806,10 +846,20 @@ async function loadDashboard() {
     var present = recs.length;
     var stillin = recs.filter(function(r) { return r.status === 'active'; }).length;
     var total   = totR.count || 0;
+    var absentCount = Math.max(0, total - present);
     document.getElementById('s-present').textContent = present;
     document.getElementById('s-total').textContent   = total;
-    document.getElementById('s-absent').textContent  = Math.max(0, total - present);
+    document.getElementById('s-absent').textContent  = absentCount;
     document.getElementById('s-active').textContent  = stillin;
+    var absentCard = document.getElementById('s-absent').closest('.stat-card');
+    if (absentCard) {
+      absentCard.style.cursor = 'pointer';
+      absentCard.title = 'View absent workers';
+      absentCard.onclick = function() {
+        var btn = document.querySelector('#admin-tabs .tab[onclick*="a-absent"]');
+        if (btn) { btn.click(); }
+      };
+    }
     var el = document.getElementById('dash-activity');
     el.innerHTML = recs.length
       ? recs.slice(0, 15).map(function(r) {
@@ -821,6 +871,61 @@ async function loadDashboard() {
         }).join('')
       : '<div class="empty">No clock-ins today</div>';
   } catch (e) { document.getElementById('dash-activity').innerHTML = '<div class="empty">Failed to load</div>'; }
+}
+
+// ── Absent Today ──────────────────────────────────────────
+async function loadAbsent() {
+  var el = document.getElementById('absent-list');
+  var countEl = document.getElementById('absent-count');
+  if (!el) return;
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var tmrw  = new Date(today); tmrw.setDate(tmrw.getDate() + 1);
+  var cid   = S.admin && S.admin.company_id;
+  try {
+    var wR = await withTimeout(
+      db.from('workers').select('id,name,employee_id,job_title').eq('company_id', cid).eq('is_active', true).order('name'),
+      5000
+    );
+    var all = wR.data || [];
+    if (!all.length) { el.innerHTML = '<div class="empty">No active workers</div>'; return; }
+    var ids = all.map(function(w) { return w.id; });
+    var aR  = await withTimeout(
+      db.from('attendance').select('worker_id').in('worker_id', ids)
+        .gte('clock_in_time', today.toISOString()).lt('clock_in_time', tmrw.toISOString()),
+      5000
+    );
+    var presentMap = {};
+    (aR.data || []).forEach(function(r) { presentMap[r.worker_id] = true; });
+    var absent = all.filter(function(w) { return !presentMap[w.id]; });
+    if (countEl) countEl.textContent = absent.length + ' of ' + all.length + ' workers not clocked in today';
+    if (!absent.length) {
+      el.innerHTML = '<div class="empty" style="color:var(--green);font-weight:600">✅ All workers have clocked in today!</div>';
+      return;
+    }
+    el.innerHTML = '<div class="card" style="padding:0 18px">' + absent.map(function(w) {
+      return '<div class="list-row">' +
+        '<div class="row-info">' +
+        '<div class="av av-sm" style="background:#fee2e2;color:var(--red)">' + initials(w.name) + '</div>' +
+        '<div><div class="row-name">' + w.name + '</div>' +
+        '<div class="row-meta">' + w.employee_id + (w.job_title ? ' · ' + w.job_title : '') + '</div></div>' +
+        '</div>' +
+        '<span class="badge-absent">Not In</span>' +
+        '</div>';
+    }).join('') + '</div>';
+  } catch(e) { el.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
+}
+
+async function forceClockOut(attId, workerName) {
+  if (!confirm('Force clock out "' + workerName + '"?\nClock-out time will be set to now.')) return;
+  try {
+    var r = await withTimeout(
+      db.from('attendance').update({ clock_out_time: new Date().toISOString(), status: 'completed' }).eq('id', attId),
+      5000
+    );
+    if (!r.error) { toast('✅ ' + workerName + ' clocked out'); loadAttendance(); }
+    else toast('Error: ' + r.error.message);
+  } catch(e) { toast('Error: ' + e.message); }
 }
 
 // ── Workers (Admin) ───────────────────────────────────────
@@ -871,15 +976,17 @@ async function addWorker() {
   if (pin.length < 4) { showMsg('nw-msg', 'PIN must be at least 4 digits.', 'err'); return; }
   var cid = S.admin.company_id;
   try {
+    var hashedPin = await sha256(pin);
     var wpR = await withTimeout(db.from('workplaces').select('id').eq('company_id', cid).limit(1), 5000);
     var r   = await withTimeout(db.from('workers').insert({
-      employee_id:  empId,
-      name:         name,
-      job_title:    job || null,
-      pin:          pin,
-      workplace_id: (wpR.data && wpR.data[0]) ? wpR.data[0].id : null,
-      company_id:   cid,
-      is_active:    true
+      employee_id:      empId,
+      name:             name,
+      job_title:        job || null,
+      pin:              hashedPin,
+      force_pin_change: true,
+      workplace_id:     (wpR.data && wpR.data[0]) ? wpR.data[0].id : null,
+      company_id:       cid,
+      is_active:        true
     }).select('id,name,employee_id').single(), 5000);
     if (r.error) {
       showMsg('nw-msg', r.error.message.includes('unique') ? 'Employee ID already exists.' : r.error.message, 'err'); return;
@@ -1013,6 +1120,7 @@ async function loadAttendance() {
           '<span class="chip chip-out">⏹ ' + (rec.clock_out_time ? fmtTime(rec.clock_out_time) : 'Still in') + '</span>' +
           '<span class="chip chip-hrs">⏱ ' + hrs + '</span>' +
           '<span class="chip chip-mth">'   + (rec.auth_method || '') + '</span>' +
+          (!rec.clock_out_time ? '<button class="btn btn-sm btn-outline" style="margin-left:6px;color:var(--red);border-color:var(--red);padding:2px 8px;font-size:.72rem" onclick="forceClockOut(\'' + rec.id + '\',\'' + escQ(rec.w ? rec.w.name : 'Worker') + '\')">Force Out</button>' : '') +
         '</div></div>';
     }).join('') + '</div>';
   } catch (e) { el.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
@@ -1100,7 +1208,7 @@ async function addAdmin() {
   if (!/^[a-z0-9_]+$/.test(user)) { showMsg('ca-msg', 'Username: letters, numbers and underscores only.', 'err'); return; }
   try {
     var r = await withTimeout(db.from('admin_users').insert({
-      username: user, password_hash: pass, full_name: name, email: email || null,
+      username: user, password_hash: await sha256(pass), full_name: name, email: email || null,
       role: role, company_id: S.admin.company_id, is_active: true
     }), 5000);
     if (r.error) { showMsg('ca-msg', r.error.message.includes('unique') ? 'Username already exists.' : r.error.message, 'err'); return; }
@@ -1117,7 +1225,7 @@ async function resetPw(id, username) {
   var pw = prompt('Set new password for @' + username + ':');
   if (!pw) return;
   if (pw.length < 6) { toast('Password must be at least 6 characters.'); return; }
-  var r = await withTimeout(db.from('admin_users').update({ password_hash: pw }).eq('id', id), 5000);
+  var r = await withTimeout(db.from('admin_users').update({ password_hash: await sha256(pw) }).eq('id', id), 5000);
   if (!r.error) toast('✅ Password updated for @' + username);
   else toast('Error: ' + r.error.message);
 }
@@ -1208,7 +1316,7 @@ async function saveProfile() {
 async function changeAdminPw() {
   var pw = document.getElementById('new-pw').value;
   if (!pw || pw.length < 6) { showMsg('pw-msg', 'Password must be at least 6 characters.', 'err'); return; }
-  var r = await withTimeout(db.from('admin_users').update({ password_hash: pw }).eq('id', S.admin.id), 5000);
+  var r = await withTimeout(db.from('admin_users').update({ password_hash: await sha256(pw) }).eq('id', S.admin.id), 5000);
   if (r.error) showMsg('pw-msg', 'Failed: ' + r.error.message, 'err');
   else { showMsg('pw-msg', '✅ Password updated!', 'ok'); document.getElementById('new-pw').value = ''; }
 }
@@ -1235,7 +1343,7 @@ async function saveEditWorker() {
   if (!empId || !name) { showMsg('ewk-msg', 'Employee ID and Name required.', 'err'); return; }
   if (pin && pin.length < 4) { showMsg('ewk-msg', 'PIN must be at least 4 digits.', 'err'); return; }
   var updates = { employee_id: empId, name: name, job_title: job || null };
-  if (pin) updates.pin = pin;
+  if (pin) { updates.pin = await sha256(pin); updates.force_pin_change = false; }
   try {
     var r = await withTimeout(db.from('workers').update(updates).eq('id', id), 5000);
     if (r.error) { showMsg('ewk-msg', r.error.message.includes('unique') ? 'Employee ID already in use.' : r.error.message, 'err'); return; }
@@ -1269,7 +1377,7 @@ async function saveEditAcct() {
   if (!name) { showMsg('eac-msg', 'Full name required.', 'err'); return; }
   if (pw && pw.length < 6) { showMsg('eac-msg', 'Password must be at least 6 characters.', 'err'); return; }
   var updates = { full_name: name, email: email || null };
-  if (pw) updates.password_hash = pw;
+  if (pw) updates.password_hash = await sha256(pw);
   var wrap = document.getElementById('eac-role-wrap');
   if (!wrap.classList.contains('hidden')) updates.role = document.getElementById('eac-role').value;
   try {
@@ -1426,7 +1534,7 @@ async function addDevAcct() {
   if (!/^[a-z0-9_]+$/.test(user)) { showMsg('da-msg', 'Username: letters, numbers and underscores only.', 'err'); return; }
   try {
     var r = await withTimeout(db.from('admin_users').insert({
-      username: user, password_hash: pass, full_name: name, email: email || null,
+      username: user, password_hash: await sha256(pass), full_name: name, email: email || null,
       role: role, company_id: cid, is_active: true
     }), 5000);
     if (r.error) { showMsg('da-msg', r.error.message.includes('unique') ? 'Username already exists.' : r.error.message, 'err'); return; }
@@ -1503,7 +1611,7 @@ async function saveDevProfile() {
 async function changeDevPw() {
   var pw = document.getElementById('dev-new-pw').value;
   if (!pw || pw.length < 6) { showMsg('dev-pw-msg', 'Password must be at least 6 characters.', 'err'); return; }
-  var r = await withTimeout(db.from('admin_users').update({ password_hash: pw }).eq('id', S.admin.id), 5000);
+  var r = await withTimeout(db.from('admin_users').update({ password_hash: await sha256(pw) }).eq('id', S.admin.id), 5000);
   if (r.error) showMsg('dev-pw-msg', 'Failed: ' + r.error.message, 'err');
   else { showMsg('dev-pw-msg', '✅ Password updated!', 'ok'); document.getElementById('dev-new-pw').value = ''; }
 }

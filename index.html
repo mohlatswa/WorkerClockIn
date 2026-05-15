@@ -266,6 +266,7 @@
     <button class="tab active" onclick="switchTab(this,'a-dash')">Dashboard</button>
     <button class="tab"        onclick="switchTab(this,'a-workers')">Workers</button>
     <button class="tab"        onclick="switchTab(this,'a-att')">Attendance</button>
+    <button class="tab"        onclick="switchTab(this,'a-absent')">Absent</button>
     <button class="tab hidden" onclick="switchTab(this,'a-admins')" id="tab-admins-btn">Admins</button>
     <button class="tab"        onclick="switchTab(this,'a-setup')">Setup</button>
   </nav>
@@ -374,6 +375,18 @@
         <p class="msg hidden" id="csv-msg"></p>
       </div>
       <div id="att-list"><div class="empty">Select filters and tap View Report</div></div>
+    </div>
+
+    <!-- Absent Today Tab -->
+    <div id="a-absent" class="tab-pane">
+      <div class="card" style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div class="sec-lbl" style="margin-bottom:2px">🚫 Absent Today</div>
+          <div id="absent-count" style="font-size:.82rem;color:var(--muted)">Loading…</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="loadAbsent()">↻ Refresh</button>
+      </div>
+      <div id="absent-list"><div class="empty">Loading…</div></div>
     </div>
 
     <!-- Admins Tab (super_admin only) -->
@@ -562,6 +575,20 @@
     <div id="succ-name"   style="font-size:1.1rem;color:rgba(255,255,255,.9)"></div>
     <div id="succ-time"   style="font-size:1rem;color:rgba(255,255,255,.7);margin-top:4px"></div>
     <div id="succ-wp"     style="font-size:.85rem;color:rgba(255,255,255,.6);margin-top:2px"></div>
+  </div>
+</div>
+
+<!-- MODAL: First-Login PIN Change -->
+<div id="modal-pin-change" class="modal-bd hidden">
+  <div class="modal-box" style="max-width:360px">
+    <div class="modal-hd"><h3>🔐 Set Your PIN</h3></div>
+    <div style="padding:18px">
+      <p style="font-size:.88rem;color:var(--muted);margin-bottom:14px">Your administrator set a temporary PIN. Please create your own secure PIN before continuing.</p>
+      <div class="field"><label>New PIN (4–6 digits)</label><input id="fp-pin1" type="password" class="input" placeholder="Enter new PIN" maxlength="6" inputmode="numeric"></div>
+      <div class="field"><label>Confirm PIN</label><input id="fp-pin2" type="password" class="input" placeholder="Confirm PIN" maxlength="6" inputmode="numeric"></div>
+      <p class="msg hidden" id="fp-msg"></p>
+      <button id="fp-save-btn" class="btn btn-primary btn-full" style="margin-top:8px" onclick="saveForcedPin()">Set PIN</button>
+    </div>
   </div>
 </div>
 

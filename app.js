@@ -492,24 +492,30 @@ function startLocationWatch() {
   var locCard = document.getElementById('loc-card');
   var locBlk  = document.getElementById('loc-blocked-card');
   locCard.style.display = ''; locBlk.classList.add('hidden');
+
+  // Block immediately if no workplace — before any GPS attempt
+  var wp = S.worker && S.worker.workplace;
+  if (!wp || !wp.latitude || !wp.longitude) {
+    document.getElementById('loc-status').innerHTML =
+      '⚠️ <span style="color:var(--amber)">Workplace not configured — contact your admin</span>';
+    setClockBtn(false);
+    document.getElementById('clk-icon').textContent  = '📍';
+    document.getElementById('clk-label').textContent = 'Workplace Not Set Up';
+    return;
+  }
+
   document.getElementById('loc-status').innerHTML = '<div class="checking"><div class="spin"></div> Getting your location…</div>';
   if (!navigator.geolocation) {
     document.getElementById('loc-status').textContent = '⚠️ Location not supported on this device';
-    setClockBtn(true); return;
+    setClockBtn(false);
+    document.getElementById('clk-icon').textContent  = '📍';
+    document.getElementById('clk-label').textContent = 'Location Not Supported';
+    return;
   }
   if (S.geoWatcher) navigator.geolocation.clearWatch(S.geoWatcher);
   S.geoWatcher = navigator.geolocation.watchPosition(
     function(pos) {
       S.userLoc = pos.coords;
-      var wp = S.worker && S.worker.workplace;
-      if (!wp || !wp.latitude || !wp.longitude) {
-        document.getElementById('loc-status').innerHTML =
-          '⚠️ <span style="color:var(--amber)">Workplace not configured — contact your admin</span>';
-        setClockBtn(false);
-        document.getElementById('clk-icon').textContent  = '📍';
-        document.getElementById('clk-label').textContent = 'Workplace Not Set Up';
-        return;
-      }
       var dist   = Math.round(haversineM(pos.coords.latitude, pos.coords.longitude, wp.latitude, wp.longitude));
       var radius = wp.radius_meters || 100;
       var inside = dist <= radius;
@@ -523,7 +529,7 @@ function startLocationWatch() {
         locCard.style.display = 'none'; locBlk.classList.remove('hidden');
         setClockBtn(false);
       } else {
-        document.getElementById('loc-status').textContent = '⚠️ Location unavailable — clocking in without location';
+        document.getElementById('loc-status').textContent = '⚠️ GPS signal unavailable — clocking in without location';
         setClockBtn(true);
       }
     },

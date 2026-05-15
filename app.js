@@ -74,15 +74,13 @@ function updateHomeUI() {
   var pillEl   = document.getElementById('home-co-pill');
   var noCard   = document.getElementById('no-co-card');
   var actions  = document.getElementById('home-actions');
-  if (S.companyId) {
-    if (pillEl) { pillEl.textContent = S.companyName || ''; pillEl.classList.remove('hidden'); }
-    if (noCard)  noCard.classList.add('hidden');
-    if (actions) actions.classList.remove('hidden');
-  } else {
-    if (pillEl) pillEl.classList.add('hidden');
-    if (noCard)  noCard.classList.remove('hidden');
-    if (actions) actions.classList.add('hidden');
+  // Always show the action buttons — company pill shows only when a company is loaded
+  if (pillEl) {
+    if (S.companyId) { pillEl.textContent = S.companyName || ''; pillEl.classList.remove('hidden'); }
+    else pillEl.classList.add('hidden');
   }
+  if (noCard)  noCard.classList.add('hidden');
+  if (actions) actions.classList.remove('hidden');
 }
 async function initCompany() {
   var params = new URLSearchParams(window.location.search);
@@ -176,7 +174,7 @@ async function findWorker() {
   if (!id) { showErr('err-empid', 'Please enter your Employee ID.'); return; }
   try {
     var q = db.from('workers').select('*, workplace:workplaces(*)').eq('employee_id', id).eq('is_active', true);
-    if (S.companyId && S.fromUrl) q = q.eq('company_id', S.companyId);
+    if (S.companyId) q = q.eq('company_id', S.companyId);
     var r = await withTimeout(q.maybeSingle(), 5000);
     if (r.error && r.error.code === 'PGRST116') {
       showErr('err-empid', 'Multiple accounts found — open your employer\'s link.'); return;
@@ -461,8 +459,13 @@ function startLocationWatch() {
       setClockBtn(inside);
     },
     function(err) {
-      if (err.code === 1) { locCard.style.display = 'none'; locBlk.classList.remove('hidden'); }
-      else { document.getElementById('loc-status').textContent = '⚠️ Location error — try again'; setClockBtn(false); }
+      if (err.code === 1) {
+        locCard.style.display = 'none'; locBlk.classList.remove('hidden');
+        setClockBtn(true);
+      } else {
+        document.getElementById('loc-status').textContent = '⚠️ Location unavailable — clocking in without location';
+        setClockBtn(true);
+      }
     },
     { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 }
   );

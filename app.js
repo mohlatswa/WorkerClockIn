@@ -504,8 +504,11 @@ function startLocationWatch() {
       var wp = S.worker && S.worker.workplace;
       if (!wp || !wp.latitude || !wp.longitude) {
         document.getElementById('loc-status').innerHTML =
-          '⚠️ <span style="color:var(--amber)">Workplace not configured — ask your admin to set it up</span>';
-        setClockBtn(true); return;
+          '⚠️ <span style="color:var(--amber)">Workplace not configured — contact your admin</span>';
+        setClockBtn(false);
+        document.getElementById('clk-icon').textContent  = '📍';
+        document.getElementById('clk-label').textContent = 'Workplace Not Set Up';
+        return;
       }
       var dist   = Math.round(haversineM(pos.coords.latitude, pos.coords.longitude, wp.latitude, wp.longitude));
       var radius = wp.radius_meters || 100;
@@ -518,7 +521,7 @@ function startLocationWatch() {
     function(err) {
       if (err.code === 1) {
         locCard.style.display = 'none'; locBlk.classList.remove('hidden');
-        setClockBtn(true);
+        setClockBtn(false);
       } else {
         document.getElementById('loc-status').textContent = '⚠️ Location unavailable — clocking in without location';
         setClockBtn(true);

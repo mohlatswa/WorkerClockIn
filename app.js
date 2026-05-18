@@ -882,10 +882,13 @@ async function sendOtp() {
     if (typeof emailjs === 'undefined' || EMAILJS_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
       showMsg('fpw-send-msg', 'Email service not configured — contact your system administrator to reset your password.', 'err'); return;
     }
+    var expiry = new Date(Date.now() + 15 * 60 * 1000);
+    var timeStr = expiry.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
     await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
       to_email: r.data.email,
       to_name:  r.data.full_name || username,
-      otp_code: otp
+      passcode: otp,
+      time:     timeStr
     });
     var s1 = document.getElementById('fpw-step1'); if (s1) s1.classList.add('hidden');
     var s2 = document.getElementById('fpw-step2'); if (s2) s2.classList.remove('hidden');

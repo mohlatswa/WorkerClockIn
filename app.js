@@ -1644,9 +1644,17 @@ async function saveWorkerLimit() {
   if (rawVal !== '' && (isNaN(newLimit) || newLimit < 1)) {
     showMsg('wl-msg', 'Enter a valid number or leave blank for unlimited.', 'err'); return;
   }
+  if (!S.admin || !S.admin.id) { showMsg('wl-msg', 'Session error — please log in again.', 'err'); return; }
   try {
-    var r = await withTimeout(db.from('companies').update({ worker_limit: newLimit }).eq('id', coId), 5000);
-    if (r.error) { showMsg('wl-msg', 'Save failed: ' + r.error.message, 'err'); return; }
+    var r = await withTimeout(
+      db.rpc('set_worker_limit', {
+        p_company_id: coId,
+        p_new_limit:  newLimit,
+        p_admin_id:   S.admin.id
+      }),
+      5000
+    );
+    if (r.error) { showMsg('wl-msg', 'Failed: ' + r.error.message, 'err'); return; }
     if (_cCache[coId]) _cCache[coId].worker_limit = newLimit;
     showMsg('wl-msg', '✅ Limit updated!', 'ok');
     setTimeout(function() { closeModal('modal-worker-limit'); loadDevCos(); }, 1200);

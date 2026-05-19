@@ -274,7 +274,7 @@
     </div>
     <h1>Documentation</h1>
     <p>Complete guides for developers, administrators, and workers using the WorkClock Staff Attendance system.</p>
-    <span class="header-badge">Version 1.0 &nbsp;&middot;&nbsp; 2026</span>
+    <span class="header-badge">Version 1.1 &nbsp;&middot;&nbsp; 2026</span>
   </div>
 </header>
 
@@ -295,7 +295,7 @@
     <a class="doc-card" href="admin-guide.html">
       <div class="card-icon green">&#128101;</div>
       <h2>Admin Guide</h2>
-      <p>How to manage workers, view attendance, configure workplaces, create admin accounts, handle security resets, and troubleshoot common issues.</p>
+      <p>How to manage workers, view attendance, track absent workers, configure workplaces, reset passwords, force clock-outs, and troubleshoot common issues.</p>
       <span class="card-audience aud-admin">For Admins</span>
       <div class="card-arrow"><span>Read guide</span><span>&rarr;</span></div>
     </a>
@@ -303,7 +303,7 @@
     <a class="doc-card" href="user-guide.html">
       <div class="card-icon amber">&#128100;</div>
       <h2>Worker Guide</h2>
-      <p>How to clock in and out, set up fingerprint sign-in, view your attendance history, install the app on your phone, and what to do if you get locked out.</p>
+      <p>How to clock in and out, change your PIN, set up fingerprint sign-in, view your attendance history, install the app on your phone, and what to do if you get locked out.</p>
       <span class="card-audience aud-user">For Workers</span>
       <div class="card-arrow"><span>Read guide</span><span>&rarr;</span></div>
     </a>
@@ -354,15 +354,19 @@
       </div>
       <div class="step">
         <div class="step-num">3</div>
-        <div class="step-text">From the <strong>Setup</strong> tab, copy the Worker Portal Link (e.g. <code>https://mohlatswa.github.io/WorkerClockIn/?c=COMPANYCODE</code>) and send it to the worker.</div>
+        <div class="step-text">In the <strong>Setup</strong> tab, enter your workplace name, address, and GPS coordinates (tap 📍 to auto-detect your current location), then tap <strong>Save Workplace</strong>. Assign the workplace to each worker via their Edit form. Workers cannot clock in without a workplace configured.</div>
       </div>
       <div class="step">
         <div class="step-num">4</div>
-        <div class="step-text">The worker opens the link, enters their Employee ID, then taps their PIN. On the first sign-in the device is <strong>registered</strong> automatically.</div>
+        <div class="step-text">From the <strong>Setup</strong> tab, copy the Worker Portal Link (e.g. <code>https://mohlatswa.github.io/WorkerClockIn/?c=COMPANYCODE</code>) and send it to the worker via WhatsApp or email.</div>
       </div>
       <div class="step">
         <div class="step-num">5</div>
-        <div class="step-text">The app checks the worker's GPS distance from the configured workplace. If within range, the <strong>Clock In</strong> button becomes active.</div>
+        <div class="step-text">The worker opens the link, enters their Employee ID, then taps their PIN. On the first sign-in the device is <strong>registered</strong> automatically.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-text">The app checks the worker's GPS distance from the configured workplace. If within range, the <strong>Clock In</strong> button activates. Workers too far away will see "Too far from workplace".</div>
       </div>
     </div>
   </div>

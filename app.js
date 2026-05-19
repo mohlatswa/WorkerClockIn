@@ -1049,6 +1049,18 @@ async function loadWorkers() {
   el.innerHTML = '<div class="empty">Loading…</div>';
   var cid = requireAdminCid(); if (!cid) return;
   try {
+    // ── Show/hide limit banner ─────────────────────────────
+    var coB  = await withTimeout(db.from('companies').select('worker_limit').eq('id', cid).single(), 5000);
+    var cntB = await withTimeout(
+      db.from('workers').select('*', { count: 'exact', head: true }).eq('company_id', cid).eq('is_active', true),
+      5000
+    );
+    var banner = document.getElementById('worker-limit-banner');
+    if (banner) {
+      var atLimit = coB.data && coB.data.worker_limit !== null && (cntB.count || 0) >= coB.data.worker_limit;
+      banner.classList.toggle('hidden', !atLimit);
+    }
+    // ──────────────────────────────────────────────────────
     var r = await withTimeout(db.from('workers').select('*').eq('company_id', cid).order('name'), 5000);
     if (r.error || !r.data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
     if (!r.data.length) { el.innerHTML = '<div class="empty">No workers yet — add one above</div>'; return; }
@@ -1092,6 +1104,23 @@ async function addWorker() {
   if (pin.length < 4) { showMsg('nw-msg', 'PIN must be at least 4 digits.', 'err'); return; }
   var cid = requireAdminCid(); if (!cid) return;
   try {
+    // ── Worker limit check ─────────────────────────────────
+    var coR = await withTimeout(db.from('companies').select('worker_limit').eq('id', cid).single(), 5000);
+    if (!coR.error && coR.data && coR.data.worker_limit !== null) {
+      var countR = await withTimeout(
+        db.from('workers').select('*', { count: 'exact', head: true }).eq('company_id', cid).eq('is_active', true),
+        5000
+      );
+      var current = countR.count || 0;
+      if (current >= coR.data.worker_limit) {
+        showMsg('nw-msg',
+          '⚠️ Worker limit reached (' + current + ' / ' + coR.data.worker_limit + '). ' +
+          'Please upgrade your subscription to add more workers.',
+          'err');
+        return;
+      }
+    }
+    // ──────────────────────────────────────────────────────
     var hashedPin = await sha256(pin);
     var wpR = await withTimeout(db.from('workplaces').select('id').eq('company_id', cid).limit(1), 5000);
     var r   = await withTimeout(db.from('workers').insert({
@@ -1374,6 +1403,32 @@ async function loadSetup() {
 
   document.getElementById('my-name').value  = S.admin.full_name || '';
   document.getElementById('my-email').value = S.admin.email     || '';
+
+  // ── Worker usage display ───────────────────────────────
+  try {
+    var coR2    = await withTimeout(db.from('companies').select('worker_limit').eq('id', cid).single(), 5000);
+    var cntR    = await withTimeout(
+      db.from('workers').select('*', { count: 'exact', head: true }).eq('company_id', cid).eq('is_active', true),
+      5000
+    );
+    var used    = cntR.count || 0;
+    var limit   = (coR2.data && coR2.data.worker_limit !== null) ? coR2.data.worker_limit : null;
+    var usageEl = document.getElementById('worker-usage-bar');
+    var usageTx = document.getElementById('worker-usage-text');
+    var upgEl   = document.getElementById('worker-upgrade-msg');
+    if (usageTx) {
+      usageTx.textContent = limit !== null
+        ? (used + ' / ' + limit + ' workers used')
+        : (used + ' workers  (unlimited)');
+    }
+    if (usageEl && limit !== null) {
+      var pct = Math.min(100, Math.round((used / limit) * 100));
+      usageEl.style.width = pct + '%';
+      usageEl.style.background = pct >= 100 ? 'var(--red)' : pct >= 80 ? '#F59E0B' : 'var(--green)';
+    }
+    if (upgEl) upgEl.classList.toggle('hidden', limit === null || used < limit);
+  } catch (e) {}
+  // ──────────────────────────────────────────────────────
 }
 async function saveWorkplace() {
   var name   = (document.getElementById('wp-name').value || '').trim();
@@ -1532,16 +1587,70 @@ async function loadDevCos() {
     if (r.error || !r.data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
     if (!r.data.length) { el.innerHTML = '<div class="empty">No companies yet</div>'; return; }
     r.data.forEach(function(c) { _cCache[c.id] = c; });
+
+    // Fetch active worker counts for all companies in one query
+    var wcR = await withTimeout(
+      db.from('workers').select('company_id', { count: 'exact' }).eq('is_active', true),
+      5000
+    );
+    var workerCounts = {};
+    if (wcR.data) wcR.data.forEach(function(w) {
+      workerCounts[w.company_id] = (workerCounts[w.company_id] || 0) + 1;
+    });
+
     el.innerHTML = '<div class="card" style="padding:0 18px">' + r.data.map(function(c) {
+      var used  = workerCounts[c.id] || 0;
+      var lim   = c.worker_limit;
+      var limitTxt = lim !== null ? (used + ' / ' + lim + ' workers') : (used + ' workers  (unlimited)');
+      var limitClr = (lim !== null && used >= lim) ? 'color:var(--red);font-weight:700' : 'color:var(--muted)';
       return '<div class="list-row">' +
         '<div class="row-info"><div class="av av-sm" style="background:var(--purple)">' + c.code.slice(0, 2) + '</div>' +
-        '<div><div class="row-name">' + c.name + '</div><div class="row-meta">Code: ' + c.code + (!c.is_active ? ' · <em>Inactive</em>' : '') + '</div></div></div>' +
+        '<div><div class="row-name">' + c.name + '</div>' +
+        '<div class="row-meta">Code: ' + c.code +
+          (!c.is_active ? ' · <em>Inactive</em>' : '') +
+          ' · <span style="' + limitClr + '">' + limitTxt + '</span>' +
+        '</div></div></div>' +
         '<div class="row-btns">' +
+        '<button class="icon-btn" title="Set Worker Limit" onclick="openWorkerLimitModal(\'' + c.id + '\',' + used + ')">👥</button>' +
         '<button class="icon-btn" onclick="openEditCo(\'' + c.id + '\')">✏️</button>' +
         '<button class="icon-btn" onclick="devToggleCo(\'' + c.id + '\',' + c.is_active + ')">' + (c.is_active ? '🚫' : '✅') + '</button>' +
         '</div></div>';
     }).join('') + '</div>';
   } catch (e) { el.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
+}
+
+function openWorkerLimitModal(coId, usedCount) {
+  var c = _cCache[coId]; if (!c) { toast('Company data not loaded — refresh.'); return; }
+  document.getElementById('wl-co-id').value       = coId;
+  document.getElementById('wl-co-name').textContent = c.name;
+  var lim = c.worker_limit;
+  document.getElementById('wl-co-usage').textContent =
+    'Currently: ' + usedCount + ' active worker' + (usedCount !== 1 ? 's' : '') +
+    (lim !== null ? ' · Limit: ' + lim : ' · Limit: Unlimited');
+  document.getElementById('wl-custom').value = lim !== null ? lim : '';
+  document.getElementById('wl-msg').classList.add('hidden');
+  document.getElementById('modal-worker-limit').classList.remove('hidden');
+}
+
+function setWlQuick(val) {
+  document.getElementById('wl-custom').value = val !== null ? val : '';
+  document.getElementById('wl-custom').placeholder = val !== null ? val : 'Unlimited (leave blank)';
+}
+
+async function saveWorkerLimit() {
+  var coId    = document.getElementById('wl-co-id').value;
+  var rawVal  = document.getElementById('wl-custom').value.trim();
+  var newLimit = rawVal === '' ? null : parseInt(rawVal);
+  if (rawVal !== '' && (isNaN(newLimit) || newLimit < 1)) {
+    showMsg('wl-msg', 'Enter a valid number or leave blank for unlimited.', 'err'); return;
+  }
+  try {
+    var r = await withTimeout(db.from('companies').update({ worker_limit: newLimit }).eq('id', coId), 5000);
+    if (r.error) { showMsg('wl-msg', 'Save failed: ' + r.error.message, 'err'); return; }
+    if (_cCache[coId]) _cCache[coId].worker_limit = newLimit;
+    showMsg('wl-msg', '✅ Limit updated!', 'ok');
+    setTimeout(function() { closeModal('modal-worker-limit'); loadDevCos(); }, 1200);
+  } catch (e) { showMsg('wl-msg', 'Error: ' + e.message, 'err'); }
 }
 function toggleAddCo() {
   var p = document.getElementById('add-co-panel'); p.classList.toggle('hidden');

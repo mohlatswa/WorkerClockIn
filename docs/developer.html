@@ -250,7 +250,7 @@
 <div class="topbar">
   <span class="topbar-title">WorkClock &mdash; Developer Reference</span>
   <a href="index.html">&larr; Docs Home</a>
-  <span class="topbar-badge">v1.0</span>
+  <span class="topbar-badge">v1.1</span>
 </div>
 
 <div class="layout">
@@ -275,7 +275,7 @@
     <a href="#auth-worker-pin">Worker PIN Flow</a>
     <a href="#auth-worker-bio">Worker Biometric Flow</a>
     <a href="#auth-worker-face">Worker Face Flow</a>
-    <a href="#auth-admin">Admin Login Flow</a>
+    <a href="#auth-admin">Admin Login &amp; OTP Reset</a>
 
     <div class="nav-section">Security</div>
     <a href="#device-binding">Device Binding</a>
@@ -285,6 +285,7 @@
     <div class="nav-section">Features</div>
     <a href="#clock-methods">Clock-in Methods</a>
     <a href="#geolocation">Geolocation</a>
+    <a href="#pg-cron">Auto Clock-Out (pg_cron)</a>
     <a href="#face-recog">Face Recognition</a>
     <a href="#pwa">PWA Details</a>
 
@@ -324,13 +325,13 @@
           <li><strong>Routing:</strong> Single-page with visible panels toggled via <code>showPg(id)</code></li>
           <li><strong>Backend:</strong> Supabase — PostgreSQL database, auto-generated REST API (PostgREST), anon key access</li>
           <li><strong>Hosting:</strong> GitHub Pages (static files, main branch)</li>
-          <li><strong>Auth:</strong> Custom (PIN stored as plain text in DB, WebAuthn credentials stored as base64 rawId, face descriptors as JSON float arrays)</li>
+          <li><strong>Auth:</strong> Custom (PIN hashed with SHA-256 in browser before storage; WebAuthn credentials stored as base64 rawId; face descriptors as JSON float arrays; admin passwords SHA-256 hashed)</li>
           <li><strong>Security boundary:</strong> Device ID + session token stored in <code>localStorage</code>; server-side lockout enforced via <code>locked_until</code> column</li>
         </ul>
 
-        <div class="callout warn">
-          <span class="callout-icon">&#9888;</span>
-          <div class="callout-body"><strong>Note on PIN storage:</strong> PINs are currently stored as plain text in the workers table. For production hardening, consider hashing PINs server-side using a Supabase Edge Function or PostgreSQL trigger with <code>pgcrypto</code>.</div>
+        <div class="callout info">
+          <span class="callout-icon">&#128274;</span>
+          <div class="callout-body"><strong>Credential hashing:</strong> Both worker PINs and admin passwords are hashed with SHA-256 in the browser (via <code>crypto.subtle.digest</code>) before being sent to or compared against the database. Plain-text credentials are never transmitted or stored.</div>
         </div>
       </section>
 
@@ -433,14 +434,16 @@
             <tbody>
               <tr><td><span class="pk">PK</span> id</td><td>UUID</td><td>DEFAULT gen_random_uuid()</td><td>Primary key</td></tr>
               <tr><td>username</td><td>VARCHAR(50)</td><td>UNIQUE NOT NULL</td><td>Login username (lowercase, alphanumeric + underscore)</td></tr>
-              <tr><td>password_hash</td><td>TEXT</td><td>NOT NULL</td><td>Password (currently plain text — field name retained for future hashing)</td></tr>
+              <tr><td>password_hash</td><td>TEXT</td><td>NOT NULL</td><td>SHA-256 hash of the admin's password (hashed client-side before storage)</td></tr>
               <tr><td>full_name</td><td>VARCHAR(255)</td><td></td><td>Admin's display name</td></tr>
-              <tr><td>email</td><td>VARCHAR(255)</td><td></td><td>Email address (used for OTP password reset)</td></tr>
+              <tr><td>email</td><td>VARCHAR(255)</td><td></td><td>Email address (required for OTP password reset via EmailJS)</td></tr>
               <tr><td>role</td><td>VARCHAR(20)</td><td>CHECK IN ('developer','super_admin','admin')</td><td>Access level — see Roles section</td></tr>
               <tr><td><span class="fk">FK</span> company_id</td><td>UUID</td><td>REFERENCES companies(id)</td><td>Company this admin belongs to. NULL for developer role.</td></tr>
               <tr><td>is_active</td><td>BOOLEAN</td><td>DEFAULT TRUE</td><td>Disabled accounts cannot log in</td></tr>
               <tr><td>failed_attempts</td><td>INTEGER</td><td>DEFAULT 0</td><td>Consecutive failed login count. Resets to 0 on success or after lockout expires.</td></tr>
               <tr><td>locked_until</td><td>TIMESTAMPTZ</td><td></td><td>If set and in the future, login is blocked. Set to NOW() + 30 min after 5 failures.</td></tr>
+              <tr><td>reset_token</td><td>TEXT</td><td></td><td>6-digit OTP sent via EmailJS for password reset. Cleared after use.</td></tr>
+              <tr><td>reset_expires</td><td>TIMESTAMPTZ</td><td></td><td>Expiry time for the reset OTP (15 minutes after issue). Checked before accepting the token.</td></tr>
               <tr><td>created_at</td><td>TIMESTAMPTZ</td><td>DEFAULT NOW()</td><td>Record creation timestamp</td></tr>
             </tbody>
           </table>
@@ -469,7 +472,7 @@
               <tr><td>email</td><td>VARCHAR(255)</td><td></td><td>Contact email (informational)</td></tr>
               <tr><td><span class="fk">FK</span> company_id</td><td>UUID</td><td>REFERENCES companies(id)</td><td>Owning company</td></tr>
               <tr><td><span class="fk">FK</span> workplace_id</td><td>UUID</td><td>REFERENCES workplaces(id) ON DELETE SET NULL</td><td>Assigned workplace for GPS radius check. NULL = no geofence enforced.</td></tr>
-              <tr><td>pin</td><td>VARCHAR(10)</td><td>NOT NULL</td><td>4–10 digit PIN for clock-in. Stored as plain text currently.</td></tr>
+              <tr><td>pin</td><td>VARCHAR(64)</td><td>NOT NULL</td><td>SHA-256 hex hash of the worker's 4–10 digit PIN. Hashed in the browser before insert/update and before comparison.</td></tr>
               <tr><td>biometric_credential_id</td><td>TEXT</td><td></td><td>Base64-encoded WebAuthn credential <code>rawId</code> registered via platform authenticator</td></tr>
               <tr><td>biometric_enabled</td><td>BOOLEAN</td><td>DEFAULT FALSE</td><td>True if a credential has been successfully registered</td></tr>
               <tr><td>face_descriptor</td><td>TEXT</td><td></td><td>JSON string of a Float32Array(128) face embedding from face-api.js</td></tr>
@@ -587,11 +590,19 @@ CREATE INDEX idx_workers_active        ON workers(is_active);</code></pre>
       <section id="auth-admin">
         <h2>Authentication Flow — Admin Login</h2>
         <div class="flow">
-          <div class="flow-step"><p>Admin enters username and password on the Admin Login page and clicks <strong>Login</strong> &rarr; <code>adminLogin()</code>.</p></div>
-          <div class="flow-step"><p>First, a lockout pre-check: the account row is fetched by username to read <code>is_active</code>, <code>failed_attempts</code>, and <code>locked_until</code>. If locked, the attempt is rejected immediately without a DB password comparison.</p></div>
-          <div class="flow-step"><p>Full query: <code>admin_users WHERE username = ? AND password_hash = ? AND is_active = true</code>.</p></div>
-          <div class="flow-step"><p>On failure, <code>failed_attempts</code> is incremented. At 5 failures, <code>locked_until</code> = NOW() + 30 min and <code>failed_attempts</code> resets to 0.</p></div>
-          <div class="flow-step"><p>On success, <code>failed_attempts</code> and <code>locked_until</code> are cleared. <code>S.admin</code> is set. Role-based routing: <code>developer</code> goes to <code>pg-developer</code>, others go to <code>pg-admin</code>. The Admins tab is hidden for <code>admin</code> role.</p></div>
+          <div class="flow-step"><p>Admin enters username and password. <code>adminLogin()</code> hashes the password with SHA-256 client-side, then calls the <code>admin_login(p_username, p_password_hash)</code> PostgreSQL RPC function via <code>db.rpc('admin_login', ...)</code>.</p></div>
+          <div class="flow-step"><p><code>admin_login</code> is a <code>SECURITY DEFINER</code> function. It reads the account row, performs the lockout pre-check (<code>locked_until</code> &gt; NOW()), and compares the supplied hash against the stored hash — all within the database, keeping the query logic off the client.</p></div>
+          <div class="flow-step"><p>On hash mismatch, the function increments <code>failed_attempts</code> in the DB. At 5 failures, <code>locked_until</code> is set to NOW() + 30 minutes and <code>failed_attempts</code> resets to 0.</p></div>
+          <div class="flow-step"><p>On success, the function returns the full admin row. <code>failed_attempts</code> and <code>locked_until</code> are cleared in the DB. <code>S.admin</code> is populated client-side.</p></div>
+          <div class="flow-step"><p>Role-based routing: <code>developer</code> goes to <code>pg-developer</code>; all others go to <code>pg-admin</code>. The Admins tab (<code>tab-admins-btn</code>) is hidden for the <code>admin</code> role.</p></div>
+        </div>
+
+        <h3>Forgot Password Flow (EmailJS OTP)</h3>
+        <div class="flow">
+          <div class="flow-step"><p>Admin taps <strong>Forgot password?</strong> &rarr; <code>forgotPassword()</code>. The forgot-password panel is shown. Admin enters their username and taps <strong>Send OTP</strong> &rarr; <code>sendOtp()</code>.</p></div>
+          <div class="flow-step"><p><code>sendOtp()</code> looks up the admin by username, reads their <code>email</code> field. A random 6-digit OTP is generated. The OTP is stored in <code>admin_users.reset_token</code> and expiry in <code>reset_expires</code> (NOW() + 15 minutes).</p></div>
+          <div class="flow-step"><p><code>emailjs.send()</code> is called with the OTP as <code>passcode</code> and expiry time as <code>time</code> — matching the variables in the EmailJS One-Time Password template.</p></div>
+          <div class="flow-step"><p>Admin enters the OTP and new password, taps <strong>Reset Password</strong> &rarr; <code>resetAdminPassword()</code>. The function verifies the OTP matches <code>reset_token</code> and <code>reset_expires</code> is in the future, then updates <code>password_hash</code> with the SHA-256 hash of the new password and clears <code>reset_token</code>/<code>reset_expires</code>.</p></div>
         </div>
       </section>
 
@@ -660,7 +671,28 @@ CREATE INDEX idx_workers_active        ON workers(is_active);</code></pre>
         * Math.pow(Math.sin(r(lo2-lo1)/<span class="num">2</span>),<span class="num">2</span>);
   <span class="kw">return</span> R * <span class="num">2</span> * Math.atan2(Math.sqrt(a), Math.sqrt(<span class="num">1</span>-a));
 }</code></pre>
-        <p>The GPS coordinates at clock-in and clock-out are stored in the attendance record. If a worker's workplace is not configured (<code>workplace_id = NULL</code>), a warning is shown but clock-in is still permitted.</p>
+        <p>The GPS coordinates at clock-in and clock-out are stored in the attendance record. If a worker's workplace is not configured (<code>workplace_id = NULL</code> or coordinates are missing), <code>startLocationWatch()</code> blocks clock-in immediately — before even requesting GPS access — and shows "Workplace Not Set Up". Clock-in is not permitted without a configured workplace.</p>
+      </section>
+
+      <section id="pg-cron">
+        <h2>Scheduled Job — Midnight Auto Clock-Out</h2>
+        <p>A <code>pg_cron</code> job runs every night at <strong>22:00 UTC</strong> (midnight SAST = UTC+2) and closes all attendance records that are still <code>active</code>:</p>
+        <pre><code><span class="comment">-- Enable pg_cron extension (done once via Supabase dashboard)</span>
+<span class="comment">-- Extensions → pg_cron → Enable</span>
+
+<span class="comment">-- Schedule the midnight auto clock-out</span>
+SELECT cron.schedule(
+  <span class="str">'midnight-clock-out'</span>,
+  <span class="str">'0 22 * * *'</span>,          <span class="comment">-- 22:00 UTC = midnight SAST</span>
+  $$
+    UPDATE attendance
+    SET    clock_out_time = NOW(),
+           status         = 'completed'
+    WHERE  status  = 'active'
+      AND  clock_in_time &lt; date_trunc('day', NOW());
+  $$
+);</code></pre>
+        <p>Only records whose <code>clock_in_time</code> is before the current day are closed (to avoid edge cases at exactly midnight). The job can be inspected and managed via the Supabase Dashboard under <strong>Database → Extensions → pg_cron</strong>.</p>
       </section>
 
       <section id="face-recog">
@@ -765,6 +797,46 @@ CREATE INDEX idx_workers_active        ON workers(is_active);</code></pre>
                 <td>Re-queries attendance with current filters, builds a UTF-8 BOM CSV with 9 columns, triggers browser download.</td>
                 <td>Download CSV button</td>
               </tr>
+              <tr>
+                <td><code>forgotPassword()</code></td>
+                <td>Shows the forgot-password panel on the admin login page (step 1 — username entry).</td>
+                <td>Forgot password? link</td>
+              </tr>
+              <tr>
+                <td><code>sendOtp()</code></td>
+                <td>Looks up admin by username, generates a 6-digit OTP, stores it in <code>reset_token</code>/<code>reset_expires</code>, then calls <code>emailjs.send()</code> with <code>passcode</code> and <code>time</code> variables.</td>
+                <td>Send OTP button (step 1)</td>
+              </tr>
+              <tr>
+                <td><code>resetAdminPassword()</code></td>
+                <td>Validates OTP against <code>reset_token</code> and expiry, SHA-256 hashes the new password, updates <code>password_hash</code>, clears the reset columns.</td>
+                <td>Reset Password button (step 2)</td>
+              </tr>
+              <tr>
+                <td><code>openChangePinModal()</code></td>
+                <td>Opens the Change PIN modal for a signed-in worker (clears fields, shows modal).</td>
+                <td>Change PIN button in worker dashboard</td>
+              </tr>
+              <tr>
+                <td><code>saveChangedPin()</code></td>
+                <td>Validates current PIN (SHA-256 comparison), checks new PIN confirmation, hashes new PIN, updates <code>workers.pin</code>.</td>
+                <td>Save New PIN button in Change PIN modal</td>
+              </tr>
+              <tr>
+                <td><code>forceClockOut(attId, workerName)</code></td>
+                <td>Admin-triggered: after confirmation, sets <code>clock_out_time = NOW()</code> and <code>status = 'completed'</code> on the given attendance record.</td>
+                <td>Force Out button in Attendance tab</td>
+              </tr>
+              <tr>
+                <td><code>loadAbsent()</code></td>
+                <td>Fetches all active workers for the company, compares against today's attendance records, renders the list of workers who have not clocked in today.</td>
+                <td>Absent tab activate</td>
+              </tr>
+              <tr>
+                <td><code>saveWorkplace()</code></td>
+                <td>Reads the workplace form fields (name, address, lat, lng, radius), upserts the workplace record for the admin's company, updates all workers' <code>workplace_id</code> if a single workplace exists.</td>
+                <td>Save Workplace button in Setup tab</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -784,7 +856,20 @@ CREATE INDEX idx_workers_active        ON workers(is_active);</code></pre>
 <span class="kw">const</span> EMAILJS_TEMPLATE_ID  = <span class="str">'YOUR_TEMPLATE_ID'</span>;
 <span class="kw">const</span> ADMIN_RECOVERY_EMAIL = <span class="str">'admin@yourdomain.com'</span>;</code></pre>
         <p>The anon key is safe to expose in client-side code — it can only access Supabase via the PostgREST API (not the management API). RLS policies should be configured to limit what the anon key can do in production.</p>
-        <p>EmailJS is only used if you configure an EmailJS account and fill in the three constants. The admin OTP reset feature calls <code>emailjs.send()</code> with the configured service and template.</p>
+
+        <h3>EmailJS Setup (Admin Password Reset OTP)</h3>
+        <ol>
+          <li>Create a free account at <a href="https://www.emailjs.com" target="_blank" rel="noopener">emailjs.com</a>.</li>
+          <li>Add an email service (Gmail, Outlook, etc.) in the <strong>Email Services</strong> tab. Note the <strong>Service ID</strong>.</li>
+          <li>Create a new template using the <strong>One-Time Password</strong> preset. This preset uses <code>&#123;&#123;passcode&#125;&#125;</code> and <code>&#123;&#123;time&#125;&#125;</code> variables — these match what <code>sendOtp()</code> sends. Set the <strong>To Email</strong> field to <code>&#123;&#123;to_email&#125;&#125;</code>. Note the <strong>Template ID</strong>.</li>
+          <li>Copy your <strong>Public Key</strong> from Account &rarr; General.</li>
+          <li>Fill in <code>config.js</code>: <code>EMAILJS_PUBLIC_KEY</code>, <code>EMAILJS_SERVICE_ID</code>, <code>EMAILJS_TEMPLATE_ID</code>.</li>
+          <li>The <code>ADMIN_RECOVERY_EMAIL</code> constant is reserved for future use — it is not currently read by the OTP flow.</li>
+        </ol>
+        <div class="callout warn">
+          <span class="callout-icon">&#9888;</span>
+          <div class="callout-body">Admin accounts must have an <code>email</code> address saved in <code>admin_users</code> for password reset OTP to work. Accounts without an email will see an error when requesting a reset.</div>
+        </div>
       </section>
 
       <!-- ── Deployment ── -->
@@ -852,23 +937,15 @@ python -m http.server 8080
         <h3>Enabling RLS</h3>
         <p>Currently RLS is disabled. To enable it, you need to create policies for each table. The anon key should only be able to SELECT/INSERT/UPDATE rows relevant to the requesting session. Consider using Supabase Auth or custom JWT claims for this.</p>
 
-        <h3>Hashing PINs</h3>
-        <p>Add a PostgreSQL trigger using <code>pgcrypto</code>:</p>
-        <pre><code>CREATE EXTENSION IF NOT EXISTS pgcrypto;
+        <h3>Enabling Row Level Security (RLS)</h3>
+        <p>Currently RLS is disabled and all access goes through the anon key. To harden the system for production, enable RLS on each table. Example policy for workers — a worker can only read their own row:</p>
+        <pre><code><span class="comment">-- Enable RLS on workers table</span>
+ALTER TABLE workers ENABLE ROW LEVEL SECURITY;
 
-CREATE OR REPLACE FUNCTION hash_pin() RETURNS TRIGGER AS $$
-BEGIN
-  IF NEW.pin IS DISTINCT FROM OLD.pin THEN
-    NEW.pin := crypt(NEW.pin, gen_salt('bf'));
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_hash_pin
-BEFORE INSERT OR UPDATE ON workers
-FOR EACH ROW EXECUTE FUNCTION hash_pin();</code></pre>
-        <p>Then update the PIN verification in <code>verifyPin()</code> to use a DB function call instead of a client-side string comparison.</p>
+<span class="comment">-- Policy: anon can select/update their own row (match by employee_id lookup)</span>
+CREATE POLICY worker_self_access ON workers
+  USING (true);  <span class="comment">-- Refine with JWT claims or a custom auth scheme</span></code></pre>
+        <p>A full RLS implementation would require Supabase Auth integration or custom JWT claims to scope queries. The current architecture is secured instead via server-side SECURITY DEFINER functions (for admin login) and device binding + session tokens (for worker sessions).</p>
       </section>
 
     </div><!-- /content -->

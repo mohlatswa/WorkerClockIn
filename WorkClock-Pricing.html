@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WorkClock — Service Pricing | Reatlegile Solutions</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue:   #2563EB;
+      --dark:   #1E3A8A;
+      --green:  #16A34A;
+      --light-green: #F0FDF4;
+      --light-blue:  #EFF6FF;
+      --text:   #1E293B;
+      --muted:  #64748B;
+      --border: #E2E8F0;
+      --bg:     #F8FAFC;
+      --white:  #ffffff;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    /* ── Page wrapper ── */
+    .page {
+      max-width: 800px;
+      margin: 32px auto;
+      background: var(--white);
+      border-radius: 16px;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.10);
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%);
+      color: #fff;
+      padding: 40px 48px 36px;
+    }
+    .header-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 28px;
+    }
+    .brand { display: flex; align-items: center; gap: 16px; }
+    .brand-icon {
+      width: 54px; height: 54px;
+      background: rgba(255,255,255,0.18);
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px;
+    }
+    .brand-name { font-size: 12px; opacity: 0.75; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 3px; }
+    .brand-product { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+    .doc-meta { text-align: right; font-size: 12px; opacity: 0.75; line-height: 1.8; }
+    .doc-meta strong { opacity: 1; font-size: 13px; display: block; }
+    .header h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 8px; }
+    .header p { font-size: 15px; opacity: 0.85; max-width: 480px; }
+
+    /* ── Body ── */
+    .body { padding: 40px 48px; }
+
+    /* ── Section labels ── */
+    .section-label {
+      font-size: 10.5px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 1.8px; color: var(--blue);
+      margin-bottom: 14px; margin-top: 36px;
+      padding-bottom: 6px; border-bottom: 2px solid var(--border);
+    }
+    .section-label:first-child { margin-top: 0; }
+
+    /* ── Intro callout ── */
+    .intro-box {
+      background: var(--light-blue);
+      border-left: 4px solid var(--blue);
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 8px;
+      font-size: 13.5px;
+      color: #334155;
+      line-height: 1.65;
+    }
+
+    /* ── Setup fee card ── */
+    .setup-card {
+      background: var(--light-green);
+      border: 1px solid #BBF7D0;
+      border-radius: 12px;
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 6px;
+    }
+    .setup-card h3 { font-size: 15px; font-weight: 700; color: #064E3B; margin-bottom: 4px; }
+    .setup-card p { font-size: 13px; color: #166534; margin: 0; }
+    .setup-price {
+      font-size: 22px; font-weight: 800; color: var(--green);
+      white-space: nowrap;
+    }
+    .setup-price span { font-size: 13px; font-weight: 500; color: #166534; display: block; text-align: right; }
+
+    /* ── Tier cards ── */
+    .tiers { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 6px; }
+    .tier-card {
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 22px;
+      position: relative;
+      background: var(--white);
+      transition: box-shadow 0.15s;
+    }
+    .tier-card.featured {
+      border-color: var(--blue);
+      background: var(--light-blue);
+    }
+    .tier-badge {
+      position: absolute; top: -11px; left: 50%; transform: translateX(-50%);
+      background: var(--blue); color: #fff;
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+      padding: 3px 12px; border-radius: 20px; white-space: nowrap;
+    }
+    .tier-name { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+    .tier-workers { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+    .tier-price { font-size: 28px; font-weight: 800; color: var(--blue); line-height: 1; }
+    .tier-price span { font-size: 13px; font-weight: 500; color: var(--muted); }
+    .tier-divider { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+    .tier-features { list-style: none; padding: 0; }
+    .tier-features li {
+      font-size: 13px; color: #334155;
+      padding: 3px 0; display: flex; align-items: flex-start; gap: 8px;
+    }
+    .tier-features li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+
+    /* ── Add-ons table ── */
+    .addon-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    .addon-table th {
+      background: var(--bg); border: 1px solid var(--border);
+      padding: 9px 14px; text-align: left; font-weight: 700;
+      color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .addon-table td { border: 1px solid var(--border); padding: 10px 14px; color: #334155; vertical-align: top; }
+    .addon-table tr:nth-child(even) td { background: var(--bg); }
+    .addon-price { font-weight: 700; color: var(--blue); white-space: nowrap; }
+
+    /* ── Notes ── */
+    .notes { list-style: none; padding: 0; }
+    .notes li {
+      font-size: 13px; color: #475569;
+      padding: 6px 0 6px 20px;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+    }
+    .notes li:last-child { border-bottom: none; }
+    .notes li::before { content: '•'; position: absolute; left: 6px; color: var(--blue); font-weight: 700; }
+
+    /* ── Footer ── */
+    .footer {
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+      padding: 24px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .footer strong { color: var(--text); font-size: 13px; display: block; margin-bottom: 2px; }
+    .footer-right { text-align: right; }
+
+    /* ── Print button ── */
+    .print-bar {
+      max-width: 800px;
+      margin: 0 auto 24px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 0 4px;
+    }
+    .btn-print {
+      background: var(--blue); color: #fff;
+      border: none; border-radius: 8px;
+      padding: 10px 22px; font-size: 14px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; gap: 8px;
+    }
+    .btn-print:hover { background: var(--dark); }
+
+    /* ── Print styles ── */
+    @media print {
+      body { background: #fff; font-size: 12px; }
+      .page {
+        max-width: 100%; margin: 0;
+        box-shadow: none; border-radius: 0;
+      }
+      .print-bar { display: none; }
+      .header { padding: 28px 36px 24px; }
+      .body { padding: 28px 36px; }
+      .footer { padding: 18px 36px; }
+      .tier-card { break-inside: avoid; }
+      @page { size: A4; margin: 0; }
+    }
+
+    @media (max-width: 600px) {
+      .header { padding: 28px 24px; }
+      .body { padding: 24px; }
+      .header-top { flex-direction: column; gap: 14px; }
+      .doc-meta { text-align: left; }
+      .tiers { grid-template-columns: 1fr; }
+      .setup-card { flex-direction: column; align-items: flex-start; }
+      .footer { flex-direction: column; gap: 12px; }
+      .footer-right { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="print-bar">
+  <button class="btn-print" onclick="window.print()">&#128438; Save as PDF / Print</button>
+</div>
+
+<div class="page">
+
+  <!-- ── Header ── -->
+  <div class="header">
+    <div class="header-top">
+      <div class="brand">
+        <div class="brand-icon">&#128339;</div>
+        <div>
+          <div class="brand-name">Reatlegile Solutions</div>
+          <div class="brand-product">WorkClock</div>
+        </div>
+      </div>
+      <div class="doc-meta">
+        <strong>Service Pricing</strong>
+        Effective: May 2026<br>
+        All prices in South African Rand (ZAR)<br>
+        VAT exclusive
+      </div>
+    </div>
+    <h1>Staff Attendance System</h1>
+    <p>Cloud-based clock-in and attendance tracking — no hardware required. Workers clock in using their smartphone from any company-approved location.</p>
+  </div>
+
+  <!-- ── Body ── -->
+  <div class="body">
+
+    <!-- What you get -->
+    <div class="section-label">What Is Included in Every Plan</div>
+    <div class="intro-box">
+      Every subscription includes: GPS-verified clock-in &amp; clock-out &bull; PIN, fingerprint, and face recognition sign-in &bull; Real-time admin dashboard &bull; Attendance reports &amp; CSV export for payroll &bull; Absent Today view &bull; Auto midnight clock-out &bull; Worker self-service PIN change &bull; Admin password reset via email &bull; Secure cloud database &bull; PWA — installs on any smartphone, no app store needed &bull; Ongoing hosting and maintenance
+    </div>
+
+    <!-- Once-off Setup Fee -->
+    <div class="section-label">Once-Off Setup Fee</div>
+    <div class="setup-card">
+      <div>
+        <h3>Company Onboarding</h3>
+        <p>Company created &bull; Workplace GPS configured &bull; Admin account set up &bull; Workers loaded &bull; Portal link generated &bull; Admin walkthrough</p>
+      </div>
+      <div class="setup-price">
+        R500 – R1,500
+        <span>once-off per company</span>
+      </div>
+    </div>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:8px;margin-bottom:0">
+      Setup fee depends on number of workers to load and whether on-site assistance is required. Quoted per client.
+    </p>
+
+    <!-- Monthly Subscription -->
+    <div class="section-label">Monthly Subscription</div>
+    <div class="tiers">
+
+      <div class="tier-card">
+        <div class="tier-name">Starter</div>
+        <div class="tier-workers">Up to 10 workers</div>
+        <div class="tier-price">R299 <span>/ month</span></div>
+        <hr class="tier-divider">
+        <ul class="tier-features">
+          <li>Up to 10 active workers</li>
+          <li>1 workplace location</li>
+          <li>All clock-in methods</li>
+          <li>Admin panel &amp; reporting</li>
+          <li>CSV export for payroll</li>
+          <li>Email support</li>
+        </ul>
+      </div>
+
+      <div class="tier-card featured">
+        <div class="tier-badge">Most Popular</div>
+        <div class="tier-name">Small Business</div>
+        <div class="tier-workers">11 – 30 workers</div>
+        <div class="tier-price">R549 <span>/ month</span></div>
+        <hr class="tier-divider">
+        <ul class="tier-features">
+          <li>Up to 30 active workers</li>
+          <li>1 workplace location</li>
+          <li>All clock-in methods</li>
+          <li>Admin panel &amp; reporting</li>
+          <li>CSV export for payroll</li>
+          <li>Email support</li>
+        </ul>
+      </div>
+
+      <div class="tier-card">
+        <div class="tier-name">Growth</div>
+        <div class="tier-workers">31 – 75 workers</div>
+        <div class="tier-price">R899 <span>/ month</span></div>
+        <hr class="tier-divider">
+        <ul class="tier-features">
+          <li>Up to 75 active workers</li>
+          <li>1 workplace location</li>
+          <li>All clock-in methods</li>
+          <li>Admin panel &amp; reporting</li>
+          <li>CSV export for payroll</li>
+          <li>Priority email support</li>
+        </ul>
+      </div>
+
+      <div class="tier-card">
+        <div class="tier-name">Enterprise</div>
+        <div class="tier-workers">76+ workers</div>
+        <div class="tier-price">R1,400+ <span>/ month</span></div>
+        <hr class="tier-divider">
+        <ul class="tier-features">
+          <li>Unlimited active workers</li>
+          <li>Multiple workplace locations</li>
+          <li>All clock-in methods</li>
+          <li>Admin panel &amp; reporting</li>
+          <li>CSV export for payroll</li>
+          <li>Priority support</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- Add-ons -->
+    <div class="section-label">Optional Add-Ons</div>
+    <table class="addon-table">
+      <thead>
+        <tr>
+          <th>Add-On</th>
+          <th>Description</th>
+          <th>Price</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Additional Workplace</strong></td>
+          <td>For companies with more than one physical site (e.g. two farm locations)</td>
+          <td class="addon-price">R150/month<br><small style="font-weight:400;color:var(--muted)">per extra location</small></td>
+        </tr>
+        <tr>
+          <td><strong>On-Site Setup &amp; Training</strong></td>
+          <td>In-person setup visit and admin training at the client's premises</td>
+          <td class="addon-price">R500 – R1,000<br><small style="font-weight:400;color:var(--muted)">once-off + travel</small></td>
+        </tr>
+        <tr>
+          <td><strong>Priority Support</strong></td>
+          <td>Same-business-day response guarantee for any issues</td>
+          <td class="addon-price">R200/month</td>
+        </tr>
+        <tr>
+          <td><strong>Worker Data Import</strong></td>
+          <td>Bulk upload of workers from an existing spreadsheet (per session)</td>
+          <td class="addon-price">R250<br><small style="font-weight:400;color:var(--muted)">once-off</small></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Terms & Notes -->
+    <div class="section-label">Terms &amp; Notes</div>
+    <ul class="notes">
+      <li>All prices are VAT exclusive. VAT at 15% will be added where applicable.</li>
+      <li>Monthly subscription is billed in advance at the start of each calendar month.</li>
+      <li>The setup fee is a once-off charge, invoiced before onboarding begins.</li>
+      <li>Worker count refers to active (enabled) workers only. Deactivated workers do not count toward the tier limit.</li>
+      <li>Subscriptions can be upgraded to a higher tier at any time. The new rate applies from the following month.</li>
+      <li>A 30-day written notice is required to cancel a subscription.</li>
+      <li>Reatlegile Solutions reserves the right to review pricing annually. Existing clients will receive 30 days' notice of any changes.</li>
+      <li>This document is a pricing guideline. A formal service agreement will be issued to each client.</li>
+    </ul>
+
+  </div><!-- /body -->
+
+  <!-- ── Footer ── -->
+  <div class="footer">
+    <div>
+      <strong>Reatlegile Solutions</strong>
+      WorkClock Staff Attendance System
+    </div>
+    <div class="footer-right">
+      <strong>hennie.mohlatswa@outlook.com</strong>
+      Pricing effective May 2026 &bull; VAT exclusive
+    </div>
+  </div>
+
+</div><!-- /page -->
+
+</body>
+</html>

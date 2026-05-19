@@ -222,6 +222,7 @@
     <a href="#tab-dashboard">Dashboard</a>
     <a href="#tab-workers">Workers Tab</a>
     <a href="#tab-attendance">Attendance Tab</a>
+    <a href="#tab-absent">Absent Today Tab</a>
     <a href="#tab-admins">Admins Tab</a>
     <a href="#tab-setup">Setup Tab</a>
 
@@ -235,6 +236,7 @@
     <a href="#device-binding">Device Binding</a>
     <a href="#lockout">Account Lockout</a>
     <a href="#reset-security">Resetting Security</a>
+    <a href="#auto-clockout">Auto Midnight Clock-Out</a>
 
     <div class="nav-section">Help</div>
     <a href="#troubleshoot">Troubleshooting</a>
@@ -321,7 +323,11 @@
 
         <div class="callout warn">
           <span class="callout-icon">&#128274;</span>
-          <div class="callout-body"><p><strong>Account lockout:</strong> After 5 incorrect password attempts, your account is locked for 30 minutes. If this happens, wait or contact the system developer to unlock it.</p></div>
+          <div class="callout-body"><p><strong>Account lockout:</strong> After 5 incorrect password attempts, your account is locked for 30 minutes. Wait 30 minutes and try again, or ask a super admin or developer to unlock your account.</p></div>
+        </div>
+        <div class="callout green">
+          <span class="callout-icon">&#128231;</span>
+          <div class="callout-body"><p><strong>Forgot your password?</strong> Tap the <strong>Forgot password?</strong> link below the Login button. Enter your username and tap <strong>Send OTP</strong> — a one-time code will be emailed to the address on your account. Enter the code, then set a new password. The OTP expires after 15 minutes. (You must have an email address saved on your account for this to work.)</p></div>
         </div>
         <div class="callout info">
           <span class="callout-icon">&#8505;</span>
@@ -337,9 +343,9 @@
           <p>The Dashboard shows four stat tiles for today's date:</p>
         </div>
         <ul>
-          <li><strong>Present:</strong> Number of workers who have clocked in today (at least one clock-in record).</li>
+          <li><strong>Present:</strong> Number of workers who have clocked in at least once today.</li>
           <li><strong>Total Workers:</strong> Total active workers registered to your company.</li>
-          <li><strong>Absent:</strong> Total Workers minus Present (approximate — based on today's records).</li>
+          <li><strong>Absent:</strong> Active workers who have not yet clocked in today. <strong>Tap this tile</strong> to jump straight to the Absent Today tab and see exactly who is missing.</li>
           <li><strong>Still In:</strong> Workers with an active clock-in (not yet clocked out).</li>
         </ul>
         <p>Below the stats tiles is the <strong>Today's Activity Feed</strong> — a live list of today's clock-in and clock-out events, showing the worker's name, time, and whether they are still in or have clocked out. The most recent events appear at the top.</p>
@@ -485,6 +491,25 @@
 
         <h3>Exporting to CSV</h3>
         <p>With filters applied, tap <strong>Download CSV</strong> to export all matching records. The CSV file is named <code>attendance_YYYY-MM-DD_to_YYYY-MM-DD.csv</code> and includes: Worker Name, Employee ID, Job Title, Date, Clock In, Clock Out, Hours, Auth Method, and Status. It opens correctly in Microsoft Excel and Google Sheets.</p>
+
+        <h3>Force Clock Out</h3>
+        <p>On any attendance record where a worker is <strong>Still In</strong> (clock-out time is blank), a red <strong>Force Out</strong> button appears next to the record. Tap it to immediately set the clock-out time to now. Use this when a worker forgot to clock out at the end of their shift.</p>
+        <div class="callout warn">
+          <span class="callout-icon">&#9888;</span>
+          <div class="callout-body"><p>Force Out sets the clock-out time to the moment you tap the button — not the actual time the worker left. If you need accurate hours, note the correct time before using Force Out and adjust manually for payroll.</p></div>
+        </div>
+      </section>
+
+      <!-- ── Absent Today Tab ── -->
+      <section id="tab-absent">
+        <h2>Absent Today Tab</h2>
+        <p>The <strong>Absent</strong> tab shows a list of all active workers who have not clocked in today. This gives you a quick view of who is missing without needing to search through the attendance report.</p>
+        <p>Each row shows the worker's name, Employee ID, and job title. You can also reach this tab by tapping the <strong>Absent</strong> stat tile on the Dashboard.</p>
+        <p>If all workers have clocked in, the tab shows a green confirmation message: <em>"All workers have clocked in today!"</em></p>
+        <div class="callout info">
+          <span class="callout-icon">&#8505;</span>
+          <div class="callout-body"><p>The list refreshes each time you open the tab. Absent workers are those with no clock-in record at all for today — a worker who clocked in and then clocked out is considered <em>present</em>, not absent.</p></div>
+        </div>
       </section>
 
       <!-- ── Admins Tab ── -->
@@ -527,8 +552,17 @@
         </div>
 
         <h3>Workplaces</h3>
-        <p>Workplaces define the physical locations where workers are allowed to clock in. Each workplace has a GPS coordinate and a radius (in metres). Workers must be within the radius to activate the Clock In button.</p>
-        <p>To configure a workplace, add a row to the <code>workplaces</code> table in Supabase with the correct latitude, longitude, and radius. Then assign workers to that workplace by editing each worker record. Contact your system developer to set this up initially.</p>
+        <p>Workplaces define the physical locations where workers are allowed to clock in. Each workplace has a name, GPS coordinates, and a radius (in metres). Workers must be within the radius to activate the Clock In button.</p>
+        <p>You can configure your workplace directly in the Setup tab — no developer access is required. Fill in the workplace name, address, latitude, longitude, and radius, then tap <strong>Save Workplace</strong>.</p>
+        <div class="callout green">
+          <span class="callout-icon">&#128205;</span>
+          <div class="callout-body"><p><strong>Tip — detect automatically:</strong> Tap the <strong>&#128205;</strong> button next to the Address field to fill in the latitude and longitude from your current GPS position. This works best if you are physically standing at the workplace when you do it.</p></div>
+        </div>
+        <p>After saving a workplace, edit each worker's record and assign them to it. Workers without a workplace assigned will not be able to clock in — their clock-in button will show "Workplace Not Set Up" until you assign them a location.</p>
+        <div class="callout info">
+          <span class="callout-icon">&#8505;</span>
+          <div class="callout-body"><p>The default radius is <strong>100 metres</strong>. For large sites (farms, warehouses, construction sites) you may need to increase this to 200–500 metres to accommodate the size of the property.</p></div>
+        </div>
       </section>
 
       <!-- ── Security ── -->
@@ -567,6 +601,17 @@
         </div>
       </section>
 
+      <!-- ── Auto Midnight Clock-Out ── -->
+      <section id="auto-clockout">
+        <h2>Auto Midnight Clock-Out</h2>
+        <p>Every night at <strong>midnight (SAST)</strong>, any worker who is still clocked in is automatically clocked out by the system. This prevents attendance records from spanning multiple days and keeps your reports accurate.</p>
+        <p>Automatic clock-outs are scheduled via a database job that runs at 22:00 UTC (which equals midnight South Africa Standard Time). No admin action is required.</p>
+        <div class="callout info">
+          <span class="callout-icon">&#128338;</span>
+          <div class="callout-body"><p>Workers who are automatically clocked out at midnight will have a clock-out time of exactly 00:00. If a worker legitimately works past midnight, their shift will be split across two days. Use the Force Clock Out option and manually adjust records for payroll if needed.</p></div>
+        </div>
+      </section>
+
       <!-- ── Troubleshooting ── -->
       <section id="troubleshoot">
         <h2>Troubleshooting</h2>
@@ -597,7 +642,7 @@
               <tr>
                 <td>Clock In button shows "Too far from workplace"</td>
                 <td>Worker is outside the geofence radius</td>
-                <td class="fix">Verify the worker is at the correct location. If the workplace coordinates are incorrect, contact the developer to update them. You can also increase the radius in the workplaces table.</td>
+                <td class="fix">Verify the worker is at the correct location. If the workplace coordinates are incorrect, update them in the <strong>Setup</strong> tab — enter the correct latitude/longitude (or tap 📍 while standing at the site) and save. You can also increase the radius if the site is large.</td>
               </tr>
               <tr>
                 <td>Face recognition keeps saying "Face not recognised"</td>
@@ -628,6 +673,21 @@
                 <td>CSV download is empty or shows "No records found"</td>
                 <td>Date range too narrow, or no attendance records match filters</td>
                 <td class="fix">Widen the date range. Try selecting "All Workers" and "All Methods". Check that workers have actually clocked in during the selected period.</td>
+              </tr>
+              <tr>
+                <td>Clock In button shows "Workplace Not Set Up"</td>
+                <td>Worker has no workplace assigned</td>
+                <td class="fix">Go to the Setup tab and save your workplace location. Then edit the affected worker record and assign them to the workplace. They can clock in immediately after.</td>
+              </tr>
+              <tr>
+                <td>Admin forgot password — OTP email not received</td>
+                <td>Email address not saved on the admin account, or email went to spam</td>
+                <td class="fix">Check spam/junk. A super admin can update the email address in the Admins tab. The developer can set a new password directly from the Developer panel.</td>
+              </tr>
+              <tr>
+                <td>Attendance shows workers clocked out at midnight</td>
+                <td>Auto midnight clock-out (scheduled job)</td>
+                <td class="fix">This is normal — any worker still clocked in at midnight is automatically closed off. Workers who genuinely work past midnight will have a split record. Note the actual end time for payroll.</td>
               </tr>
             </tbody>
           </table>

@@ -1,0 +1,46 @@
+WorkClock — Worker Portal Links
+================================
+Last updated: 2026-05-15
+Live site: https://mohlatswa.github.io/WorkerClockIn/
+
+PLAIN LINK (no company filter — worker must have a unique Employee ID across all companies)
+--------------------------------------------------------------------------------------------
+https://mohlatswa.github.io/WorkerClockIn/index.html
+
+
+COMPANY-SPECIFIC LINKS (recommended — share the correct link with each company)
+--------------------------------------------------------------------------------
+AgriFarm
+  https://mohlatswa.github.io/WorkerClockIn/index.html?c=AGRIFARM
+
+DarkShitren
+  https://mohlatswa.github.io/WorkerClockIn/index.html?c=DARKSHITREN
+
+LG Mokubedi
+  https://mohlatswa.github.io/WorkerClockIn/index.html?c=LGMOKUBEDI
+
+Lillies
+  https://mohlatswa.github.io/WorkerClockIn/index.html?c=LILLIES
+
+Lincon Holdings
+  https://mohlatswa.github.io/WorkerClockIn/index.html?c=LINCON
+
+Reatlegile Solutions
+  https://mohlatswa.github.io/WorkerClockIn/index.html?c=REATLEGILE
+
+Temoso Holdings
+  https://mohlatswa.github.io/WorkerClockIn/index.html?c=TEMOSO
+
+
+ADMIN LOGIN (all companies)
+---------------------------
+https://mohlatswa.github.io/WorkerClockIn/index.html
+(tap the small "🔧 Admin" button at the bottom of the home screen)
+
+
+NOTES
+-----
+- Always share the company-specific link (?c=CODE) with workers.
+  The plain link only works if the same Employee ID does not exist in more than one company.
+- If a company code is ever changed in the Developer panel, update this file and re-share links.
+- Default Company is deactivated and has no portal link.

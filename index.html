@@ -322,6 +322,9 @@
         <span class="sec-lbl">Workers</span>
         <button class="btn btn-primary btn-sm" onclick="toggleAddWorker()">+ Add Worker</button>
       </div>
+      <div id="worker-limit-banner" class="hidden" style="background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:10px 16px;margin-bottom:12px;font-size:13px;color:#991B1B;display:flex;align-items:center;gap:8px;">
+        ⚠️ <strong>Worker limit reached.</strong>&nbsp;Upgrade your subscription to add more workers.
+      </div>
       <div id="add-worker-panel" class="card hidden">
         <!-- Step 1: Worker details -->
         <div id="nw-step1">
@@ -450,6 +453,22 @@
 
     <!-- Setup Tab -->
     <div id="a-setup" class="tab-pane">
+
+      <!-- Subscription / Worker Usage -->
+      <div class="card">
+        <h4>📊 Subscription Usage</h4>
+        <p class="sub" style="margin-bottom:14px">Active workers on your current plan</p>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span id="worker-usage-text" style="font-size:14px;font-weight:600;color:var(--text)">Loading…</span>
+        </div>
+        <div style="background:#E2E8F0;border-radius:99px;height:10px;overflow:hidden;">
+          <div id="worker-usage-bar" style="height:100%;width:0%;border-radius:99px;background:var(--green);transition:width 0.4s;"></div>
+        </div>
+        <p id="worker-upgrade-msg" class="hidden" style="margin-top:10px;font-size:13px;color:var(--red);font-weight:600;">
+          ⚠️ Worker limit reached — contact Reatlegile Solutions to upgrade your plan.
+        </p>
+      </div>
+
       <div class="card">
         <h4>Workplace Location</h4>
         <p class="sub" style="margin-bottom:14px">Workers must be within the radius to clock in</p>
@@ -721,6 +740,50 @@
     <div class="modal-ft">
       <button class="btn btn-primary" onclick="saveEditCo()">Save</button>
       <button class="btn btn-outline" onclick="closeModal('modal-edit-co')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Set Worker Limit -->
+<div id="modal-worker-limit" class="modal-bd hidden" onclick="if(event.target===this)closeModal('modal-worker-limit')">
+  <div class="modal-box" style="max-width:400px">
+    <div class="modal-hd"><h3>👥 Set Worker Limit</h3><button class="modal-close" onclick="closeModal('modal-worker-limit')">✕</button></div>
+    <div style="padding:18px">
+      <input type="hidden" id="wl-co-id">
+      <p class="sub" id="wl-co-name" style="font-weight:600;margin-bottom:4px;font-size:14px"></p>
+      <p class="sub" id="wl-co-usage" style="margin-bottom:16px;font-size:13px"></p>
+
+      <p style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94A3B8;margin-bottom:8px">Quick Select — Subscription Tier</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+        <button class="btn btn-outline btn-sm" style="justify-content:flex-start;text-align:left;padding:10px 12px" onclick="setWlQuick(10)">
+          <span style="font-weight:700;display:block">Starter</span>
+          <span style="font-size:12px;color:#64748B">10 workers · R299/mo</span>
+        </button>
+        <button class="btn btn-outline btn-sm" style="justify-content:flex-start;text-align:left;padding:10px 12px" onclick="setWlQuick(30)">
+          <span style="font-weight:700;display:block">Small Business</span>
+          <span style="font-size:12px;color:#64748B">30 workers · R549/mo</span>
+        </button>
+        <button class="btn btn-outline btn-sm" style="justify-content:flex-start;text-align:left;padding:10px 12px" onclick="setWlQuick(75)">
+          <span style="font-weight:700;display:block">Growth</span>
+          <span style="font-size:12px;color:#64748B">75 workers · R899/mo</span>
+        </button>
+        <button class="btn btn-outline btn-sm" style="justify-content:flex-start;text-align:left;padding:10px 12px" onclick="setWlQuick(null)">
+          <span style="font-weight:700;display:block">Enterprise</span>
+          <span style="font-size:12px;color:#64748B">Unlimited · R1400+/mo</span>
+        </button>
+      </div>
+
+      <p style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94A3B8;margin-bottom:8px">Or Set a Custom Limit</p>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+        <input id="wl-custom" type="number" class="input" placeholder="e.g. 50" min="1" style="flex:1">
+        <span style="font-size:13px;color:#64748B">workers</span>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="saveWorkerLimit()">Save Limit</button>
+        <button class="btn btn-outline" onclick="closeModal('modal-worker-limit')">Cancel</button>
+      </div>
+      <p class="msg hidden" id="wl-msg"></p>
     </div>
   </div>
 </div>

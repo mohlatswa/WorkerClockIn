@@ -256,6 +256,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
 .stat-card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:16px;text-align:center}
 .stat-val{font-size:2rem;font-weight:800;color:var(--blue)}
+.stat-card.clickable{cursor:pointer;transition:box-shadow .15s,transform .1s,-webkit-transform .1s}
+.stat-card.clickable:hover{box-shadow:var(--sh-md)}
+.stat-card.clickable:active{transform:scale(.96);opacity:.85}
 .stat-lbl{font-size:.75rem;font-weight:600;color:var(--muted);margin-top:2px;text-transform:uppercase}
 
 /* ─── ACTIVITY ──────────────────────────────────────────── */

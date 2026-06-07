@@ -987,15 +987,22 @@ async function loadDashboard() {
     document.getElementById('s-total').textContent   = total;
     document.getElementById('s-absent').textContent  = absentCount;
     document.getElementById('s-active').textContent  = stillin;
-    var absentCard = document.getElementById('s-absent').closest('.stat-card');
-    if (absentCard) {
-      absentCard.style.cursor = 'pointer';
-      absentCard.title = 'View absent workers';
-      absentCard.onclick = function() {
-        var btn = document.querySelector('#admin-tabs .bnav-item[onclick*="a-absent"]');
-        if (btn) { btn.click(); }
+    function makeCardLink(statId, tabName, title) {
+      var card = document.getElementById(statId).closest('.stat-card');
+      if (!card) return;
+      card.classList.add('clickable');
+      card.title = title;
+      card.onclick = function() {
+        var btn = document.querySelector('#admin-tabs .bnav-item[onclick*="' + tabName + '"]');
+        if (btn) { btn.click(); return; }
+        // Tab may be in More (overflow) — switch directly
+        switchTab(document.getElementById('admin-more-btn') || document.querySelector('#admin-tabs .bnav-item'), tabName);
       };
     }
+    makeCardLink('s-present', 'a-att',     'View today\'s attendance');
+    makeCardLink('s-total',   'a-workers', 'View all workers');
+    makeCardLink('s-absent',  'a-absent',  'View absent workers');
+    makeCardLink('s-active',  'a-att',     'View workers still clocked in');
     var el = document.getElementById('dash-activity');
     el.innerHTML = recs.length
       ? recs.slice(0, 15).map(function(r) {

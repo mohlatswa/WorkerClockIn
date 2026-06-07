@@ -529,6 +529,32 @@
       </div>
 
       <div class="card">
+        <h4>🌍 Timezone</h4>
+        <p class="sub" style="margin-bottom:14px">Attendance times display in this timezone</p>
+        <div class="field">
+          <label>Company Timezone</label>
+          <select id="co-timezone" class="input">
+            <optgroup label="Africa">
+              <option value="Africa/Johannesburg">South Africa (SAST, UTC+2)</option>
+              <option value="Africa/Nairobi">East Africa (EAT, UTC+3)</option>
+              <option value="Africa/Lagos">West Africa (WAT, UTC+1)</option>
+              <option value="Africa/Cairo">Egypt (EET, UTC+2)</option>
+              <option value="Africa/Casablanca">Morocco (WET, UTC+0/+1)</option>
+            </optgroup>
+            <optgroup label="Other">
+              <option value="UTC">UTC</option>
+              <option value="Europe/London">London (GMT/BST)</option>
+              <option value="America/New_York">New York (EST/EDT)</option>
+              <option value="Asia/Dubai">Dubai (GST, UTC+4)</option>
+              <option value="Asia/Kolkata">India (IST, UTC+5:30)</option>
+            </optgroup>
+          </select>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="saveTimezone()">Save Timezone</button>
+        <p class="msg hidden" id="tz-msg"></p>
+      </div>
+
+      <div class="card">
         <h4>📎 Worker Portal Link</h4>
         <p class="sub" style="margin-bottom:10px">Share this link with workers — they sign in once and stay signed in.</p>
         <div class="link-box" id="portal-link">Loading…</div>

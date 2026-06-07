@@ -53,11 +53,12 @@ function haversineM(la1, lo1, la2, lo2) {
 function b64(buf) { return btoa(String.fromCharCode.apply(null, new Uint8Array(buf))); }
 function unb64(s) { var b = atob(s), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a.buffer; }
 function initials(n) { return (n || '??').split(' ').map(function(w) { return w[0]; }).join('').toUpperCase().slice(0, 2); }
-function fmtTime(iso) { return iso ? new Date(iso).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' }) : '--:--'; }
-function fmtDate(iso) { return iso ? new Date(iso).toLocaleDateString('en-ZA') : ''; }
+function _tz() { return (S.admin && S.admin.co_timezone) || 'Africa/Johannesburg'; }
+function fmtTime(iso) { return iso ? new Date(iso).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit', timeZone: _tz() }) : '--:--'; }
+function fmtDate(iso) { return iso ? new Date(iso).toLocaleDateString('en-ZA', { timeZone: _tz() }) : ''; }
 function fmtDateShort(iso) {
   if (!iso) return '';
-  return new Date(iso).toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short' });
+  return new Date(iso).toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short', timeZone: _tz() });
 }
 function vibrate(p) { if (navigator.vibrate) navigator.vibrate(p || 50); }
 function escQ(s) { return (s || '').replace(/'/g, "\\'"); }
@@ -869,7 +870,7 @@ async function adminLogin() {
   } catch (e) { showErr('err-admin', 'Error: ' + e.message); }
   finally { btn.disabled = false; btn.textContent = 'Login'; }
 }
-function adminLogout() { S.admin = null; localStorage.removeItem('wc_admin_session'); showPg('home'); }
+function adminLogout() { S.admin = null; localStorage.removeItem('wc_admin_session'); localStorage.removeItem('wc_dash_cache'); showPg('home'); }
 
 // ── Admin Forgot Password ─────────────────────────────────
 function forgotPassword() {
@@ -964,6 +965,18 @@ function switchTab(btn, name) {
 // ── Dashboard ─────────────────────────────────────────────
 async function loadDashboard() {
   var cid = requireAdminCid(); if (!cid) return;
+
+  // Show cached data immediately so the screen is never blank while loading
+  var _dashCache = null;
+  try { _dashCache = JSON.parse(localStorage.getItem('wc_dash_cache') || 'null'); } catch(e) {}
+  if (_dashCache && _dashCache.cid === cid) {
+    document.getElementById('s-present').textContent = _dashCache.present;
+    document.getElementById('s-total').textContent   = _dashCache.total;
+    document.getElementById('s-absent').textContent  = _dashCache.absent;
+    document.getElementById('s-active').textContent  = _dashCache.active;
+    if (_dashCache.html) document.getElementById('dash-activity').innerHTML = _dashCache.html;
+  }
+
   var today = new Date(); today.setHours(0, 0, 0, 0);
   var tmrw  = new Date(today); tmrw.setDate(tmrw.getDate() + 1);
   try {
@@ -1014,7 +1027,20 @@ async function loadDashboard() {
             '</div>';
         }).join('')
       : '<div class="empty">No clock-ins today</div>';
-  } catch (e) { document.getElementById('dash-activity').innerHTML = '<div class="empty">Failed to load</div>'; }
+    // Save to cache so the dashboard loads instantly on next visit
+    try {
+      localStorage.setItem('wc_dash_cache', JSON.stringify({
+        cid: cid, present: present, total: total, absent: absentCount,
+        active: stillin, html: el.innerHTML, at: Date.now()
+      }));
+    } catch(e) {}
+  } catch (e) {
+    if (!_dashCache || _dashCache.cid !== cid) {
+      document.getElementById('dash-activity').innerHTML = '<div class="empty">Failed to load — check your connection</div>';
+    } else {
+      toast('⚠️ Showing last cached data — check your connection');
+    }
+  }
 }
 
 // ── Absent Today ──────────────────────────────────────────
@@ -1581,6 +1607,14 @@ async function loadSetup() {
   document.getElementById('my-name').value  = S.admin.full_name || '';
   document.getElementById('my-email').value = S.admin.email     || '';
 
+  // Load current timezone
+  try {
+    var tzR = await withTimeout(db.from('companies').select('timezone').eq('id', cid).single(), 5000);
+    var coTz = (tzR.data && tzR.data.timezone) || 'Africa/Johannesburg';
+    var tzSel = document.getElementById('co-timezone');
+    if (tzSel) tzSel.value = coTz;
+  } catch(e) {}
+
   // ── Worker usage display ───────────────────────────────
   try {
     var coR2    = await withTimeout(db.from('companies').select('worker_limit').eq('id', cid).single(), 5000);
@@ -1628,6 +1662,18 @@ async function saveWorkplace() {
       await withTimeout(db.from('workers').update({ workplace_id: wpR.data[0].id }).eq('company_id', cid).is('workplace_id', null), 5000);
     }
   } catch (e) { showMsg('wp-msg', 'Error: ' + e.message, 'err'); }
+}
+async function saveTimezone() {
+  var cid = requireAdminCid(); if (!cid) return;
+  var tzSel = document.getElementById('co-timezone');
+  var tz = tzSel ? tzSel.value : '';
+  if (!tz) { showMsg('tz-msg', 'Please select a timezone.', 'err'); return; }
+  try {
+    var r = await withTimeout(db.from('companies').update({ timezone: tz }).eq('id', cid), 5000);
+    if (r.error) { showMsg('tz-msg', 'Save failed: ' + r.error.message, 'err'); return; }
+    if (S.admin) { S.admin.co_timezone = tz; localStorage.setItem('wc_admin_session', JSON.stringify(S.admin)); }
+    showMsg('tz-msg', '✅ Timezone saved — times now display in ' + tz, 'ok');
+  } catch(e) { showMsg('tz-msg', 'Error: ' + e.message, 'err'); }
 }
 function detectLocation() {
   if (!navigator.geolocation) { toast('Geolocation not available'); return; }
@@ -1749,7 +1795,7 @@ async function saveEditAcct() {
 }
 
 // ── Developer Panel ───────────────────────────────────────
-function devLogout() { S.admin = null; localStorage.removeItem('wc_admin_session'); showPg('home'); }
+function devLogout() { S.admin = null; localStorage.removeItem('wc_admin_session'); localStorage.removeItem('wc_dash_cache'); showPg('home'); }
 // ── Nav pin / customise system ────────────────────────────
 var NAV_TABS = [
   { id: 'a-dash',     icon: '📊', label: 'Dashboard',  saOnly: false },

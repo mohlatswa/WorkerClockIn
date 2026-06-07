@@ -854,6 +854,7 @@ async function adminLogin() {
     // Success — clear lockout
     try { await withTimeout(db.from('admin_users').update({ failed_attempts: 0, locked_until: null }).eq('id', row.id), 3000); } catch(e) {}
     S.admin = row;
+    localStorage.setItem('wc_admin_session', JSON.stringify(row));
     document.getElementById('inp-auser').value = '';
     document.getElementById('inp-apass').value = '';
     if (row.role === 'developer') {
@@ -868,7 +869,7 @@ async function adminLogin() {
   } catch (e) { showErr('err-admin', 'Error: ' + e.message); }
   finally { btn.disabled = false; btn.textContent = 'Login'; }
 }
-function adminLogout() { S.admin = null; showPg('home'); }
+function adminLogout() { S.admin = null; localStorage.removeItem('wc_admin_session'); showPg('home'); }
 
 // ── Admin Forgot Password ─────────────────────────────────
 function forgotPassword() {
@@ -1748,7 +1749,7 @@ async function saveEditAcct() {
 }
 
 // ── Developer Panel ───────────────────────────────────────
-function devLogout() { S.admin = null; showPg('home'); }
+function devLogout() { S.admin = null; localStorage.removeItem('wc_admin_session'); showPg('home'); }
 // ── Nav pin / customise system ────────────────────────────
 var NAV_TABS = [
   { id: 'a-dash',     icon: '📊', label: 'Dashboard',  saOnly: false },
@@ -2324,8 +2325,23 @@ document.addEventListener('DOMContentLoaded', function() {
   } catch (e) {}
   updateHomeUI();
 
-  // 2. Show home page immediately and start home clock
-  showPg('home');
+  // 2. Restore admin/developer session if available, else show home page
+  var _savedAdmin = null;
+  try { _savedAdmin = JSON.parse(localStorage.getItem('wc_admin_session') || 'null'); } catch(e) {}
+  if (_savedAdmin && _savedAdmin.id && _savedAdmin.role) {
+    S.admin = _savedAdmin;
+    if (_savedAdmin.role === 'developer') {
+      showPg('developer');
+    } else {
+      document.getElementById('admin-co-lbl').textContent = _savedAdmin.co_name || '';
+      var _isSA = _savedAdmin.role === 'super_admin';
+      document.getElementById('tab-admins-btn').classList.toggle('hidden', !_isSA);
+      applyNavPins(getNavPins());
+      showPg('admin');
+    }
+  } else {
+    showPg('home');
+  }
   startHomeClock();
 
   // Initialize EmailJS if credentials are configured
@@ -2345,9 +2361,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
   checkIOSInstall();
 
-  // 4. Background async: verify company from Supabase + restore worker session
+  // 4. Background async: load data after session restore + restore worker session
   (async function() {
     try { await withTimeout(initCompany(), 4000); } catch (e) {}
+
+    // If admin session was restored, load their panel data now
+    if (S.admin) {
+      try {
+        if (S.admin.role === 'developer') loadDevCos();
+        else loadDashboard();
+      } catch(e) {}
+      return; // Admin and worker sessions are mutually exclusive on one device
+    }
 
     var savedId    = localStorage.getItem('wc_worker_id');
     var savedToken = localStorage.getItem('wc_session_token');

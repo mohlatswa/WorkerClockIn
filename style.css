@@ -219,6 +219,29 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 }
 .more-sheet-item:active{background:var(--bg)}
 .more-item-icon{font-size:1.3rem;width:28px;text-align:center;flex-shrink:0}
+.more-sheet-customize{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:calc(100% - 36px);margin:10px 18px 0;
+  padding:12px;border:1.5px dashed var(--border);background:transparent;
+  border-radius:var(--r);font-size:.85rem;font-weight:600;color:var(--muted);
+  cursor:pointer;transition:border-color .15s,color .15s;
+}
+.more-sheet-customize:active{border-color:var(--blue);color:var(--blue)}
+
+/* ─── NAV PIN ROWS (customize modal) ────────────────────── */
+.nav-pin-row{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 4px;border-bottom:1px solid var(--border);
+}
+.nav-pin-row:last-child{border-bottom:none}
+.nav-pin-icon{font-size:1.3rem;width:32px;text-align:center;flex-shrink:0}
+.nav-pin-name{flex:1;font-size:.9rem;font-weight:600}
+.nav-pin-btn{
+  padding:6px 14px;border-radius:50px;font-size:.78rem;font-weight:700;
+  cursor:pointer;border:1.5px solid var(--border);background:#fff;color:var(--muted);
+  transition:all .15s;white-space:nowrap;
+}
+.nav-pin-btn.pinned{background:var(--blue);color:#fff;border-color:var(--blue)}
 
 /* ─── STATS ─────────────────────────────────────────────── */
 .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}

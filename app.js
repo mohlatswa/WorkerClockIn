@@ -862,7 +862,7 @@ async function adminLogin() {
       document.getElementById('admin-co-lbl').textContent = row.co_name || '';
       var isSA = row.role === 'super_admin';
       document.getElementById('tab-admins-btn').classList.toggle('hidden', !isSA);
-      document.getElementById('more-admins-btn').classList.toggle('hidden', !isSA);
+      applyNavPins(getNavPins());
       showPg('admin'); loadDashboard();
     }
   } catch (e) { showErr('err-admin', 'Error: ' + e.message); }
@@ -1742,13 +1742,116 @@ async function saveEditAcct() {
 
 // ── Developer Panel ───────────────────────────────────────
 function devLogout() { S.admin = null; showPg('home'); }
+// ── Nav pin / customise system ────────────────────────────
+var NAV_TABS = [
+  { id: 'a-dash',     icon: '📊', label: 'Dashboard',  saOnly: false },
+  { id: 'a-workers',  icon: '👥', label: 'Workers',    saOnly: false },
+  { id: 'a-att',      icon: '📋', label: 'Attendance', saOnly: false },
+  { id: 'a-absent',   icon: '🚫', label: 'Absent',     saOnly: false },
+  { id: 'a-admins',   icon: '🔑', label: 'Admins',     saOnly: true  },
+  { id: 'a-inactive', icon: '🗂', label: 'Inactive',   saOnly: false },
+  { id: 'a-setup',    icon: '⚙️', label: 'Setup',      saOnly: false },
+];
+var DEFAULT_PINS = ['a-dash', 'a-workers', 'a-att', 'a-absent'];
+var MAX_PINS = 4;
+var _pendingPins = null;
+
+function getNavPins() {
+  try { return JSON.parse(localStorage.getItem('wc_nav_pins')) || DEFAULT_PINS.slice(); }
+  catch(e) { return DEFAULT_PINS.slice(); }
+}
+
+function applyNavPins(pins) {
+  var isSA = S.admin && S.admin.role === 'super_admin';
+  document.querySelectorAll('#admin-tabs .bnav-item[data-tab]').forEach(function(btn) {
+    var tab = btn.getAttribute('data-tab');
+    var def = NAV_TABS.find(function(t) { return t.id === tab; });
+    // Admins tab: always hidden unless super_admin
+    if (def && def.saOnly && !isSA) { btn.classList.add('hidden'); return; }
+    if (def && def.saOnly && isSA) btn.classList.remove('hidden');
+    // Show in bar (remove overflow) or hide behind More (add overflow)
+    if (pins.indexOf(tab) !== -1) btn.classList.remove('bnav-overflow');
+    else btn.classList.add('bnav-overflow');
+  });
+}
+
 function openMoreSheet() {
+  var pins = getNavPins();
+  var isSA = S.admin && S.admin.role === 'super_admin';
+  var html = '';
+  NAV_TABS.forEach(function(t) {
+    if (t.saOnly && !isSA) return;
+    if (pins.indexOf(t.id) !== -1) return; // already in bar
+    html += '<button class="more-sheet-item" onclick="switchTab(document.getElementById(\'admin-more-btn\'),\'' + t.id + '\');closeMoreSheet()">'
+          + '<span class="more-item-icon">' + t.icon + '</span><span>' + t.label + '</span></button>';
+  });
+  document.getElementById('more-sheet-items').innerHTML = html ||
+    '<p class="sub" style="padding:8px 18px 4px">All tabs are pinned to the bar.</p>';
   document.getElementById('admin-more-sheet').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
 }
 function closeMoreSheet() {
   document.getElementById('admin-more-sheet').classList.add('hidden');
   document.body.style.overflow = '';
+}
+
+function openNavCustomize() {
+  var pins = getNavPins();
+  var isSA = S.admin && S.admin.role === 'super_admin';
+  _pendingPins = pins.slice();
+  var html = '';
+  NAV_TABS.forEach(function(t) {
+    if (t.saOnly && !isSA) return;
+    var pinned = _pendingPins.indexOf(t.id) !== -1;
+    html += '<div class="nav-pin-row">'
+          + '<span class="nav-pin-icon">' + t.icon + '</span>'
+          + '<span class="nav-pin-name">' + t.label + '</span>'
+          + '<button class="nav-pin-btn' + (pinned ? ' pinned' : '') + '" data-tab="' + t.id + '" onclick="toggleNavPin(this)">'
+          + (pinned ? '★ Pinned' : '☆ Add') + '</button>'
+          + '</div>';
+  });
+  document.getElementById('nav-customize-list').innerHTML = html;
+  document.getElementById('modal-nav-customize').classList.remove('hidden');
+}
+function closeNavCustomize() {
+  _pendingPins = null;
+  document.getElementById('modal-nav-customize').classList.add('hidden');
+}
+function toggleNavPin(btn) {
+  var tab = btn.getAttribute('data-tab');
+  var idx = _pendingPins.indexOf(tab);
+  if (idx !== -1) {
+    _pendingPins.splice(idx, 1);
+    btn.classList.remove('pinned'); btn.textContent = '☆ Add';
+  } else {
+    if (_pendingPins.length >= MAX_PINS) {
+      toast('Maximum ' + MAX_PINS + ' tabs in the bar — unpin one first');
+      return;
+    }
+    _pendingPins.push(tab);
+    btn.classList.add('pinned'); btn.textContent = '★ Pinned';
+  }
+  // Update pin count hint on all buttons
+  document.querySelectorAll('.nav-pin-btn:not(.pinned)').forEach(function(b) {
+    b.style.opacity = _pendingPins.length >= MAX_PINS ? '.4' : '1';
+    b.style.pointerEvents = _pendingPins.length >= MAX_PINS ? 'none' : '';
+  });
+  document.querySelectorAll('.nav-pin-btn.pinned').forEach(function(b) {
+    b.style.opacity = ''; b.style.pointerEvents = '';
+  });
+}
+function saveNavCustomize() {
+  if (_pendingPins.length === 0) { toast('Pin at least one tab'); return; }
+  localStorage.setItem('wc_nav_pins', JSON.stringify(_pendingPins));
+  applyNavPins(_pendingPins);
+  closeNavCustomize();
+  toast('Navigation updated');
+}
+function resetNavCustomize() {
+  localStorage.removeItem('wc_nav_pins');
+  applyNavPins(DEFAULT_PINS.slice());
+  closeNavCustomize();
+  toast('Navigation reset to default');
 }
 function switchDevTab(btn, name) {
   document.querySelectorAll('#dev-tabs .bnav-item').forEach(function(t) { t.classList.remove('active'); });

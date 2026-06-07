@@ -298,25 +298,25 @@
     <button class="btn-logout" onclick="adminLogout()">Logout</button>
   </header>
   <nav class="panel-nav" id="admin-tabs">
-    <button class="bnav-item active" onclick="switchTab(this,'a-dash')">
+    <button class="bnav-item active" data-tab="a-dash" onclick="switchTab(this,'a-dash')">
       <span class="bnav-icon">📊</span><span class="bnav-lbl">Dashboard</span>
     </button>
-    <button class="bnav-item" onclick="switchTab(this,'a-workers')">
+    <button class="bnav-item" data-tab="a-workers" onclick="switchTab(this,'a-workers')">
       <span class="bnav-icon">👥</span><span class="bnav-lbl">Workers</span>
     </button>
-    <button class="bnav-item" onclick="switchTab(this,'a-att')">
+    <button class="bnav-item" data-tab="a-att" onclick="switchTab(this,'a-att')">
       <span class="bnav-icon">📋</span><span class="bnav-lbl">Attendance</span>
     </button>
-    <button class="bnav-item" onclick="switchTab(this,'a-absent')">
+    <button class="bnav-item" data-tab="a-absent" onclick="switchTab(this,'a-absent')">
       <span class="bnav-icon">🚫</span><span class="bnav-lbl">Absent</span>
     </button>
-    <button class="bnav-item bnav-overflow hidden" id="tab-admins-btn" onclick="switchTab(this,'a-admins')">
+    <button class="bnav-item bnav-overflow hidden" id="tab-admins-btn" data-tab="a-admins" onclick="switchTab(this,'a-admins')">
       <span class="bnav-icon">🔑</span><span class="bnav-lbl">Admins</span>
     </button>
-    <button class="bnav-item bnav-overflow" onclick="switchTab(this,'a-inactive')">
+    <button class="bnav-item bnav-overflow" data-tab="a-inactive" onclick="switchTab(this,'a-inactive')">
       <span class="bnav-icon">🗂</span><span class="bnav-lbl">Inactive</span>
     </button>
-    <button class="bnav-item bnav-overflow" onclick="switchTab(this,'a-setup')">
+    <button class="bnav-item bnav-overflow" data-tab="a-setup" onclick="switchTab(this,'a-setup')">
       <span class="bnav-icon">⚙️</span><span class="bnav-lbl">Setup</span>
     </button>
     <button class="bnav-item bnav-more-btn" id="admin-more-btn" onclick="openMoreSheet()">
@@ -327,18 +327,8 @@
     <div class="more-sheet-bd" onclick="closeMoreSheet()"></div>
     <div class="more-sheet-body">
       <div class="more-sheet-handle"></div>
-      <button class="more-sheet-item hidden" id="more-admins-btn"
-              onclick="switchTab(document.getElementById('admin-more-btn'),'a-admins');closeMoreSheet()">
-        <span class="more-item-icon">🔑</span><span>Admins</span>
-      </button>
-      <button class="more-sheet-item"
-              onclick="switchTab(document.getElementById('admin-more-btn'),'a-inactive');closeMoreSheet()">
-        <span class="more-item-icon">🗂</span><span>Inactive Archive</span>
-      </button>
-      <button class="more-sheet-item"
-              onclick="switchTab(document.getElementById('admin-more-btn'),'a-setup');closeMoreSheet()">
-        <span class="more-item-icon">⚙️</span><span>Setup</span>
-      </button>
+      <div id="more-sheet-items"></div>
+      <button class="more-sheet-customize" onclick="closeMoreSheet();openNavCustomize()">✏️ Customise tabs</button>
     </div>
   </div>
   <div class="content">
@@ -852,6 +842,21 @@
         <button class="btn btn-outline" onclick="closeModal('modal-worker-limit')">Cancel</button>
       </div>
       <p class="msg hidden" id="wl-msg"></p>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Customise Navigation Tabs -->
+<div id="modal-nav-customize" class="modal-bd hidden" onclick="if(event.target===this)closeNavCustomize()">
+  <div class="modal-box" style="max-width:380px">
+    <div class="modal-hd"><h3>✏️ Customise Tabs</h3><button class="modal-close" onclick="closeNavCustomize()">✕</button></div>
+    <div style="padding:16px 18px">
+      <p class="sub" style="margin-bottom:14px">Pin up to <strong>4 tabs</strong> to the bottom bar. The rest stay in <strong>More</strong>.</p>
+      <div id="nav-customize-list"></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-primary" onclick="saveNavCustomize()">Done</button>
+      <button class="btn btn-outline" onclick="resetNavCustomize()">Reset</button>
     </div>
   </div>
 </div>

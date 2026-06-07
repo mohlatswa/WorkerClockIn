@@ -888,6 +888,8 @@ function hideForgotPw() {
 async function sendOtp() {
   var username = (document.getElementById('fpw-username').value || '').trim().toLowerCase();
   if (!username) { showMsg('fpw-send-msg', 'Enter your username.', 'err'); return; }
+  var btn = document.getElementById('send-otp-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
   showMsg('fpw-send-msg', '⏳ Sending…', 'ok');
   try {
     var r = await withTimeout(
@@ -916,6 +918,7 @@ async function sendOtp() {
     var s2 = document.getElementById('fpw-step2'); if (s2) s2.classList.remove('hidden');
     showMsg('fpw-reset-msg', '✅ Code sent to ' + r.data.email + ' (valid 15 min)', 'ok');
   } catch(e) { showMsg('fpw-send-msg', 'Error: ' + (e.text || e.message || 'Failed to send'), 'err'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Send Code'; } }
 }
 async function resetAdminPassword() {
   var username = (document.getElementById('fpw-username').value || '').trim().toLowerCase();
@@ -1162,6 +1165,8 @@ async function addWorker() {
   if (!empId || !name || !pin) { showMsg('nw-msg', 'Employee ID, Name and PIN are required.', 'err'); return; }
   if (pin.length < 4) { showMsg('nw-msg', 'PIN must be at least 4 digits.', 'err'); return; }
   var cid = requireAdminCid(); if (!cid) return;
+  var btn = document.getElementById('add-worker-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
     // ── Worker limit check ─────────────────────────────────
     var coR = await withTimeout(db.from('companies').select('worker_limit').eq('id', cid).single(), 5000);
@@ -1210,6 +1215,7 @@ async function addWorker() {
     document.getElementById('nw-step1').classList.add('hidden');
     document.getElementById('nw-step2').classList.remove('hidden');
   } catch (e) { showMsg('nw-msg', 'Error: ' + e.message, 'err'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Save Worker'; } }
 }
 function nwEnrollFace() {
   if (_newWorkerId) adminEnrollFace(_newWorkerId, _newWorkerName, 'nw');
@@ -1743,6 +1749,8 @@ async function saveEditWorker() {
   if (pin && pin.length < 4) { showMsg('ewk-msg', 'PIN must be at least 4 digits.', 'err'); return; }
   var updates = { employee_id: empId, name: name, job_title: job || null };
   if (pin) { updates.pin = await sha256(pin); updates.force_pin_change = false; }
+  var btn = document.getElementById('edit-worker-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
     var r = await withTimeout(db.from('workers').update(updates).eq('id', id), 5000);
     if (r.error) { showMsg('ewk-msg', r.error.message.includes('unique') ? 'Employee ID already in use.' : r.error.message, 'err'); return; }
@@ -1754,6 +1762,7 @@ async function saveEditWorker() {
       else loadWorkers();
     }, 1200);
   } catch (e) { showMsg('ewk-msg', 'Error: ' + e.message, 'err'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Save'; } }
 }
 
 // ── Edit Account Modal ────────────────────────────────────
@@ -2037,6 +2046,8 @@ async function saveWorkerLimit() {
     showMsg('wl-msg', 'Enter a valid number or leave blank for unlimited.', 'err'); return;
   }
   if (!S.admin || !S.admin.id) { showMsg('wl-msg', 'Session error — please log in again.', 'err'); return; }
+  var btn = document.getElementById('wl-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
     var r = await withTimeout(
       db.rpc('set_worker_limit', {
@@ -2051,6 +2062,7 @@ async function saveWorkerLimit() {
     showMsg('wl-msg', '✅ Limit updated!', 'ok');
     setTimeout(function() { closeModal('modal-worker-limit'); loadDevCos(); }, 1200);
   } catch (e) { showMsg('wl-msg', 'Error: ' + e.message, 'err'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Save Limit'; } }
 }
 function toggleAddCo() {
   var p = document.getElementById('add-co-panel'); p.classList.toggle('hidden');
@@ -2064,6 +2076,8 @@ async function addCompany() {
   var methods = ['pin'];
   if (document.getElementById('nc-face').checked) methods.push('face');
   if (document.getElementById('nc-bio').checked)  methods.push('biometric');
+  var btn = document.getElementById('add-co-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
   try {
     var r = await withTimeout(db.from('companies').insert({ name: name, code: code, is_active: true, clock_methods: methods }), 5000);
     if (r.error) { showMsg('nc-msg', r.error.message.includes('unique') ? 'Code already exists.' : r.error.message, 'err'); return; }
@@ -2072,6 +2086,7 @@ async function addCompany() {
     document.getElementById('nc-face').checked = false; document.getElementById('nc-bio').checked = false;
     setTimeout(function() { toggleAddCo(); loadDevCos(); }, 1400);
   } catch (e) { showMsg('nc-msg', 'Error: ' + e.message, 'err'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Create Company'; } }
 }
 async function devToggleCo(id, cur) {
   var r = await withTimeout(db.from('companies').update({ is_active: !cur }).eq('id', id), 5000);

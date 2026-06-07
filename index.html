@@ -263,7 +263,7 @@
           <p style="font-size:.82rem;color:var(--muted);margin-bottom:10px">Enter your username to receive a reset code by email.</p>
           <div class="field"><input id="fpw-username" type="text" class="input" placeholder="Username" autocapitalize="none" autocomplete="off"></div>
           <div class="btn-row">
-            <button class="btn btn-primary btn-sm" onclick="sendOtp()">Send Code</button>
+            <button id="send-otp-btn" class="btn btn-primary btn-sm" onclick="sendOtp()">Send Code</button>
             <button class="btn btn-outline btn-sm" onclick="hideForgotPw()">Cancel</button>
           </div>
           <p class="msg hidden" id="fpw-send-msg" style="margin-top:8px"></p>
@@ -363,7 +363,7 @@
           <div class="field"><label>Job Title</label>    <input id="nw-job"  type="text"     class="input" placeholder="e.g. Driver, Security"></div>
           <div class="field"><label>PIN (4–6 digits) *</label><input id="nw-pin" type="password" class="input" placeholder="Set PIN" maxlength="6" inputmode="numeric"></div>
           <div class="btn-row">
-            <button class="btn btn-primary" onclick="addWorker()">Save Worker</button>
+            <button id="add-worker-btn" class="btn btn-primary" onclick="addWorker()">Save Worker</button>
             <button class="btn btn-outline" onclick="toggleAddWorker()">Cancel</button>
           </div>
           <p class="msg hidden" id="nw-msg"></p>
@@ -625,7 +625,7 @@
           </div>
         </div>
         <div class="btn-row">
-          <button class="btn btn-primary" onclick="addCompany()">Create Company</button>
+          <button id="add-co-btn" class="btn btn-primary" onclick="addCompany()">Create Company</button>
           <button class="btn btn-outline" onclick="toggleAddCo()">Cancel</button>
         </div>
         <p class="msg hidden" id="nc-msg"></p>
@@ -767,7 +767,7 @@
       <p class="msg hidden" id="ewk-msg"></p>
     </div>
     <div class="modal-ft">
-      <button class="btn btn-primary" onclick="saveEditWorker()">Save</button>
+      <button id="edit-worker-save-btn" class="btn btn-primary" onclick="saveEditWorker()">Save</button>
       <button class="btn btn-outline" onclick="closeModal('modal-edit-worker')">Cancel</button>
     </div>
   </div>
@@ -872,7 +872,7 @@
       </div>
 
       <div class="btn-row">
-        <button class="btn btn-primary" onclick="saveWorkerLimit()">Save Limit</button>
+        <button id="wl-save-btn" class="btn btn-primary" onclick="saveWorkerLimit()">Save Limit</button>
         <button class="btn btn-outline" onclick="closeModal('modal-worker-limit')">Cancel</button>
       </div>
       <p class="msg hidden" id="wl-msg"></p>

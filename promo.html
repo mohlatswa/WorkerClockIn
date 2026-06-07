@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="WorkClock — Affordable staff attendance tracking for South African businesses. R50 per employee per month. No contracts.">
+<title>WorkClock — Staff Attendance Made Simple</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --blue:#1E3A8A;--blue-m:#2563EB;--blue-l:#EFF6FF;
+  --green:#059669;--green-l:#F0FDF4;
+  --text:#1E293B;--muted:#64748B;--border:#E2E8F0;--bg:#F8FAFC;
+  --r:14px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#fff;color:var(--text);line-height:1.5}
+a{color:inherit;text-decoration:none}
+img{max-width:100%}
+
+/* ── HERO ── */
+.hero{background:linear-gradient(150deg,#0F2460 0%,#1E3A8A 50%,#2563EB 100%);color:#fff;padding:52px 24px 64px;text-align:center}
+.hero-logo{display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:50px;padding:7px 18px;font-size:.85rem;font-weight:700;letter-spacing:.5px;margin-bottom:28px}
+.hero h1{font-size:2.1rem;font-weight:900;line-height:1.15;margin-bottom:14px;letter-spacing:-.5px}
+.hero h1 span{color:#60A5FA}
+.hero p{font-size:1.05rem;opacity:.85;max-width:340px;margin:0 auto 28px}
+.hero-btns{display:flex;flex-direction:column;gap:12px;max-width:300px;margin:0 auto}
+.btn-hero{display:block;padding:15px 24px;border-radius:50px;font-size:1rem;font-weight:700;cursor:pointer;border:none;transition:transform .15s,opacity .15s;text-align:center}
+.btn-hero:active{transform:scale(.97);opacity:.88}
+.btn-primary-hero{background:#fff;color:var(--blue)}
+.btn-secondary-hero{background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.4)}
+.badge-free{display:inline-block;background:#10B981;color:#fff;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:50px;margin-left:8px;vertical-align:middle}
+
+/* ── SOCIAL PROOF ── */
+.social-proof{background:#fff;padding:18px 24px;border-bottom:1px solid var(--border);text-align:center}
+.social-proof p{font-size:.82rem;color:var(--muted);font-weight:600;letter-spacing:.3px}
+.social-proof span{color:var(--blue-m);font-weight:700}
+
+/* ── PAIN SECTION ── */
+.pain{background:var(--bg);padding:40px 24px;text-align:center}
+.pain h2{font-size:1.4rem;font-weight:800;margin-bottom:8px}
+.pain p{color:var(--muted);font-size:.95rem;max-width:360px;margin:0 auto 24px}
+.pain-list{max-width:380px;margin:0 auto;text-align:left;display:flex;flex-direction:column;gap:10px}
+.pain-item{display:flex;align-items:flex-start;gap:12px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px;font-size:.9rem}
+.pain-icon{font-size:1.3rem;flex-shrink:0;line-height:1.2}
+
+/* ── FEATURES ── */
+.features{padding:44px 24px;background:#fff}
+.features h2{font-size:1.4rem;font-weight:800;text-align:center;margin-bottom:6px}
+.features .sub{text-align:center;color:var(--muted);font-size:.92rem;margin-bottom:28px}
+.feat-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:480px;margin:0 auto}
+.feat-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:16px 14px}
+.feat-icon{font-size:1.8rem;margin-bottom:8px;display:block}
+.feat-title{font-size:.88rem;font-weight:700;margin-bottom:4px}
+.feat-desc{font-size:.78rem;color:var(--muted);line-height:1.45}
+
+/* ── HOW IT WORKS ── */
+.how{background:var(--blue-l);padding:44px 24px}
+.how h2{font-size:1.4rem;font-weight:800;text-align:center;margin-bottom:28px}
+.steps{display:flex;flex-direction:column;gap:16px;max-width:400px;margin:0 auto}
+.step{display:flex;gap:14px;align-items:flex-start}
+.step-num{width:34px;height:34px;border-radius:50%;background:var(--blue-m);color:#fff;font-weight:800;font-size:.95rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.step-body{}
+.step-title{font-weight:700;font-size:.92rem;margin-bottom:3px}
+.step-desc{font-size:.82rem;color:var(--muted)}
+
+/* ── PRICING ── */
+.pricing{padding:44px 24px;background:#fff;text-align:center}
+.pricing h2{font-size:1.4rem;font-weight:800;margin-bottom:6px}
+.pricing .sub{color:var(--muted);font-size:.92rem;margin-bottom:28px}
+.price-card{background:linear-gradient(135deg,var(--blue),var(--blue-m));color:#fff;border-radius:20px;padding:32px 24px;max-width:340px;margin:0 auto 20px}
+.price-amount{font-size:3rem;font-weight:900;line-height:1}
+.price-unit{font-size:1rem;opacity:.85;margin-bottom:6px}
+.price-note{font-size:.82rem;opacity:.75;margin-bottom:20px}
+.price-list{text-align:left;display:flex;flex-direction:column;gap:10px}
+.price-list li{display:flex;align-items:center;gap:9px;font-size:.88rem}
+.price-list li::before{content:'✓';font-weight:800;color:#34D399;flex-shrink:0}
+.price-examples{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:16px;max-width:340px;margin:0 auto}
+.price-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:.88rem}
+.price-row:last-child{border-bottom:none;font-weight:700}
+.price-row .amt{font-weight:700;color:var(--green)}
+
+/* ── TESTIMONIAL ── */
+.testimonial{background:var(--green-l);padding:36px 24px;text-align:center}
+.quote{font-size:1.05rem;font-style:italic;color:var(--text);max-width:360px;margin:0 auto 14px;line-height:1.55}
+.quote-author{font-size:.82rem;font-weight:700;color:var(--muted)}
+
+/* ── FREE TRIAL ── */
+.trial{background:linear-gradient(135deg,#0F2460,#1E3A8A);color:#fff;padding:44px 24px;text-align:center}
+.trial h2{font-size:1.5rem;font-weight:900;margin-bottom:10px}
+.trial p{opacity:.85;font-size:.95rem;max-width:340px;margin:0 auto 28px}
+.trial-btns{display:flex;flex-direction:column;gap:12px;max-width:300px;margin:0 auto}
+.btn-wa{display:flex;align-items:center;justify-content:center;gap:10px;background:#25D366;color:#fff;padding:16px 24px;border-radius:50px;font-size:1rem;font-weight:700;border:none;cursor:pointer;transition:opacity .15s}
+.btn-wa:active{opacity:.85}
+.btn-wa-icon{font-size:1.3rem}
+.btn-demo{background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.4);padding:14px 24px;border-radius:50px;font-size:.92rem;font-weight:700;display:block;text-align:center;transition:opacity .15s}
+.btn-demo:active{opacity:.85}
+
+/* ── FOOTER ── */
+footer{background:#0F2460;color:rgba(255,255,255,.6);padding:24px;text-align:center;font-size:.8rem}
+footer strong{color:#fff}
+footer a{color:#60A5FA}
+
+/* ── DESKTOP ── */
+@media(min-width:600px){
+  .hero h1{font-size:2.6rem}
+  .feat-grid{grid-template-columns:1fr 1fr 1fr}
+  .hero-btns,.trial-btns{flex-direction:row;max-width:440px;justify-content:center}
+  .btn-hero{min-width:180px}
+}
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-logo">⏱ WorkClock</div>
+  <h1>Stop guessing when your<br><span>staff actually arrive.</span></h1>
+  <p>Affordable, simple clock-in &amp; attendance tracking built for South African businesses.</p>
+  <div class="hero-btns">
+    <a href="https://mohlatswa.github.io/WorkerClockIn" class="btn-hero btn-primary-hero">
+      Try Free for 30 Days <span class="badge-free">FREE</span>
+    </a>
+    <a href="https://wa.me/27XXXXXXXXX?text=Hi%2C%20I%27d%20like%20to%20know%20more%20about%20WorkClock" class="btn-hero btn-secondary-hero">
+      💬 WhatsApp Us
+    </a>
+  </div>
+</section>
+
+<!-- SOCIAL PROOF -->
+<div class="social-proof">
+  <p>Trusted by businesses across South Africa &nbsp;·&nbsp; <span>R50 per employee/month</span> &nbsp;·&nbsp; No setup fees</p>
+</div>
+
+<!-- PAIN -->
+<section class="pain">
+  <h2>Sound familiar?</h2>
+  <p>These problems cost South African businesses thousands every month.</p>
+  <div class="pain-list">
+    <div class="pain-item"><span class="pain-icon">📋</span><span>Paper timesheets that get lost, altered, or "forgotten"</span></div>
+    <div class="pain-item"><span class="pain-icon">🕐</span><span>Paying for hours worked that nobody can verify</span></div>
+    <div class="pain-item"><span class="pain-icon">🤷</span><span>No way to prove when someone arrived — or if they showed up at all</span></div>
+    <div class="pain-item"><span class="pain-icon">📍</span><span>Staff clocking in from home instead of the workplace</span></div>
+    <div class="pain-item"><span class="pain-icon">😤</span><span>Disputes at month end with no records to back you up</span></div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features">
+  <h2>Everything you need</h2>
+  <p class="sub">Simple enough for any employee. Powerful enough for any manager.</p>
+  <div class="feat-grid">
+    <div class="feat-card">
+      <span class="feat-icon">📍</span>
+      <div class="feat-title">GPS Location Lock</div>
+      <div class="feat-desc">Workers can only clock in when they're physically at the workplace.</div>
+    </div>
+    <div class="feat-card">
+      <span class="feat-icon">🔐</span>
+      <div class="feat-title">PIN & Biometric</div>
+      <div class="feat-desc">Secure PIN or fingerprint login — no buddy-punching allowed.</div>
+    </div>
+    <div class="feat-card">
+      <span class="feat-icon">📊</span>
+      <div class="feat-title">Live Dashboard</div>
+      <div class="feat-desc">See who's in, who's absent, and who's still clocked in — right now.</div>
+    </div>
+    <div class="feat-card">
+      <span class="feat-icon">📋</span>
+      <div class="feat-title">Attendance Reports</div>
+      <div class="feat-desc">Filter by date, export to CSV. Perfect for payroll every month.</div>
+    </div>
+    <div class="feat-card">
+      <span class="feat-icon">📱</span>
+      <div class="feat-title">Works on Any Phone</div>
+      <div class="feat-desc">No app store needed. Workers open it in their phone browser and install in one tap.</div>
+    </div>
+    <div class="feat-card">
+      <span class="feat-icon">📶</span>
+      <div class="feat-title">Works Offline</div>
+      <div class="feat-desc">Clock-ins save even without data. They sync automatically when back online.</div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how">
+  <h2>How it works</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <div class="step-title">You send your staff a link</div>
+        <div class="step-desc">One WhatsApp message with your company's unique link. That's it — they're set up.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <div class="step-title">They clock in with their PIN</div>
+        <div class="step-desc">Every morning, they open the app, tap Clock In. GPS confirms they're at work.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <div class="step-title">You see everything live</div>
+        <div class="step-desc">Your admin dashboard updates in real time — who's in, who's absent, clock-in and out times.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <div class="step-title">Export for payroll</div>
+        <div class="step-desc">Download a clean CSV with all attendance data — hours worked, days present, everything.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="pricing">
+  <h2>Honest, simple pricing</h2>
+  <p class="sub">No contracts. No setup fees. Cancel any time.</p>
+  <div class="price-card">
+    <div class="price-amount">R50</div>
+    <div class="price-unit">per employee / per month</div>
+    <div class="price-note">You only pay for the employees you have.</div>
+    <ul class="price-list">
+      <li>Unlimited clock-ins &amp; clock-outs</li>
+      <li>Live admin dashboard</li>
+      <li>GPS location verification</li>
+      <li>Attendance reports &amp; CSV export</li>
+      <li>PIN &amp; biometric login</li>
+      <li>Works offline on any phone</li>
+      <li>Free setup &amp; onboarding</li>
+    </ul>
+  </div>
+  <div class="price-examples">
+    <div class="price-row"><span>5 employees</span><span class="amt">R250 / month</span></div>
+    <div class="price-row"><span>10 employees</span><span class="amt">R500 / month</span></div>
+    <div class="price-row"><span>20 employees</span><span class="amt">R1 000 / month</span></div>
+    <div class="price-row"><span>50 employees</span><span class="amt">R2 500 / month</span></div>
+    <div class="price-row"><span>First 30 days</span><span class="amt" style="color:#059669">FREE</span></div>
+  </div>
+</section>
+
+<!-- TESTIMONIAL placeholder -->
+<section class="testimonial">
+  <div class="quote">"We used to argue about timesheets every pay day. Now I just open the app and show them exactly when they arrived. No more disputes."</div>
+  <div class="quote-author">— Business owner, Johannesburg</div>
+</section>
+
+<!-- CTA -->
+<section class="trial">
+  <h2>Start your free 30-day trial</h2>
+  <p>No credit card. No contract. Your team could be clocking in today.</p>
+  <div class="trial-btns">
+    <a href="https://wa.me/27XXXXXXXXX?text=Hi%2C%20I%27d%20like%20to%20start%20a%20free%20trial%20of%20WorkClock%20for%20my%20business" class="btn-wa">
+      <span class="btn-wa-icon">💬</span> Start on WhatsApp
+    </a>
+    <a href="https://mohlatswa.github.io/WorkerClockIn" class="btn-demo">View Live Demo →</a>
+  </div>
+</section>
+
+<footer>
+  <strong>WorkClock</strong> by Reatlegile Solutions &nbsp;·&nbsp;
+  <a href="mailto:mohlatswa96@gmail.com">mohlatswa96@gmail.com</a><br><br>
+  Built for South African small businesses.
+</footer>
+
+</body>
+</html>

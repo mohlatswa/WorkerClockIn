@@ -199,6 +199,11 @@
 </head>
 <body>
 
+<!-- ══ OFFLINE BANNER ════════════════════════════════════ -->
+<div id="offline-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:500;background:#DC2626;color:#fff;text-align:center;padding:9px 16px;font-size:.82rem;font-weight:600;letter-spacing:.2px">
+  📶 No internet — clock-ins are saved locally and will sync automatically
+</div>
+
 <!-- ══ SIGN IN ═══════════════════════════════════════════ -->
 <div id="v-signin" class="view on">
   <div class="si-brand">
@@ -285,6 +290,11 @@
     </div>
   </div>
   <div class="dash-body">
+
+    <!-- Offline sync badge -->
+    <div id="sync-badge" style="display:none;background:#FEF3C7;color:#92400E;border:1px solid #FCD34D;border-radius:10px;padding:10px 16px;font-size:.84rem;font-weight:600;text-align:center">
+      ⏳ <span id="sync-badge-txt">Syncing…</span>
+    </div>
 
     <!-- Live clock -->
     <div class="time-card">
@@ -683,6 +693,8 @@ async function clockAction(){
   var btn=document.getElementById('clk-btn');
   btn.disabled=true;
   var action=W.clockedIn?'out':'in';
+  // If offline, save to queue immediately
+  if(!navigator.onLine){ saveOfflineAction(action); return; }
   try {
     if(action==='in'){
       var ins = await wt(db.from('attendance').insert({
@@ -710,7 +722,101 @@ async function clockAction(){
     await loadTodayRecord();
     await loadHistory();
     setClkBtn(W.locOk);
-  } catch(e){ alert('Error: '+(e.message||'Try again')); btn.disabled=false; setClkBtn(W.locOk); }
+  } catch(e){
+    // Network / timeout error — fall back to offline queue
+    if(!navigator.onLine || e.message==='timeout' || e.message.includes('fetch') || e.message.includes('network')){
+      saveOfflineAction(action);
+    } else {
+      wkToast('❌ '+(e.message||'Error — please try again'));
+      btn.disabled=false; setClkBtn(W.locOk);
+    }
+  }
+}
+
+// ── Offline queue ─────────────────────────────────────────
+var _idMap={};  // tempId -> real DB id
+
+function oQueue(){ try{ return JSON.parse(localStorage.getItem('wc_oq')||'[]'); }catch(e){ return []; } }
+function oQueueSave(q){ localStorage.setItem('wc_oq',JSON.stringify(q)); }
+function oQueueAdd(e){ var q=oQueue(); q.push(e); oQueueSave(q); updateSyncBadge(); }
+function oQueueRemove(tid){ oQueueSave(oQueue().filter(function(e){ return e.tid!==tid; })); updateSyncBadge(); }
+function updateSyncBadge(){
+  var q=oQueue(); var el=document.getElementById('sync-badge'); var tx=document.getElementById('sync-badge-txt');
+  if(!el) return;
+  if(q.length){ el.style.display=''; tx.textContent=q.length+' clock-in'+(q.length>1?'s':'')+' pending sync'; }
+  else { el.style.display='none'; }
+}
+
+function saveOfflineAction(action){
+  var tid='tmp_'+Date.now();
+  var entry={ tid:tid, action:action, workerId:W.worker.id, companyId:W.companyId,
+    workplaceId:W.workplace?W.workplace.id:null, ts:new Date().toISOString(),
+    lat:W.userLoc?W.userLoc.lat:null, lng:W.userLoc?W.userLoc.lng:null };
+  if(action==='out') entry.attId=W.attId;
+  oQueueAdd(entry);
+  // Update local state as if it succeeded
+  if(action==='in'){ W.attId=tid; W.clockedIn=true; }
+  else { W.clockedIn=false; }
+  vib([50,30,100]);
+  showSucc(action);
+  var badge=document.getElementById('d-badge');
+  if(action==='in'){ badge.textContent='Clocked In'; badge.className='profile-badge badge-in'; }
+  else             { badge.textContent='Clocked Out'; badge.className='profile-badge badge-out'; }
+  wkToast('📶 Saved offline — will sync when connected');
+  setClkBtn(W.locOk);
+}
+
+async function syncOfflineQueue(){
+  var q=oQueue(); if(!q.length) return;
+  var tx=document.getElementById('sync-badge-txt');
+  if(tx) tx.textContent='Syncing…';
+  var synced=0;
+  for(var i=0;i<q.length;i++){
+    var e=q[i];
+    try{
+      if(e.action==='in'){
+        var r=await wt(db.from('attendance').insert({
+          worker_id:e.workerId, company_id:e.companyId,
+          clock_in_time:e.ts, auth_method:'portal', status:'active',
+          workplace_id:e.workplaceId||null,
+          clock_in_latitude:e.lat||null, clock_in_longitude:e.lng||null
+        }).select('id').single(),10000);
+        if(r.error) throw r.error;
+        _idMap[e.tid]=r.data.id;
+        if(W.attId===e.tid) W.attId=r.data.id;
+        oQueueRemove(e.tid); synced++;
+      } else if(e.action==='out'){
+        var rid=e.attId;
+        if(rid && String(rid).startsWith('tmp_')) rid=_idMap[rid]||null;
+        if(!rid){
+          var lk=await wt(db.from('attendance').select('id').eq('worker_id',e.workerId).eq('status','active').order('clock_in_time',{ascending:false}).limit(1).maybeSingle(),10000);
+          if(lk.data) rid=lk.data.id;
+        }
+        if(rid){
+          await wt(db.from('attendance').update({ clock_out_time:e.ts, status:'completed',
+            clock_out_latitude:e.lat||null, clock_out_longitude:e.lng||null }).eq('id',rid),10000);
+          oQueueRemove(e.tid); synced++;
+        }
+      }
+    }catch(_){ /* leave in queue — retry on next online event */ }
+  }
+  if(synced>0){
+    wkToast('✅ '+synced+' record'+(synced>1?'s':'')+' synced successfully');
+    loadTodayRecord().catch(function(){});
+    loadHistory().catch(function(){});
+  }
+  updateSyncBadge();
+}
+
+function wkToast(msg){
+  var el=document.getElementById('wk-toast');
+  if(!el){
+    el=document.createElement('div'); el.id='wk-toast';
+    el.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1E293B;color:#fff;padding:10px 20px;border-radius:10px;font-size:.85rem;font-weight:600;z-index:900;opacity:0;transition:opacity .3s;pointer-events:none;max-width:88vw;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.25)';
+    document.body.appendChild(el);
+  }
+  el.textContent=msg; el.style.opacity='1';
+  clearTimeout(el._t); el._t=setTimeout(function(){ el.style.opacity='0'; },3500);
 }
 function showSucc(action){
   var ov=document.getElementById('succ-ov');
@@ -874,13 +980,24 @@ document.addEventListener('DOMContentLoaded', function(){
   if(sid){
     wt(db.from('workers').select('id,name,employee_id,job_title,pin,biometric_enabled,biometric_credential_id,face_descriptor,company_id').eq('id',sid).eq('is_active',true).maybeSingle(),6000)
       .then(function(r){ if(r.data){ W.worker=r.data; W.companyId=r.data.company_id; loadDashboard(); } else { localStorage.removeItem('wc_portal_worker'); } })
-      .catch(function(){ /* stay on sign-in */ });
+      .catch(function(){ /* stay on sign-in — may be offline */ });
   }
-  // Clear stale SW
+  // Register service worker for offline support
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.getRegistrations().then(function(r){ r.forEach(function(x){ x.unregister(); }); });
-    caches.keys().then(function(k){ k.forEach(function(x){ caches.delete(x); }); });
+    navigator.serviceWorker.register('sw.js').catch(function(){});
   }
+  // Connection event listeners
+  window.addEventListener('online', function(){
+    document.getElementById('offline-banner').style.display='none';
+    syncOfflineQueue();
+  });
+  window.addEventListener('offline', function(){
+    document.getElementById('offline-banner').style.display='';
+  });
+  if(!navigator.onLine) document.getElementById('offline-banner').style.display='';
+  // Sync any queued records on load
+  updateSyncBadge();
+  if(navigator.onLine) setTimeout(syncOfflineQueue, 2500);
 });
 </script>
 </body>

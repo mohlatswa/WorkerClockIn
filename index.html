@@ -289,7 +289,10 @@
 <div id="pg-admin" class="pg">
   <header class="topbar topbar-dark topbar-flex">
     <div>
-      <div style="font-weight:700">⏱ WorkClock Admin</div>
+      <div style="font-weight:700;display:flex;align-items:center;gap:7px">
+        ⏱ WorkClock Admin
+        <span id="conn-dot" title="Connected" style="width:8px;height:8px;border-radius:50%;background:#10B981;display:inline-block;flex-shrink:0"></span>
+      </div>
       <div id="admin-co-lbl" style="font-size:.78rem;opacity:.8"></div>
     </div>
     <button class="btn-logout" onclick="adminLogout()">Logout</button>
@@ -817,8 +820,7 @@
 <script src="app.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(function(r){ r.forEach(function(x){ x.unregister(); }); });
-    caches.keys().then(function(k){ k.forEach(function(x){ caches.delete(x); }); });
+    navigator.serviceWorker.register('sw.js').catch(function(){});
   }
 </script>
 </body>

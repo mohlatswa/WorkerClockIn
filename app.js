@@ -1,6 +1,25 @@
 'use strict';
 
 // ── State ─────────────────────────────────────────────────
+// ── Connection monitoring ─────────────────────────────────
+function setConnDot(ok){
+  var el=document.getElementById('conn-dot');
+  if(el){ el.style.background=ok?'#10B981':'#EF4444'; el.title=ok?'Connected to server':'Server unreachable'; }
+}
+window.addEventListener('online',  function(){ setConnDot(true);  });
+window.addEventListener('offline', function(){ setConnDot(false); toast('📶 Internet connection lost'); });
+// Health-check Supabase every 2 minutes
+setInterval(async function(){
+  if(!navigator.onLine) return;
+  try {
+    await Promise.race([
+      db.from('companies').select('id').limit(1),
+      new Promise(function(_,r){ setTimeout(function(){ r(new Error('timeout')); },6000); })
+    ]);
+    setConnDot(true);
+  } catch(e){ setConnDot(false); toast('⚠️ Server unreachable — check your connection'); }
+}, 120000);
+
 var S = {
   worker: null, admin: null,
   companyId: null, companyName: null, companyCode: null, fromUrl: false,

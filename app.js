@@ -1941,28 +1941,43 @@ async function loadDevCos() {
     var inactive = r.data.filter(function(c) { return !c.is_active; });
 
     function renderCoRow(c) {
-      var used = workerCounts[c.id] || 0;
-      var lim  = c.worker_limit;
-      var limitTxt = lim !== null ? (used + ' / ' + lim + ' workers') : (used + ' workers (unlimited)');
-      var limitClr = (lim !== null && used >= lim) ? 'color:var(--red);font-weight:700' : 'color:var(--muted)';
+      var used    = workerCounts[c.id] || 0;
+      var lim     = c.worker_limit;
+      var atLimit = lim !== null && used >= lim;
+      var empTxt  = lim !== null ? (used + ' / ' + lim + ' employees') : (used + ' employees (unlimited)');
+      var empClr  = atLimit ? 'color:var(--red);font-weight:700' : 'color:var(--muted)';
+      var monthly = lim !== null ? fmtRand(calcWlCost(lim)) + '/mo' : '—';
+      var monClr  = lim !== null ? 'color:var(--green);font-weight:700' : 'color:var(--muted)';
       return '<div class="list-row">' +
         '<div class="row-info"><div class="av av-sm" style="background:var(--purple)">' + c.code.slice(0, 2) + '</div>' +
         '<div><div class="row-name">' + c.name + '</div>' +
         '<div class="row-meta">Code: ' + c.code +
-          ' · <span style="' + limitClr + '">' + limitTxt + '</span>' +
+          ' · <span style="' + empClr + '">' + empTxt + '</span>' +
+          ' · <span style="' + monClr + '">' + monthly + '</span>' +
         '</div></div></div>' +
         '<div class="row-btns">' +
-        '<button class="icon-btn" title="Set Worker Limit" onclick="openWorkerLimitModal(\'' + c.id + '\',' + used + ')">👥</button>' +
+        '<button class="icon-btn" title="Set Employee Limit" onclick="openWorkerLimitModal(\'' + c.id + '\',' + used + ')">👥</button>' +
         '<button class="icon-btn" onclick="openEditCo(\'' + c.id + '\')">✏️</button>' +
         '<button class="icon-btn" onclick="devToggleCo(\'' + c.id + '\',' + c.is_active + ')">' + (c.is_active ? '🚫' : '✅') + '</button>' +
         '</div></div>';
     }
 
+    // Total monthly revenue from active companies with limits set
+    var totalMonthly = active.reduce(function(sum, c) {
+      return sum + (c.worker_limit ? calcWlCost(c.worker_limit) : 0);
+    }, 0);
+    var billingNote = active.filter(function(c){ return !c.worker_limit; }).length > 0
+      ? ' <span style="font-size:.75rem;color:#64748B">(excludes unlimited)</span>' : '';
+
     var html = '';
     html += '<div class="list-group-hd">✅ Active Companies (' + active.length + ')</div>';
-    html += '<div class="card" style="padding:0 18px;margin-bottom:16px">';
+    html += '<div class="card" style="padding:0 18px;margin-bottom:0;border-radius:0">';
     html += active.length ? active.map(renderCoRow).join('') : '<div class="empty" style="padding:12px 0">No active companies</div>';
     html += '</div>';
+    html += '<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:0 0 var(--r) var(--r);padding:10px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">' +
+      '<span style="font-size:.82rem;color:#065F46;font-weight:600">💰 Total monthly revenue' + billingNote + '</span>' +
+      '<span style="font-size:1rem;font-weight:800;color:#065F46">' + fmtRand(totalMonthly) + '</span>' +
+      '</div>';
     if (inactive.length) {
       html += '<div class="list-group-hd list-group-hd-inactive">🗂 Inactive / Deactivated (' + inactive.length + ')</div>';
       html += '<div class="card" style="padding:0 18px">';
@@ -1975,20 +1990,47 @@ async function loadDevCos() {
 
 function openWorkerLimitModal(coId, usedCount) {
   var c = _cCache[coId]; if (!c) { toast('Company data not loaded — refresh.'); return; }
-  document.getElementById('wl-co-id').value       = coId;
+  document.getElementById('wl-co-id').value         = coId;
   document.getElementById('wl-co-name').textContent = c.name;
-  var lim = c.worker_limit;
+  var lim  = c.worker_limit;
+  var cost = lim ? fmtRand(calcWlCost(lim)) : null;
   document.getElementById('wl-co-usage').textContent =
-    'Currently: ' + usedCount + ' active worker' + (usedCount !== 1 ? 's' : '') +
-    (lim !== null ? ' · Limit: ' + lim : ' · Limit: Unlimited');
+    'Active employees: ' + usedCount +
+    (lim !== null ? '  ·  Limit: ' + lim + '  ·  Monthly: ' + cost : '  ·  Limit: Unlimited');
   document.getElementById('wl-custom').value = lim !== null ? lim : '';
   document.getElementById('wl-msg').classList.add('hidden');
+  updateWlCost();
   document.getElementById('modal-worker-limit').classList.remove('hidden');
 }
 
+var WL_RATE = 50;   // R per employee per month
+var WL_MIN  = 200;  // minimum monthly charge in R
+
+function calcWlCost(n) {
+  if (!n || n < 1) return null;
+  return Math.max(WL_MIN, n * WL_RATE);
+}
+function fmtRand(n) {
+  return 'R' + n.toLocaleString('en-ZA');
+}
+function updateWlCost() {
+  var n   = parseInt(document.getElementById('wl-custom').value) || 0;
+  var box = document.getElementById('wl-cost-display');
+  var txt = document.getElementById('wl-cost-text');
+  if (!box || !txt) return;
+  if (n > 0) {
+    var cost = calcWlCost(n);
+    var base = n * WL_RATE;
+    var note = base < WL_MIN ? ' (minimum fee applies)' : '';
+    txt.textContent = n + ' employees × R' + WL_RATE + ' = ' + fmtRand(cost) + ' / month' + note;
+    box.style.display = '';
+  } else {
+    box.style.display = 'none';
+  }
+}
 function setWlQuick(val) {
   document.getElementById('wl-custom').value = val !== null ? val : '';
-  document.getElementById('wl-custom').placeholder = val !== null ? val : 'Unlimited (leave blank)';
+  updateWlCost();
 }
 
 async function saveWorkerLimit() {

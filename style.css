@@ -198,14 +198,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .tag-out{background:#F1F5F9;color:var(--muted)}
 
 /* ─── LIST ROWS ─────────────────────────────────────────── */
-.list-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0;border-bottom:1px solid var(--border)}
+.list-section-hd{padding:7px 18px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;margin:0 -18px}
+.list-group-hd{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#166534;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px 10px 0 0;padding:8px 14px;margin-bottom:0}
+.list-group-hd + .card{border-radius:0 0 var(--r) var(--r);border-top:none}
+.list-group-hd.list-group-hd-inactive{color:#991B1B;background:#FEF2F2;border-color:#FECACA;margin-top:12px}
+.list-row{display:flex;flex-direction:column;gap:8px;padding:12px 0;border-bottom:1px solid var(--border)}
 .list-row:last-child{border-bottom:none}
-.row-info{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+.row-info{display:flex;align-items:center;gap:10px}
 .row-name{font-weight:600;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .row-meta{font-size:.78rem;color:var(--muted);margin-top:2px}
-.row-btns{display:flex;gap:4px;flex-shrink:0}
-.icon-btn{background:none;border:1px solid var(--border);border-radius:var(--rsm);padding:5px 8px;cursor:pointer;font-size:.9rem;line-height:1;transition:background .1s}
+.row-btns{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-left:46px}
+.icon-btn{background:none;border:1px solid var(--border);border-radius:var(--rsm);width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:.88rem;line-height:1;transition:background .1s;flex-shrink:0}
 .icon-btn:active{background:var(--bg)}
+.restore-btn{background:#D1FAE5;color:#065F46;border:1px solid #6EE7B7;border-radius:8px;padding:6px 12px;font-size:.8rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .1s;flex-shrink:0}
+.restore-btn:active{background:#A7F3D0}
 .role-pill{font-size:.72rem;font-weight:700;padding:2px 7px;border-radius:50px;display:inline-block}
 .badge-absent{font-size:.72rem;font-weight:700;padding:3px 9px;border-radius:50px;background:#fee2e2;color:var(--red);flex-shrink:0}
 .stat-card{cursor:default}

@@ -299,7 +299,8 @@
     <button class="tab"        onclick="switchTab(this,'a-workers')">Workers</button>
     <button class="tab"        onclick="switchTab(this,'a-att')">Attendance</button>
     <button class="tab"        onclick="switchTab(this,'a-absent')">Absent</button>
-    <button class="tab hidden" onclick="switchTab(this,'a-admins')" id="tab-admins-btn">Admins</button>
+    <button class="tab hidden" onclick="switchTab(this,'a-admins')"   id="tab-admins-btn">Admins</button>
+    <button class="tab"        onclick="switchTab(this,'a-inactive')">Inactive</button>
     <button class="tab"        onclick="switchTab(this,'a-setup')">Setup</button>
   </nav>
   <div class="content">
@@ -451,6 +452,16 @@
       <div id="co-admins-list"><div class="empty">Loading…</div></div>
     </div>
 
+    <!-- Inactive Tab -->
+    <div id="a-inactive" class="tab-pane">
+      <div class="tab-bar">
+        <span class="sec-lbl">🗂 Inactive Records</span>
+        <button class="btn btn-outline btn-sm" onclick="loadAdminInactive()">↻ Refresh</button>
+      </div>
+      <p class="sub" style="margin-bottom:14px">All removed or deactivated users are stored here. You can restore them at any time or export the list.</p>
+      <div id="admin-inactive-list"><div class="empty">Loading…</div></div>
+    </div>
+
     <!-- Setup Tab -->
     <div id="a-setup" class="tab-pane">
 
@@ -527,6 +538,7 @@
     <button class="tab active" onclick="switchDevTab(this,'d-cos')">Companies</button>
     <button class="tab"        onclick="switchDevTab(this,'d-accounts')">Accounts</button>
     <button class="tab"        onclick="switchDevTab(this,'d-workers')">Workers</button>
+    <button class="tab"        onclick="switchDevTab(this,'d-inactive')">Inactive</button>
     <button class="tab"        onclick="switchDevTab(this,'d-system')">System</button>
   </nav>
   <div class="content">
@@ -592,6 +604,14 @@
         <select id="dev-filter-co-wk" class="input" onchange="loadDevWorkers()" style="width:100%"><option value="">Select a company…</option></select>
       </div>
       <div id="dev-workers-list"><div class="empty">Select a company above</div></div>
+    </div>
+
+    <div id="d-inactive" class="tab-pane">
+      <div class="tab-bar">
+        <span class="sec-lbl">🗂 Inactive / Deactivated</span>
+        <button class="btn btn-outline btn-sm" onclick="loadDevInactive()">↻ Refresh</button>
+      </div>
+      <div id="dev-inactive-list"><div class="empty">Loading…</div></div>
     </div>
 
     <div id="d-system" class="tab-pane">

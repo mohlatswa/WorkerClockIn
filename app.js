@@ -2003,12 +2003,11 @@ function openWorkerLimitModal(coId, usedCount) {
   document.getElementById('modal-worker-limit').classList.remove('hidden');
 }
 
-var WL_RATE = 50;   // R per employee per month
-var WL_MIN  = 200;  // minimum monthly charge in R
+var WL_RATE = 50; // R per employee per month
 
 function calcWlCost(n) {
   if (!n || n < 1) return null;
-  return Math.max(WL_MIN, n * WL_RATE);
+  return n * WL_RATE;
 }
 function fmtRand(n) {
   return 'R' + n.toLocaleString('en-ZA');
@@ -2019,10 +2018,7 @@ function updateWlCost() {
   var txt = document.getElementById('wl-cost-text');
   if (!box || !txt) return;
   if (n > 0) {
-    var cost = calcWlCost(n);
-    var base = n * WL_RATE;
-    var note = base < WL_MIN ? ' (minimum fee applies)' : '';
-    txt.textContent = n + ' employees × R' + WL_RATE + ' = ' + fmtRand(cost) + ' / month' + note;
+    txt.textContent = n + ' employees × R' + WL_RATE + ' = ' + fmtRand(n * WL_RATE) + ' / month';
     box.style.display = '';
   } else {
     box.style.display = 'none';

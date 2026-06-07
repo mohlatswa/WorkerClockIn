@@ -1787,11 +1787,11 @@ function openMoreSheet() {
   });
   document.getElementById('more-sheet-items').innerHTML = html ||
     '<p class="sub" style="padding:8px 18px 4px">All tabs are pinned to the bar.</p>';
-  document.getElementById('admin-more-sheet').classList.remove('hidden');
+  document.getElementById('admin-more-sheet').classList.add('is-open');
   document.body.style.overflow = 'hidden';
 }
 function closeMoreSheet() {
-  document.getElementById('admin-more-sheet').classList.add('hidden');
+  document.getElementById('admin-more-sheet').classList.remove('is-open');
   document.body.style.overflow = '';
 }
 

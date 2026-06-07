@@ -297,15 +297,50 @@
     </div>
     <button class="btn-logout" onclick="adminLogout()">Logout</button>
   </header>
-  <nav class="tabs" id="admin-tabs">
-    <button class="tab active" onclick="switchTab(this,'a-dash')">Dashboard</button>
-    <button class="tab"        onclick="switchTab(this,'a-workers')">Workers</button>
-    <button class="tab"        onclick="switchTab(this,'a-att')">Attendance</button>
-    <button class="tab"        onclick="switchTab(this,'a-absent')">Absent</button>
-    <button class="tab hidden" onclick="switchTab(this,'a-admins')"   id="tab-admins-btn">Admins</button>
-    <button class="tab"        onclick="switchTab(this,'a-inactive')">Inactive</button>
-    <button class="tab"        onclick="switchTab(this,'a-setup')">Setup</button>
+  <nav class="panel-nav" id="admin-tabs">
+    <button class="bnav-item active" onclick="switchTab(this,'a-dash')">
+      <span class="bnav-icon">📊</span><span class="bnav-lbl">Dashboard</span>
+    </button>
+    <button class="bnav-item" onclick="switchTab(this,'a-workers')">
+      <span class="bnav-icon">👥</span><span class="bnav-lbl">Workers</span>
+    </button>
+    <button class="bnav-item" onclick="switchTab(this,'a-att')">
+      <span class="bnav-icon">📋</span><span class="bnav-lbl">Attendance</span>
+    </button>
+    <button class="bnav-item" onclick="switchTab(this,'a-absent')">
+      <span class="bnav-icon">🚫</span><span class="bnav-lbl">Absent</span>
+    </button>
+    <button class="bnav-item bnav-overflow hidden" id="tab-admins-btn" onclick="switchTab(this,'a-admins')">
+      <span class="bnav-icon">🔑</span><span class="bnav-lbl">Admins</span>
+    </button>
+    <button class="bnav-item bnav-overflow" onclick="switchTab(this,'a-inactive')">
+      <span class="bnav-icon">🗂</span><span class="bnav-lbl">Inactive</span>
+    </button>
+    <button class="bnav-item bnav-overflow" onclick="switchTab(this,'a-setup')">
+      <span class="bnav-icon">⚙️</span><span class="bnav-lbl">Setup</span>
+    </button>
+    <button class="bnav-item bnav-more-btn" id="admin-more-btn" onclick="openMoreSheet()">
+      <span class="bnav-icon">☰</span><span class="bnav-lbl">More</span>
+    </button>
   </nav>
+  <div id="admin-more-sheet" class="more-sheet hidden">
+    <div class="more-sheet-bd" onclick="closeMoreSheet()"></div>
+    <div class="more-sheet-body">
+      <div class="more-sheet-handle"></div>
+      <button class="more-sheet-item hidden" id="more-admins-btn"
+              onclick="switchTab(document.getElementById('admin-more-btn'),'a-admins');closeMoreSheet()">
+        <span class="more-item-icon">🔑</span><span>Admins</span>
+      </button>
+      <button class="more-sheet-item"
+              onclick="switchTab(document.getElementById('admin-more-btn'),'a-inactive');closeMoreSheet()">
+        <span class="more-item-icon">🗂</span><span>Inactive Archive</span>
+      </button>
+      <button class="more-sheet-item"
+              onclick="switchTab(document.getElementById('admin-more-btn'),'a-setup');closeMoreSheet()">
+        <span class="more-item-icon">⚙️</span><span>Setup</span>
+      </button>
+    </div>
+  </div>
   <div class="content">
 
     <!-- Dashboard Tab -->
@@ -537,12 +572,22 @@
     <span style="font-weight:700">⚙ Developer Panel</span>
     <button class="btn-logout" onclick="devLogout()">Logout</button>
   </header>
-  <nav class="tabs" id="dev-tabs">
-    <button class="tab active" onclick="switchDevTab(this,'d-cos')">Companies</button>
-    <button class="tab"        onclick="switchDevTab(this,'d-accounts')">Accounts</button>
-    <button class="tab"        onclick="switchDevTab(this,'d-workers')">Workers</button>
-    <button class="tab"        onclick="switchDevTab(this,'d-inactive')">Inactive</button>
-    <button class="tab"        onclick="switchDevTab(this,'d-system')">System</button>
+  <nav class="panel-nav" id="dev-tabs">
+    <button class="bnav-item active" onclick="switchDevTab(this,'d-cos')">
+      <span class="bnav-icon">🏢</span><span class="bnav-lbl">Companies</span>
+    </button>
+    <button class="bnav-item" onclick="switchDevTab(this,'d-accounts')">
+      <span class="bnav-icon">👤</span><span class="bnav-lbl">Accounts</span>
+    </button>
+    <button class="bnav-item" onclick="switchDevTab(this,'d-workers')">
+      <span class="bnav-icon">👥</span><span class="bnav-lbl">Workers</span>
+    </button>
+    <button class="bnav-item" onclick="switchDevTab(this,'d-inactive')">
+      <span class="bnav-icon">🗂</span><span class="bnav-lbl">Inactive</span>
+    </button>
+    <button class="bnav-item" onclick="switchDevTab(this,'d-system')">
+      <span class="bnav-icon">⚙️</span><span class="bnav-lbl">System</span>
+    </button>
   </nav>
   <div class="content">
 

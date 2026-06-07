@@ -862,6 +862,7 @@ async function adminLogin() {
       document.getElementById('admin-co-lbl').textContent = row.co_name || '';
       var isSA = row.role === 'super_admin';
       document.getElementById('tab-admins-btn').classList.toggle('hidden', !isSA);
+      document.getElementById('more-admins-btn').classList.toggle('hidden', !isSA);
       showPg('admin'); loadDashboard();
     }
   } catch (e) { showErr('err-admin', 'Error: ' + e.message); }
@@ -940,7 +941,7 @@ async function resetAdminPassword() {
 
 // ── Admin Tabs ────────────────────────────────────────────
 function switchTab(btn, name) {
-  document.querySelectorAll('#admin-tabs .tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('#admin-tabs .bnav-item').forEach(function(t) { t.classList.remove('active'); });
   btn.classList.add('active');
   document.querySelectorAll('#pg-admin .tab-pane').forEach(function(p) { p.classList.remove('active'); });
   document.getElementById(name).classList.add('active');
@@ -991,7 +992,7 @@ async function loadDashboard() {
       absentCard.style.cursor = 'pointer';
       absentCard.title = 'View absent workers';
       absentCard.onclick = function() {
-        var btn = document.querySelector('#admin-tabs .tab[onclick*="a-absent"]');
+        var btn = document.querySelector('#admin-tabs .bnav-item[onclick*="a-absent"]');
         if (btn) { btn.click(); }
       };
     }
@@ -1741,8 +1742,16 @@ async function saveEditAcct() {
 
 // ── Developer Panel ───────────────────────────────────────
 function devLogout() { S.admin = null; showPg('home'); }
+function openMoreSheet() {
+  document.getElementById('admin-more-sheet').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+function closeMoreSheet() {
+  document.getElementById('admin-more-sheet').classList.add('hidden');
+  document.body.style.overflow = '';
+}
 function switchDevTab(btn, name) {
-  document.querySelectorAll('#dev-tabs .tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('#dev-tabs .bnav-item').forEach(function(t) { t.classList.remove('active'); });
   btn.classList.add('active');
   document.querySelectorAll('#pg-developer .tab-pane').forEach(function(p) { p.classList.remove('active'); });
   document.getElementById(name).classList.add('active');

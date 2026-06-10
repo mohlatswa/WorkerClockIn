@@ -969,6 +969,28 @@ function switchTab(btn, name) {
 async function loadDashboard() {
   var cid = requireAdminCid(); if (!cid) return;
 
+  // ── Subscription banner ────────────────────────────────
+  (async function() {
+    try {
+      var subR = await withTimeout(db.from('companies').select('subscription_expires_at').eq('id', cid).single(), 5000);
+      var banner = document.getElementById('sub-banner');
+      if (!banner) return;
+      var expAt = subR.data && subR.data.subscription_expires_at ? new Date(subR.data.subscription_expires_at) : null;
+      if (!expAt) { banner.classList.add('hidden'); return; }
+      var daysLeft = Math.ceil((expAt - new Date()) / 86400000);
+      if (daysLeft > 14) { banner.classList.add('hidden'); return; }
+      banner.classList.remove('hidden');
+      if (daysLeft < 0) {
+        banner.style.cssText = 'border-radius:12px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;background:#FEF2F2;border:1.5px solid #FECACA;color:#991B1B';
+        banner.innerHTML = '🔴 <span>Your subscription expired on <strong>' + expAt.toLocaleDateString('en-ZA', {day:'numeric',month:'long',year:'numeric'}) + '</strong>. Please contact Reatlegile Solutions to renew.</span>';
+      } else {
+        banner.style.cssText = 'border-radius:12px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;background:#FFFBEB;border:1.5px solid #FDE68A;color:#92400E';
+        banner.innerHTML = '⚠️ <span>Subscription expires in <strong>' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + '</strong> (' + expAt.toLocaleDateString('en-ZA', {day:'numeric',month:'long',year:'numeric'}) + '). Contact Reatlegile Solutions to renew.</span>';
+      }
+    } catch(e) {}
+  })();
+  // ──────────────────────────────────────────────────────
+
   // Show cached data immediately so the screen is never blank while loading
   var _dashCache = null;
   try { _dashCache = JSON.parse(localStorage.getItem('wc_dash_cache') || 'null'); } catch(e) {}

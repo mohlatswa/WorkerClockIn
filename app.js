@@ -35,6 +35,27 @@ var _attData = null; // last loaded attendance report (for summary / print)
 var ROLE_LABELS = { super_admin: 'Super Admin', admin: 'Admin', developer: 'Developer' };
 var ROLE_COLORS = { super_admin: 'var(--green)', admin: 'var(--blue)', developer: 'var(--purple)' };
 
+// ── Error tracking (Sentry — dormant until a DSN is set) ──
+function initSentry() {
+  if (typeof SENTRY_DSN === 'undefined' || !SENTRY_DSN) return; // off when blank
+  var s = document.createElement('script');
+  s.src = 'https://browser.sentry-cdn.com/8.45.1/bundle.min.js';
+  s.crossOrigin = 'anonymous';
+  s.onload = function () {
+    if (!window.Sentry) return;
+    Sentry.init({
+      dsn: SENTRY_DSN,
+      environment: 'production',
+      release: 'workclock',
+      tracesSampleRate: 0,            // errors only — no perf cost / no extra quota
+      replaysSessionSampleRate: 0,
+      replaysOnErrorSampleRate: 0
+    });
+  };
+  s.onerror = function () {};         // never let monitoring break the app
+  document.head.appendChild(s);
+}
+
 // ── Navigation ────────────────────────────────────────────
 function showPg(id) {
   document.querySelectorAll('.pg').forEach(function(p) { p.classList.remove('active'); });
@@ -2795,6 +2816,9 @@ function checkIOSInstall() {
 
 // ── Bootstrap ─────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
+
+  // 0. Start error tracking (no-op until a Sentry DSN is configured)
+  initSentry();
 
   // 0. Replace all static [data-icon] placeholders with inline SVG
   hydrateIcons();

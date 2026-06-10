@@ -59,6 +59,16 @@ GRANT  SELECT (
 --
 --  Verified: a direct `update admin_users` from the anon key now
 --  fails with 42501; the RPC path still works for a logged-in admin.
+--
+--  Audit follow-up (migration workclock_lock_internal_wc_actor):
+--  the internal helper _wc_actor(uuid,text) was still anon-callable via
+--  the default PUBLIC EXECUTE grant — revoked from PUBLIC/anon/authenticated.
+--    REVOKE EXECUTE ON FUNCTION public._wc_actor(uuid,text) FROM PUBLIC, anon, authenticated;
+--
+--  Note: the always-true RLS policies admin_users_update / companies_insert /
+--  companies_update still exist but are DEAD — the table-level INSERT/UPDATE
+--  grant is revoked, so anon can't write regardless. Drop them for tidiness
+--  if desired.
 -- ════════════════════════════════════════════════════════════
 
 

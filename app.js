@@ -1255,10 +1255,10 @@ async function loadWorkers() {
           '<div class="row-meta">' + meta + '</div></div></div>' +
           '<div class="row-btns">' +
           '<button class="icon-btn" title="Edit" onclick="openEditWorker(\'' + w.id + '\')">' + icon('pencil', 18) + '</button>' +
-          '<button class="icon-btn" title="Enrol face" onclick="adminEnrollFace(\'' + w.id + '\',\'' + escQ(w.name) + '\',\'admin\')">' + icon('camera', 18) + '</button>' +
-          '<button class="icon-btn" title="Register biometric" onclick="adminRegBio(\'' + w.id + '\',\'' + escQ(w.name) + '\')">' + icon('fingerprint', 18) + '</button>' +
-          '<button class="icon-btn" title="Reset device &amp; unlock" onclick="resetWorkerSecurity(\'' + w.id + '\',\'' + escQ(w.name) + '\')">' + icon('shield', 18) + '</button>' +
-          '<button class="icon-btn" title="Remove worker" onclick="toggleWorker(\'' + w.id + '\',true)">' + icon('ban', 18) + '</button>' +
+          '<button class="icon-btn ib-teal" title="Enrol face" onclick="adminEnrollFace(\'' + w.id + '\',\'' + escQ(w.name) + '\',\'admin\')">' + icon('camera', 18) + '</button>' +
+          '<button class="icon-btn ib-violet" title="Register biometric" onclick="adminRegBio(\'' + w.id + '\',\'' + escQ(w.name) + '\')">' + icon('fingerprint', 18) + '</button>' +
+          '<button class="icon-btn ib-warn" title="Reset device &amp; unlock" onclick="resetWorkerSecurity(\'' + w.id + '\',\'' + escQ(w.name) + '\')">' + icon('shield', 18) + '</button>' +
+          '<button class="icon-btn ib-danger" title="Remove worker" onclick="toggleWorker(\'' + w.id + '\',true)">' + icon('ban', 18) + '</button>' +
           '</div></div>';
       }).join('') + '</div>';
   } catch (e) { el.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
@@ -2421,7 +2421,7 @@ async function loadDevWorkers() {
         '</div></div></div>' +
         '<div class="row-btns">' +
         '<button class="icon-btn" onclick="openEditWorker(\'' + w.id + '\')">' + icon('pencil', 18) + '</button>' +
-        '<button class="icon-btn" onclick="adminEnrollFace(\'' + w.id + '\',\'' + escQ(w.name) + '\',\'dev\')">' + icon('camera', 18) + '</button>' +
+        '<button class="icon-btn ib-teal" onclick="adminEnrollFace(\'' + w.id + '\',\'' + escQ(w.name) + '\',\'dev\')">' + icon('camera', 18) + '</button>' +
         '<button class="icon-btn" onclick="devToggleWorker(\'' + w.id + '\',' + w.is_active + ')">' + (w.is_active ? icon('ban', 18) : icon('check', 18)) + '</button>' +
         '</div></div>';
     }

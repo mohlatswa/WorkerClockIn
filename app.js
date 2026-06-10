@@ -71,6 +71,62 @@ function esc(s) {
 // then HTML-escape so the surrounding attribute can't be broken out of.
 function escQ(s) { return esc(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")); }
 
+// ── Icon system (clean inline SVG, Lucide-style strokes) ──────
+// Replaces emoji icons everywhere. Static markup uses
+// <span class="ico" data-icon="name"></span> (hydrated on load);
+// JS-rendered markup calls icon('name') directly.
+var ICONS = {
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/>',
+  user:'<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  settings:'<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  dashboard:'<rect width="7" height="9" x="3" y="3" rx="1.5"/><rect width="7" height="5" x="14" y="3" rx="1.5"/><rect width="7" height="9" x="14" y="12" rx="1.5"/><rect width="7" height="5" x="3" y="16" rx="1.5"/>',
+  clipboard:'<rect width="8" height="4" x="8" y="2" rx="1.5"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>',
+  userx:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m17 8 5 5"/><path d="m22 8-5 5"/>',
+  key:'<circle cx="7.5" cy="15.5" r="4.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>',
+  archive:'<rect width="20" height="5" x="2" y="3" rx="1.5"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
+  menu:'<line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/>',
+  building:'<rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+  pencil:'<path d="M21.17 6.83a2.83 2.83 0 0 0-4-4L4 16l-1.5 5.5L8 20z"/><path d="m15 5 4 4"/>',
+  camera:'<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3.2"/>',
+  fingerprint:'<path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.1c0 2.38 0 6.38-1 8.9"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .13-5.35 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/>',
+  shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>',
+  ban:'<circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/>',
+  check:'<polyline points="20 6 9 17 4 12"/>',
+  logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>',
+  chevron:'<polyline points="9 18 15 12 9 6"/>',
+  back:'<line x1="19" x2="5" y1="12" y2="12"/><polyline points="12 19 5 12 12 5"/>',
+  refresh:'<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>',
+  pin:'<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+  calendar:'<rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/>',
+  plus:'<line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/>',
+  x:'<line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/>',
+  play:'<polygon points="6 4 20 12 6 20 6 4"/>',
+  stop:'<rect width="13" height="13" x="5.5" y="5.5" rx="2.5"/>',
+  lock:'<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  chart:'<line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/>',
+  link:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18"/>',
+  copy:'<rect width="13" height="13" x="9" y="8" rx="2"/><path d="M5 15a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2"/>',
+  briefcase:'<rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+  wifi:'<path d="M5 12.55a11 11 0 0 1 14 0"/><path d="M8.5 16.05a6 6 0 0 1 7 0"/><path d="M2 8.82a15 15 0 0 1 20 0"/><line x1="12" x2="12.01" y1="20" y2="20"/>',
+  device:'<rect width="14" height="20" x="5" y="2" rx="2.5"/><path d="M12 18h.01"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>'
+};
+function icon(name, size) {
+  var p = ICONS[name]; if (!p) return '';
+  var s = size || 22;
+  return '<svg class="ico-svg" width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" ' +
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>';
+}
+function hydrateIcons(root) {
+  (root || document).querySelectorAll('[data-icon]').forEach(function (el) {
+    var n = el.getAttribute('data-icon');
+    if (n && ICONS[n]) { el.innerHTML = icon(n, parseInt(el.getAttribute('data-size')) || 22); }
+  });
+}
+
 // Column lists that deliberately exclude credential columns (pin, session_token,
 // password_hash, reset_token, reset_expires) so they are never shipped to the browser.
 var WORKER_COLS = 'id,employee_id,name,phone,email,workplace_id,biometric_credential_id,' +
@@ -612,16 +668,16 @@ function setClockBtn(enabled) {
     btn.disabled = false;
     if (S.clockStatus === 'in') {
       btn.className = 'clock-btn clk-out';
-      document.getElementById('clk-icon').textContent  = '⏹';
+      document.getElementById('clk-icon').innerHTML   = icon('stop', 26);
       document.getElementById('clk-label').textContent = 'Clock Out';
     } else {
       btn.className = 'clock-btn clk-in';
-      document.getElementById('clk-icon').textContent  = '▶';
+      document.getElementById('clk-icon').innerHTML   = icon('play', 26);
       document.getElementById('clk-label').textContent = 'Clock In';
     }
   } else {
     btn.disabled = true; btn.className = 'clock-btn clk-wait';
-    document.getElementById('clk-icon').textContent  = '⏳';
+    document.getElementById('clk-icon').innerHTML    = icon('clock', 26);
     document.getElementById('clk-label').textContent = 'Checking Location…';
   }
 }
@@ -670,9 +726,9 @@ async function clockAction() {
 }
 function showSuccess(action) {
   var overlay = document.getElementById('success-overlay');
-  var icon    = document.getElementById('succ-icon');
-  icon.className  = 'succ-icon' + (action === 'out' ? ' out' : '');
-  icon.textContent = action === 'in' ? '✓' : '⏹';
+  var iconEl  = document.getElementById('succ-icon');
+  iconEl.className  = 'succ-icon' + (action === 'out' ? ' out' : '');
+  iconEl.innerHTML = icon(action === 'in' ? 'check' : 'stop', 48);
   document.getElementById('succ-action').textContent = action === 'in' ? 'Clocked In!'  : 'Clocked Out!';
   document.getElementById('succ-name').textContent   = S.worker.name;
   document.getElementById('succ-time').textContent   = new Date().toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
@@ -1191,18 +1247,18 @@ async function loadWorkers() {
       '<div class="card" style="padding:0 18px">' + r.data.map(function(w) {
         var isLocked = w.locked_until && new Date(w.locked_until) > new Date();
         var meta = esc(w.employee_id) + (w.job_title ? ' · ' + esc(w.job_title) : '')
-          + (w.biometric_enabled ? ' · 🔏' : '') + (w.face_descriptor ? ' · 🤳' : '')
-          + (w.device_id         ? ' · 📱' : '') + (isLocked ? ' · 🔒' : '');
+          + (w.biometric_enabled ? ' ' + icon('fingerprint', 13) : '') + (w.face_descriptor ? ' ' + icon('camera', 13) : '')
+          + (w.device_id         ? ' ' + icon('device', 13) : '') + (isLocked ? ' ' + icon('lock', 13) : '');
         return '<div class="list-row">' +
           '<div class="row-info"><div class="av av-sm">' + initials(w.name) + '</div>' +
           '<div><div class="row-name">' + esc(w.name) + '</div>' +
           '<div class="row-meta">' + meta + '</div></div></div>' +
           '<div class="row-btns">' +
-          '<button class="icon-btn" title="Edit" onclick="openEditWorker(\'' + w.id + '\')">✏️</button>' +
-          '<button class="icon-btn" title="Enrol face" onclick="adminEnrollFace(\'' + w.id + '\',\'' + escQ(w.name) + '\',\'admin\')">🤳</button>' +
-          '<button class="icon-btn" title="Register biometric" onclick="adminRegBio(\'' + w.id + '\',\'' + escQ(w.name) + '\')">🔏</button>' +
-          '<button class="icon-btn" title="Reset device &amp; unlock" onclick="resetWorkerSecurity(\'' + w.id + '\',\'' + escQ(w.name) + '\')">🛡</button>' +
-          '<button class="icon-btn" title="Remove worker" onclick="toggleWorker(\'' + w.id + '\',true)">🚫</button>' +
+          '<button class="icon-btn" title="Edit" onclick="openEditWorker(\'' + w.id + '\')">' + icon('pencil', 18) + '</button>' +
+          '<button class="icon-btn" title="Enrol face" onclick="adminEnrollFace(\'' + w.id + '\',\'' + escQ(w.name) + '\',\'admin\')">' + icon('camera', 18) + '</button>' +
+          '<button class="icon-btn" title="Register biometric" onclick="adminRegBio(\'' + w.id + '\',\'' + escQ(w.name) + '\')">' + icon('fingerprint', 18) + '</button>' +
+          '<button class="icon-btn" title="Reset device &amp; unlock" onclick="resetWorkerSecurity(\'' + w.id + '\',\'' + escQ(w.name) + '\')">' + icon('shield', 18) + '</button>' +
+          '<button class="icon-btn" title="Remove worker" onclick="toggleWorker(\'' + w.id + '\',true)">' + icon('ban', 18) + '</button>' +
           '</div></div>';
       }).join('') + '</div>';
   } catch (e) { el.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
@@ -1468,9 +1524,9 @@ async function loadCoAdmins() {
           (a.email ? ' · ' + esc(a.email) : '') + (!a.is_active ? ' · <em>Inactive</em>' : '') +
         '</div></div></div>' +
         '<div class="row-btns">' +
-        '<button class="icon-btn" onclick="openEditAcct(\'' + a.id + '\',\'' + escQ(a.full_name || '') + '\',\'' + escQ(a.email || '') + '\',\'' + a.role + '\',\'sa\')">✏️</button>' +
-        '<button class="icon-btn" onclick="resetPw(\'' + a.id + '\',\'' + escQ(a.username) + '\')">🔑</button>' +
-        '<button class="icon-btn" onclick="toggleAdmin(\'' + a.id + '\',' + a.is_active + ')">' + (a.is_active ? '🚫' : '✅') + '</button>' +
+        '<button class="icon-btn" onclick="openEditAcct(\'' + a.id + '\',\'' + escQ(a.full_name || '') + '\',\'' + escQ(a.email || '') + '\',\'' + a.role + '\',\'sa\')">' + icon('pencil', 18) + '</button>' +
+        '<button class="icon-btn" onclick="resetPw(\'' + a.id + '\',\'' + escQ(a.username) + '\')">' + icon('key', 18) + '</button>' +
+        '<button class="icon-btn" onclick="toggleAdmin(\'' + a.id + '\',' + a.is_active + ')">' + (a.is_active ? icon('ban', 18) : icon('check', 18)) + '</button>' +
         '</div></div>';
     }).join('') + '</div>';
   } catch (e) { el.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
@@ -1560,7 +1616,7 @@ async function loadAdminInactive() {
     if (wks.length) {
       wks.forEach(function(w) { _wCache[w.id] = Object.assign({}, w, { _ctx: 'admin-inactive' }); });
       html += '<div class="card" style="padding:0 18px;margin-bottom:16px">' + wks.map(function(w) {
-        var badges = (w.biometric_enabled ? ' · 🔏' : '') + (w.face_descriptor ? ' · 🤳' : '') + (w.device_id ? ' · 📱' : '');
+        var badges = (w.biometric_enabled ? ' ' + icon('fingerprint', 13) : '') + (w.face_descriptor ? ' ' + icon('camera', 13) : '') + (w.device_id ? ' ' + icon('device', 13) : '');
         return '<div class="list-row">' +
           '<div class="row-info">' +
             '<div class="av av-sm" style="background:#94A3B8;opacity:.8">' + initials(w.name) + '</div>' +
@@ -1570,8 +1626,8 @@ async function loadAdminInactive() {
             '</div>' +
           '</div>' +
           '<div class="row-btns">' +
-            '<button class="icon-btn" title="Edit" onclick="openEditWorker(\'' + w.id + '\')">✏️</button>' +
-            '<button class="restore-btn" onclick="adminRestoreWorker(\'' + w.id + '\')">✅ Restore</button>' +
+            '<button class="icon-btn" title="Edit" onclick="openEditWorker(\'' + w.id + '\')">' + icon('pencil', 18) + '</button>' +
+            '<button class="restore-btn" onclick="adminRestoreWorker(\'' + w.id + '\')">' + icon('check', 15) + ' Restore</button>' +
           '</div>' +
         '</div>';
       }).join('') + '</div>';
@@ -1594,8 +1650,8 @@ async function loadAdminInactive() {
               '</div>' +
             '</div>' +
             '<div class="row-btns">' +
-              '<button class="icon-btn" onclick="openEditAcct(\'' + a.id + '\',\'' + escQ(a.full_name || '') + '\',\'' + escQ(a.email || '') + '\',\'' + a.role + '\',\'admin-inactive\')">✏️</button>' +
-              '<button class="restore-btn" onclick="adminRestoreAccount(\'' + a.id + '\')">✅ Restore</button>' +
+              '<button class="icon-btn" onclick="openEditAcct(\'' + a.id + '\',\'' + escQ(a.full_name || '') + '\',\'' + escQ(a.email || '') + '\',\'' + a.role + '\',\'admin-inactive\')">' + icon('pencil', 18) + '</button>' +
+              '<button class="restore-btn" onclick="adminRestoreAccount(\'' + a.id + '\')">' + icon('check', 15) + ' Restore</button>' +
             '</div>' +
           '</div>';
         }).join('') + '</div>';
@@ -1886,13 +1942,13 @@ async function saveEditAcct() {
 function devLogout() { S.admin = null; localStorage.removeItem('wc_admin_session'); localStorage.removeItem('wc_dash_cache'); showPg('home'); }
 // ── Nav pin / customise system ────────────────────────────
 var NAV_TABS = [
-  { id: 'a-dash',     icon: '📊', label: 'Dashboard',  saOnly: false },
-  { id: 'a-workers',  icon: '👥', label: 'Workers',    saOnly: false },
-  { id: 'a-att',      icon: '📋', label: 'Attendance', saOnly: false },
-  { id: 'a-absent',   icon: '🚫', label: 'Absent',     saOnly: false },
-  { id: 'a-admins',   icon: '🔑', label: 'Admins',     saOnly: true  },
-  { id: 'a-inactive', icon: '🗂', label: 'Inactive',   saOnly: false },
-  { id: 'a-setup',    icon: '⚙️', label: 'Setup',      saOnly: false },
+  { id: 'a-dash',     icon: 'dashboard', label: 'Dashboard',  saOnly: false },
+  { id: 'a-workers',  icon: 'users',     label: 'Workers',    saOnly: false },
+  { id: 'a-att',      icon: 'clipboard', label: 'Attendance', saOnly: false },
+  { id: 'a-absent',   icon: 'userx',     label: 'Absent',     saOnly: false },
+  { id: 'a-admins',   icon: 'key',       label: 'Admins',     saOnly: true  },
+  { id: 'a-inactive', icon: 'archive',   label: 'Inactive',   saOnly: false },
+  { id: 'a-setup',    icon: 'settings',  label: 'Setup',      saOnly: false },
 ];
 var DEFAULT_PINS = ['a-dash', 'a-workers', 'a-att', 'a-absent'];
 var MAX_PINS = 4;
@@ -1925,7 +1981,7 @@ function openMoreSheet() {
     if (t.saOnly && !isSA) return;
     if (pins.indexOf(t.id) !== -1) return; // already in bar
     html += '<button class="more-sheet-item" onclick="switchTab(document.getElementById(\'admin-more-btn\'),\'' + t.id + '\');closeMoreSheet()">'
-          + '<span class="more-item-icon">' + t.icon + '</span><span>' + t.label + '</span></button>';
+          + '<span class="more-item-icon">' + icon(t.icon, 20) + '</span><span>' + t.label + '</span></button>';
   });
   document.getElementById('more-sheet-items').innerHTML = html ||
     '<p class="sub" style="padding:8px 18px 4px">All tabs are pinned to the bar.</p>';
@@ -1946,7 +2002,7 @@ function openNavCustomize() {
     if (t.saOnly && !isSA) return;
     var pinned = _pendingPins.indexOf(t.id) !== -1;
     html += '<div class="nav-pin-row">'
-          + '<span class="nav-pin-icon">' + t.icon + '</span>'
+          + '<span class="nav-pin-icon">' + icon(t.icon, 18) + '</span>'
           + '<span class="nav-pin-name">' + t.label + '</span>'
           + '<button class="nav-pin-btn' + (pinned ? ' pinned' : '') + '" data-tab="' + t.id + '" onclick="toggleNavPin(this)">'
           + (pinned ? '★ Pinned' : '☆ Add') + '</button>'
@@ -2057,10 +2113,10 @@ async function loadDevCos() {
         '<div class="row-meta">' + subHtml + '</div>' +
         '</div></div>' +
         '<div class="row-btns">' +
-        '<button class="icon-btn" title="Set Subscription Expiry" onclick="openSubExpiryModal(\'' + c.id + '\')">📅</button>' +
-        '<button class="icon-btn" title="Set Employee Limit" onclick="openWorkerLimitModal(\'' + c.id + '\',' + used + ')">👥</button>' +
-        '<button class="icon-btn" onclick="openEditCo(\'' + c.id + '\')">✏️</button>' +
-        '<button class="icon-btn" onclick="devToggleCo(\'' + c.id + '\',' + c.is_active + ')">' + (c.is_active ? '🚫' : '✅') + '</button>' +
+        '<button class="icon-btn" title="Set Subscription Expiry" onclick="openSubExpiryModal(\'' + c.id + '\')">' + icon('calendar', 18) + '</button>' +
+        '<button class="icon-btn" title="Set Employee Limit" onclick="openWorkerLimitModal(\'' + c.id + '\',' + used + ')">' + icon('users', 18) + '</button>' +
+        '<button class="icon-btn" onclick="openEditCo(\'' + c.id + '\')">' + icon('pencil', 18) + '</button>' +
+        '<button class="icon-btn" onclick="devToggleCo(\'' + c.id + '\',' + c.is_active + ')">' + (c.is_active ? icon('ban', 18) : icon('check', 18)) + '</button>' +
         '</div></div>';
     }
 
@@ -2276,9 +2332,9 @@ async function loadDevAccounts() {
           (ROLE_LABELS[a.role] || a.role) + '</span> 🏢 ' + (a.co ? esc(a.co.name) : '—') +
         '</div></div></div>' +
         '<div class="row-btns">' +
-        '<button class="icon-btn" onclick="openEditAcct(\'' + a.id + '\',\'' + escQ(a.full_name || '') + '\',\'' + escQ(a.email || '') + '\',\'' + a.role + '\',\'dev\')">✏️</button>' +
-        '<button class="icon-btn" onclick="resetPw(\'' + a.id + '\',\'' + escQ(a.username) + '\')">🔑</button>' +
-        '<button class="icon-btn" onclick="devToggleAcct(\'' + a.id + '\',' + a.is_active + ')">' + (a.is_active ? '🚫' : '✅') + '</button>' +
+        '<button class="icon-btn" onclick="openEditAcct(\'' + a.id + '\',\'' + escQ(a.full_name || '') + '\',\'' + escQ(a.email || '') + '\',\'' + a.role + '\',\'dev\')">' + icon('pencil', 18) + '</button>' +
+        '<button class="icon-btn" onclick="resetPw(\'' + a.id + '\',\'' + escQ(a.username) + '\')">' + icon('key', 18) + '</button>' +
+        '<button class="icon-btn" onclick="devToggleAcct(\'' + a.id + '\',' + a.is_active + ')">' + (a.is_active ? icon('ban', 18) : icon('check', 18)) + '</button>' +
         '</div></div>';
     }
 
@@ -2361,12 +2417,12 @@ async function loadDevWorkers() {
         '<div class="row-info"><div class="av av-sm">' + initials(w.name) + '</div>' +
         '<div><div class="row-name">' + esc(w.name) + '</div>' +
         '<div class="row-meta">' + esc(w.employee_id) + (w.job_title ? ' · ' + esc(w.job_title) : '') +
-          (w.biometric_enabled ? ' · 🔏' : '') + (w.face_descriptor ? ' · 🤳' : '') +
+          (w.biometric_enabled ? ' ' + icon('fingerprint', 13) : '') + (w.face_descriptor ? ' ' + icon('camera', 13) : '') +
         '</div></div></div>' +
         '<div class="row-btns">' +
-        '<button class="icon-btn" onclick="openEditWorker(\'' + w.id + '\')">✏️</button>' +
-        '<button class="icon-btn" onclick="adminEnrollFace(\'' + w.id + '\',\'' + escQ(w.name) + '\',\'dev\')">🤳</button>' +
-        '<button class="icon-btn" onclick="devToggleWorker(\'' + w.id + '\',' + w.is_active + ')">' + (w.is_active ? '🚫' : '✅') + '</button>' +
+        '<button class="icon-btn" onclick="openEditWorker(\'' + w.id + '\')">' + icon('pencil', 18) + '</button>' +
+        '<button class="icon-btn" onclick="adminEnrollFace(\'' + w.id + '\',\'' + escQ(w.name) + '\',\'dev\')">' + icon('camera', 18) + '</button>' +
+        '<button class="icon-btn" onclick="devToggleWorker(\'' + w.id + '\',' + w.is_active + ')">' + (w.is_active ? icon('ban', 18) : icon('check', 18)) + '</button>' +
         '</div></div>';
     }
 
@@ -2420,8 +2476,8 @@ async function loadDevInactive() {
           '<div><div class="row-name" style="color:var(--muted)">' + esc(c.name) + '</div>' +
           '<div class="row-meta">Code: ' + esc(c.code) + '</div></div></div>' +
           '<div class="row-btns">' +
-          '<button class="icon-btn" onclick="openEditCo(\'' + c.id + '\')">✏️</button>' +
-          '<button class="btn btn-sm" style="background:#D1FAE5;color:#065F46;border:1px solid #6EE7B7;border-radius:8px;padding:4px 10px;font-size:.78rem;cursor:pointer" onclick="devRestoreCo(\'' + c.id + '\')">✅ Restore</button>' +
+          '<button class="icon-btn" onclick="openEditCo(\'' + c.id + '\')">' + icon('pencil', 18) + '</button>' +
+          '<button class="btn btn-sm" style="background:#D1FAE5;color:#065F46;border:1px solid #6EE7B7;border-radius:8px;padding:4px 10px;font-size:.78rem;cursor:pointer" onclick="devRestoreCo(\'' + c.id + '\')">' + icon('check', 15) + ' Restore</button>' +
           '</div></div>';
       }).join('') + '</div>';
     } else {
@@ -2439,8 +2495,8 @@ async function loadDevInactive() {
           '<div class="row-meta"><span class="role-pill" style="background:' + col + '22;color:' + col + '">' + (ROLE_LABELS[a.role] || a.role) + '</span> 🏢 ' + (a.co ? esc(a.co.name) : '—') + '</div>' +
           '</div></div>' +
           '<div class="row-btns">' +
-          '<button class="icon-btn" onclick="openEditAcct(\'' + a.id + '\',\'' + escQ(a.full_name || '') + '\',\'' + escQ(a.email || '') + '\',\'' + a.role + '\',\'dev\')">✏️</button>' +
-          '<button class="btn btn-sm" style="background:#D1FAE5;color:#065F46;border:1px solid #6EE7B7;border-radius:8px;padding:4px 10px;font-size:.78rem;cursor:pointer" onclick="devRestoreAcct(\'' + a.id + '\')">✅ Restore</button>' +
+          '<button class="icon-btn" onclick="openEditAcct(\'' + a.id + '\',\'' + escQ(a.full_name || '') + '\',\'' + escQ(a.email || '') + '\',\'' + a.role + '\',\'dev\')">' + icon('pencil', 18) + '</button>' +
+          '<button class="btn btn-sm" style="background:#D1FAE5;color:#065F46;border:1px solid #6EE7B7;border-radius:8px;padding:4px 10px;font-size:.78rem;cursor:pointer" onclick="devRestoreAcct(\'' + a.id + '\')">' + icon('check', 15) + ' Restore</button>' +
           '</div></div>';
       }).join('') + '</div>';
     } else {
@@ -2457,8 +2513,8 @@ async function loadDevInactive() {
           '<div class="row-meta">' + esc(w.employee_id) + (w.job_title ? ' · ' + esc(w.job_title) : '') + ' · 🏢 ' + (w.co ? esc(w.co.name) : '—') + '</div>' +
           '</div></div>' +
           '<div class="row-btns">' +
-          '<button class="icon-btn" onclick="openEditWorker(\'' + w.id + '\')">✏️</button>' +
-          '<button class="btn btn-sm" style="background:#D1FAE5;color:#065F46;border:1px solid #6EE7B7;border-radius:8px;padding:4px 10px;font-size:.78rem;cursor:pointer" onclick="devRestoreWorker(\'' + w.id + '\')">✅ Restore</button>' +
+          '<button class="icon-btn" onclick="openEditWorker(\'' + w.id + '\')">' + icon('pencil', 18) + '</button>' +
+          '<button class="btn btn-sm" style="background:#D1FAE5;color:#065F46;border:1px solid #6EE7B7;border-radius:8px;padding:4px 10px;font-size:.78rem;cursor:pointer" onclick="devRestoreWorker(\'' + w.id + '\')">' + icon('check', 15) + ' Restore</button>' +
           '</div></div>';
       }).join('') + '</div>';
     } else {
@@ -2537,6 +2593,9 @@ function checkIOSInstall() {
 
 // ── Bootstrap ─────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
+
+  // 0. Replace all static [data-icon] placeholders with inline SVG
+  hydrateIcons();
 
   // 1. Sync init from localStorage — instant, no Supabase needed
   try {

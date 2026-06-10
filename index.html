@@ -3,20 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <meta name="theme-color" content="#1E40AF">
+  <meta name="theme-color" content="#312E81">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <title>WorkClock</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div id="splash">
-  <span style="font-size:68px">⏱</span>
+  <span class="ico" data-icon="clock" data-size="62"></span>
   <h1>WorkClock</h1>
   <p>Staff Attendance System</p>
-  <p style="margin-top:18px;font-size:.75rem;opacity:.55;letter-spacing:.3px">Developed by Reatlegile Solutions © 2026</p>
+  <p style="margin-top:18px;font-size:.75rem;opacity:.5;letter-spacing:.3px">Developed by Reatlegile Solutions © 2026</p>
 </div>
 
 <div id="app">
@@ -27,31 +30,31 @@
 <div id="pg-home" class="pg active">
   <div class="home-wrap">
     <div class="home-brand">
-      <span style="font-size:64px;display:block;margin-bottom:6px">⏱</span>
-      <h1 style="font-size:2.4rem;font-weight:800;color:#fff;margin-bottom:4px">WorkClock</h1>
-      <div id="home-live-clock" style="font-size:2.6rem;font-weight:800;color:#fff;letter-spacing:-1px;font-variant-numeric:tabular-nums;margin:8px 0 4px">--:--</div>
-      <p style="font-size:.85rem;color:rgba(255,255,255,.7);margin-top:2px">Staff Attendance System</p>
+      <div class="home-logo"><span class="ico" data-icon="clock" data-size="38"></span></div>
+      <h1>WorkClock</h1>
+      <div id="home-live-clock">--:--</div>
+      <p>Staff Attendance System</p>
     </div>
 
     <div id="home-actions">
       <button class="home-btn-worker" onclick="showPg('wlogin')">
-        <span style="font-size:1.6rem">👤</span>
+        <span class="home-btn-ico"><span class="ico" data-icon="user" data-size="24"></span></span>
         <span class="home-btn-text">
           <strong>Worker Portal</strong>
           <span>Sign in to clock in &amp; out</span>
         </span>
-        <span class="home-btn-chev">›</span>
+        <span class="home-btn-chev"><span class="ico" data-icon="chevron" data-size="22"></span></span>
       </button>
     </div>
 
-    <button class="admin-link" onclick="showPg('admin-login')">🔧 Admin</button>
+    <button class="admin-link" onclick="showPg('admin-login')"><span class="ico" data-icon="settings" data-size="17"></span> Admin</button>
 
     <div id="install-banner" class="install-banner hidden">
-      <div><strong>📲 Install WorkClock</strong><span>Add to home screen</span></div>
+      <div><strong>Install WorkClock</strong><span>Add to home screen</span></div>
       <button class="btn-sm btn-white" onclick="installPWA()">Install</button>
     </div>
     <div id="ios-banner" class="install-banner hidden" style="margin-top:8px">
-      <div><strong>📲 Install</strong><span>Tap Share → Add to Home Screen</span></div>
+      <div><strong>Install</strong><span>Tap Share → Add to Home Screen</span></div>
       <button class="btn-sm btn-white" onclick="this.closest('.install-banner').classList.add('hidden')">✕</button>
     </div>
     <div style="text-align:center;padding:16px 0 4px;font-size:.7rem;opacity:.45;color:#fff;letter-spacing:.3px">Developed by Reatlegile Solutions © 2026</div>
@@ -62,10 +65,10 @@
 <!-- PAGE 2: WORKER LOGIN (Employee ID)                     -->
 <!-- ═══════════════════════════════════════════════════════ -->
 <div id="pg-wlogin" class="pg">
-  <header class="topbar"><button class="back" onclick="showPg('home')">&#8592;</button><span>Worker Sign In</span></header>
+  <header class="topbar"><button class="back" onclick="showPg('home')"><span class="ico" data-icon="back" data-size="20"></span></button><span>Worker Sign In</span></header>
   <div class="content">
     <div class="card center">
-      <div style="font-size:2.4rem;margin-bottom:10px">👤</div>
+      <div class="auth-badge"><span class="ico" data-icon="user" data-size="28"></span></div>
       <h2>Your Employee ID</h2>
       <p class="sub" style="margin-bottom:16px">Check your ID card or ask your manager</p>
       <div class="field">
@@ -86,7 +89,7 @@
   <video id="face-video" playsinline muted style="position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0"></video>
   <div style="position:fixed;inset:0;z-index:1;display:flex;flex-direction:column">
     <div class="scan-bar">
-      <button class="scan-back" onclick="stopFaceRecog()">← Back</button>
+      <button class="scan-back" onclick="stopFaceRecog()"><span class="ico" data-icon="back" data-size="18"></span> Back</button>
       <span>Face Recognition</span>
       <span style="width:70px"></span>
     </div>
@@ -101,7 +104,7 @@
 <!-- PAGE 4: PIN AUTH                                       -->
 <!-- ═══════════════════════════════════════════════════════ -->
 <div id="pg-auth" class="pg">
-  <header class="topbar"><button class="back" onclick="backFromAuth()">&#8592;</button><span>Verify Identity</span></header>
+  <header class="topbar"><button class="back" onclick="backFromAuth()"><span class="ico" data-icon="back" data-size="20"></span></button><span>Verify Identity</span></header>
   <div class="content">
     <div class="card">
       <div class="wchip">
@@ -114,7 +117,7 @@
       </div>
     </div>
     <div id="bio-auth-wrap" class="hidden" style="margin-bottom:12px">
-      <button class="btn-bio" onclick="authBiometric()">🔏 Use Fingerprint / Face ID</button>
+      <button class="btn-bio" onclick="authBiometric()"><span class="ico" data-icon="fingerprint" data-size="20"></span> Use Fingerprint / Face ID</button>
       <div class="or-div">or enter PIN</div>
     </div>
     <div class="card">
@@ -146,7 +149,7 @@
         <div id="wk-greeting" class="wk-greeting">Good morning!</div>
         <div id="wk-co-name" class="wk-co-name"></div>
       </div>
-      <button class="btn-logout" onclick="logoutWorker()">Sign Out</button>
+      <button class="btn-logout" onclick="logoutWorker()"><span class="ico" data-icon="logout" data-size="16"></span> Sign Out</button>
     </div>
     <div class="worker-profile-row">
       <div class="av av-lg" id="wk-av">JD</div>
@@ -169,7 +172,7 @@
 
     <!-- Location Card -->
     <div class="card" id="loc-card">
-      <div class="sec-lbl">📍 Location</div>
+      <div class="sec-lbl"><span class="ico" data-icon="pin" data-size="15"></span> Location</div>
       <div id="loc-status"><div class="checking"><div class="spin"></div> Getting your location…</div></div>
     </div>
     <div id="loc-blocked-card" class="card hidden" style="text-align:center">
@@ -186,7 +189,7 @@
 
     <!-- Clock In/Out Button -->
     <button id="clk-btn" class="clock-btn clk-wait" onclick="clockAction()" disabled>
-      <span id="clk-icon">⏳</span>
+      <span id="clk-icon"></span>
       <span id="clk-label">Checking Location…</span>
     </button>
 
@@ -208,25 +211,25 @@
 
     <!-- Biometric Registration (optional) -->
     <div class="card" id="bio-reg-card" style="display:none">
-      <div class="sec-lbl">Optional: Fingerprint / Face ID</div>
-      <p class="sub" style="margin-bottom:12px">Register for one-tap clock-in next time.</p>
-      <button class="btn-bio" onclick="workerRegBio()">🔏 Register Fingerprint / Face ID</button>
+      <div class="sec-lbl"><span class="ico" data-icon="fingerprint" data-size="15"></span> Optional: Fingerprint / Face ID</div>
+      <p class="sub" style="margin:6px 0 12px">Register for one-tap clock-in next time.</p>
+      <button class="btn-bio" onclick="workerRegBio()"><span class="ico" data-icon="fingerprint" data-size="20"></span> Register Fingerprint / Face ID</button>
       <p class="msg hidden" id="bio-reg-msg"></p>
     </div>
 
     <!-- Face Registration (optional) -->
     <div class="card" id="face-reg-card" style="display:none">
-      <div class="sec-lbl">Optional: Face Recognition</div>
-      <p class="sub" style="margin-bottom:12px">Register your face so the camera can identify you.</p>
-      <button class="btn-bio" style="background:linear-gradient(135deg,#10B981,#059669)" onclick="workerEnrollFace()">🤳 Register My Face</button>
+      <div class="sec-lbl"><span class="ico" data-icon="camera" data-size="15"></span> Optional: Face Recognition</div>
+      <p class="sub" style="margin:6px 0 12px">Register your face so the camera can identify you.</p>
+      <button class="btn-bio" style="background:linear-gradient(145deg,#10B981,#059669)" onclick="workerEnrollFace()"><span class="ico" data-icon="camera" data-size="20"></span> Register My Face</button>
       <p class="msg hidden" id="face-reg-msg"></p>
     </div>
 
     <!-- Change PIN -->
     <div class="card" id="change-pin-card">
-      <div class="sec-lbl">🔑 Change PIN</div>
-      <p class="sub" style="margin-bottom:12px">Update your clock-in PIN at any time.</p>
-      <button class="btn-bio" style="background:linear-gradient(135deg,#6366f1,#4f46e5)" onclick="openChangePinModal()">🔑 Change My PIN</button>
+      <div class="sec-lbl"><span class="ico" data-icon="key" data-size="15"></span> Change PIN</div>
+      <p class="sub" style="margin:6px 0 12px">Update your clock-in PIN at any time.</p>
+      <button class="btn-bio" onclick="openChangePinModal()"><span class="ico" data-icon="key" data-size="20"></span> Change My PIN</button>
     </div>
 
   </div>
@@ -236,10 +239,10 @@
 <!-- PAGE 6: ADMIN LOGIN                                    -->
 <!-- ═══════════════════════════════════════════════════════ -->
 <div id="pg-admin-login" class="pg">
-  <header class="topbar"><button class="back" onclick="showPg('home')">&#8592;</button><span>Admin Login</span></header>
+  <header class="topbar"><button class="back" onclick="showPg('home')"><span class="ico" data-icon="back" data-size="20"></span></button><span>Admin Login</span></header>
   <div class="content">
     <div class="card center">
-      <div style="font-size:2.4rem;margin-bottom:10px">🔧</div>
+      <div class="auth-badge"><span class="ico" data-icon="settings" data-size="28"></span></div>
       <h2>Admin Access</h2>
       <div class="field">
         <label>Username</label>
@@ -289,38 +292,38 @@
 <div id="pg-admin" class="pg">
   <header class="topbar topbar-dark topbar-flex">
     <div>
-      <div style="font-weight:700;display:flex;align-items:center;gap:7px">
-        ⏱ WorkClock Admin
+      <div style="font-weight:700;display:flex;align-items:center;gap:8px">
+        <span class="ico" data-icon="clock" data-size="20"></span> WorkClock Admin
         <span id="conn-dot" title="Connected" style="width:8px;height:8px;border-radius:50%;background:#10B981;display:inline-block;flex-shrink:0"></span>
       </div>
       <div id="admin-co-lbl" style="font-size:.78rem;opacity:.8"></div>
     </div>
-    <button class="btn-logout" onclick="adminLogout()">Logout</button>
+    <button class="btn-logout" onclick="adminLogout()"><span class="ico" data-icon="logout" data-size="16"></span> Logout</button>
   </header>
   <nav class="panel-nav" id="admin-tabs">
     <button class="bnav-item active" data-tab="a-dash" onclick="switchTab(this,'a-dash')">
-      <span class="bnav-icon">📊</span><span class="bnav-lbl">Dashboard</span>
+      <span class="bnav-icon" data-icon="dashboard" data-size="21"></span><span class="bnav-lbl">Dashboard</span>
     </button>
     <button class="bnav-item" data-tab="a-workers" onclick="switchTab(this,'a-workers')">
-      <span class="bnav-icon">👥</span><span class="bnav-lbl">Workers</span>
+      <span class="bnav-icon" data-icon="users" data-size="21"></span><span class="bnav-lbl">Workers</span>
     </button>
     <button class="bnav-item" data-tab="a-att" onclick="switchTab(this,'a-att')">
-      <span class="bnav-icon">📋</span><span class="bnav-lbl">Attendance</span>
+      <span class="bnav-icon" data-icon="clipboard" data-size="21"></span><span class="bnav-lbl">Attendance</span>
     </button>
     <button class="bnav-item" data-tab="a-absent" onclick="switchTab(this,'a-absent')">
-      <span class="bnav-icon">🚫</span><span class="bnav-lbl">Absent</span>
+      <span class="bnav-icon" data-icon="userx" data-size="21"></span><span class="bnav-lbl">Absent</span>
     </button>
     <button class="bnav-item bnav-overflow hidden" id="tab-admins-btn" data-tab="a-admins" onclick="switchTab(this,'a-admins')">
-      <span class="bnav-icon">🔑</span><span class="bnav-lbl">Admins</span>
+      <span class="bnav-icon" data-icon="key" data-size="21"></span><span class="bnav-lbl">Admins</span>
     </button>
     <button class="bnav-item bnav-overflow" data-tab="a-inactive" onclick="switchTab(this,'a-inactive')">
-      <span class="bnav-icon">🗂</span><span class="bnav-lbl">Inactive</span>
+      <span class="bnav-icon" data-icon="archive" data-size="21"></span><span class="bnav-lbl">Inactive</span>
     </button>
     <button class="bnav-item bnav-overflow" data-tab="a-setup" onclick="switchTab(this,'a-setup')">
-      <span class="bnav-icon">⚙️</span><span class="bnav-lbl">Setup</span>
+      <span class="bnav-icon" data-icon="settings" data-size="21"></span><span class="bnav-lbl">Setup</span>
     </button>
     <button class="bnav-item bnav-more-btn" id="admin-more-btn" onclick="openMoreSheet()">
-      <span class="bnav-icon">☰</span><span class="bnav-lbl">More</span>
+      <span class="bnav-icon" data-icon="menu" data-size="21"></span><span class="bnav-lbl">More</span>
     </button>
   </nav>
   <div id="admin-more-sheet" class="more-sheet">
@@ -328,7 +331,7 @@
     <div class="more-sheet-body">
       <div class="more-sheet-handle"></div>
       <div id="more-sheet-items"></div>
-      <button class="more-sheet-customize" onclick="closeMoreSheet();openNavCustomize()">✏️ Customise tabs</button>
+      <button class="more-sheet-customize" onclick="closeMoreSheet();openNavCustomize()"><span class="ico" data-icon="pencil" data-size="16"></span> Customise tabs</button>
     </div>
   </div>
   <div class="content">
@@ -372,23 +375,23 @@
         <!-- Step 2: Choose clock-in methods -->
         <div id="nw-step2" class="hidden">
           <div style="text-align:center;margin-bottom:16px">
-            <div style="font-size:2rem;margin-bottom:4px">✅</div>
+            <div class="auth-badge" style="width:52px;height:52px;border-radius:14px;background:var(--green-l);color:var(--green-d);margin-bottom:8px"><span class="ico" data-icon="check" data-size="26"></span></div>
             <div id="nw-s2-name" style="font-weight:700;font-size:1.05rem;margin:2px 0"></div>
             <div id="nw-s2-empid" style="font-size:.8rem;color:var(--muted);margin-bottom:4px"></div>
             <div style="font-size:.78rem;color:var(--muted)">Worker saved — choose clock-in methods:</div>
           </div>
 
           <div class="method-row method-done">
-            <div class="method-icon">🔢</div>
+            <div class="method-icon"><span class="ico" data-icon="key" data-size="18"></span></div>
             <div class="method-info">
               <div class="method-name">Employee ID + PIN</div>
               <div class="method-sub">Ready — linked to their Employee ID</div>
             </div>
-            <span class="method-check">✅</span>
+            <span class="method-check"><span class="ico" data-icon="check" data-size="18"></span></span>
           </div>
 
           <div class="method-row" id="nw-face-row">
-            <div class="method-icon">📷</div>
+            <div class="method-icon"><span class="ico" data-icon="camera" data-size="18"></span></div>
             <div class="method-info">
               <div class="method-name">Facial Recognition</div>
               <div class="method-sub" id="nw-face-sub">Capture worker's face to enable</div>
@@ -397,7 +400,7 @@
           </div>
 
           <div class="method-row" id="nw-bio-row">
-            <div class="method-icon">🖐</div>
+            <div class="method-icon"><span class="ico" data-icon="fingerprint" data-size="18"></span></div>
             <div class="method-info">
               <div class="method-name">Fingerprint / Face ID</div>
               <div class="method-sub" id="nw-bio-sub">Worker must be on this device</div>
@@ -414,7 +417,7 @@
     <!-- Attendance Tab -->
     <div id="a-att" class="tab-pane">
       <div class="card" style="margin-bottom:12px">
-        <div class="sec-lbl" style="margin-bottom:10px">🔍 Filter Records</div>
+        <div class="sec-lbl" style="margin-bottom:10px"><span class="ico" data-icon="search" data-size="15"></span> Filter Records</div>
         <div class="field-row">
           <div class="field"><label>From</label><input id="att-from" type="date" class="input"></div>
           <div class="field"><label>To</label>  <input id="att-to"   type="date" class="input"></div>
@@ -433,8 +436,8 @@
           </select>
         </div>
         <div class="btn-row" style="margin-top:4px">
-          <button class="btn btn-primary" onclick="loadAttendance()">🔍 View Report</button>
-          <button class="btn btn-outline" onclick="downloadCSV()">📥 Export CSV</button>
+          <button class="btn btn-primary" onclick="loadAttendance()"><span class="ico" data-icon="search" data-size="17"></span> View Report</button>
+          <button class="btn btn-outline" onclick="downloadCSV()"><span class="ico" data-icon="download" data-size="17"></span> Export CSV</button>
         </div>
         <p class="msg hidden" id="att-summary" style="margin-top:8px"></p>
         <p class="msg hidden" id="csv-msg"></p>
@@ -446,10 +449,10 @@
     <div id="a-absent" class="tab-pane">
       <div class="card" style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
         <div>
-          <div class="sec-lbl" style="margin-bottom:2px">🚫 Absent Today</div>
+          <div class="sec-lbl" style="margin-bottom:2px"><span class="ico" data-icon="userx" data-size="15"></span> Absent Today</div>
           <div id="absent-count" style="font-size:.82rem;color:var(--muted)">Loading…</div>
         </div>
-        <button class="btn btn-outline btn-sm" onclick="loadAbsent()">↻ Refresh</button>
+        <button class="btn btn-outline btn-sm" onclick="loadAbsent()"><span class="ico" data-icon="refresh" data-size="16"></span> Refresh</button>
       </div>
       <div id="absent-list"><div class="empty">Loading…</div></div>
     </div>
@@ -484,8 +487,8 @@
     <!-- Inactive Tab -->
     <div id="a-inactive" class="tab-pane">
       <div class="tab-bar">
-        <span class="sec-lbl">🗂 Inactive Records</span>
-        <button class="btn btn-outline btn-sm" onclick="loadAdminInactive()">↻ Refresh</button>
+        <span class="sec-lbl"><span class="ico" data-icon="archive" data-size="15"></span> Inactive Records</span>
+        <button class="btn btn-outline btn-sm" onclick="loadAdminInactive()"><span class="ico" data-icon="refresh" data-size="16"></span> Refresh</button>
       </div>
       <p class="sub" style="margin-bottom:14px">All removed or deactivated users are stored here. You can restore them at any time or export the list.</p>
       <div id="admin-inactive-list"><div class="empty">Loading…</div></div>
@@ -496,7 +499,7 @@
 
       <!-- Subscription / Worker Usage -->
       <div class="card">
-        <h4>📊 Subscription Usage</h4>
+        <h4><span class="ico" data-icon="chart" data-size="18"></span> Subscription Usage</h4>
         <p class="sub" style="margin-bottom:14px">Active workers on your current plan</p>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <span id="worker-usage-text" style="font-size:14px;font-weight:600;color:var(--text)">Loading…</span>
@@ -534,7 +537,7 @@
       </div>
 
       <div class="card">
-        <h4>🌍 Timezone</h4>
+        <h4><span class="ico" data-icon="globe" data-size="18"></span> Timezone</h4>
         <p class="sub" style="margin-bottom:14px">Attendance times display in this timezone</p>
         <div class="field">
           <label>Company Timezone</label>
@@ -560,7 +563,7 @@
       </div>
 
       <div class="card">
-        <h4>📎 Worker Portal Link</h4>
+        <h4><span class="ico" data-icon="link" data-size="18"></span> Worker Portal Link</h4>
         <p class="sub" style="margin-bottom:10px">Share this link with workers — they sign in once and stay signed in.</p>
         <div class="link-box" id="portal-link">Loading…</div>
         <button class="btn btn-primary btn-full" style="margin-top:10px" onclick="copyPortalLink()">📋 Copy Worker Portal Link</button>
@@ -590,24 +593,24 @@
 <!-- ═══════════════════════════════════════════════════════ -->
 <div id="pg-developer" class="pg">
   <header class="topbar topbar-dark topbar-flex">
-    <span style="font-weight:700">⚙ Developer Panel</span>
-    <button class="btn-logout" onclick="devLogout()">Logout</button>
+    <span style="font-weight:700;display:flex;align-items:center;gap:8px"><span class="ico" data-icon="settings" data-size="20"></span> Developer Panel</span>
+    <button class="btn-logout" onclick="devLogout()"><span class="ico" data-icon="logout" data-size="16"></span> Logout</button>
   </header>
   <nav class="panel-nav" id="dev-tabs">
     <button class="bnav-item active" onclick="switchDevTab(this,'d-cos')">
-      <span class="bnav-icon">🏢</span><span class="bnav-lbl">Companies</span>
+      <span class="bnav-icon" data-icon="building" data-size="21"></span><span class="bnav-lbl">Companies</span>
     </button>
     <button class="bnav-item" onclick="switchDevTab(this,'d-accounts')">
-      <span class="bnav-icon">👤</span><span class="bnav-lbl">Accounts</span>
+      <span class="bnav-icon" data-icon="user" data-size="21"></span><span class="bnav-lbl">Accounts</span>
     </button>
     <button class="bnav-item" onclick="switchDevTab(this,'d-workers')">
-      <span class="bnav-icon">👥</span><span class="bnav-lbl">Workers</span>
+      <span class="bnav-icon" data-icon="users" data-size="21"></span><span class="bnav-lbl">Workers</span>
     </button>
     <button class="bnav-item" onclick="switchDevTab(this,'d-inactive')">
-      <span class="bnav-icon">🗂</span><span class="bnav-lbl">Inactive</span>
+      <span class="bnav-icon" data-icon="archive" data-size="21"></span><span class="bnav-lbl">Inactive</span>
     </button>
     <button class="bnav-item" onclick="switchDevTab(this,'d-system')">
-      <span class="bnav-icon">⚙️</span><span class="bnav-lbl">System</span>
+      <span class="bnav-icon" data-icon="settings" data-size="21"></span><span class="bnav-lbl">System</span>
     </button>
   </nav>
   <div class="content">
@@ -677,8 +680,8 @@
 
     <div id="d-inactive" class="tab-pane">
       <div class="tab-bar">
-        <span class="sec-lbl">🗂 Inactive / Deactivated</span>
-        <button class="btn btn-outline btn-sm" onclick="loadDevInactive()">↻ Refresh</button>
+        <span class="sec-lbl"><span class="ico" data-icon="archive" data-size="15"></span> Inactive / Deactivated</span>
+        <button class="btn btn-outline btn-sm" onclick="loadDevInactive()"><span class="ico" data-icon="refresh" data-size="16"></span> Refresh</button>
       </div>
       <div id="dev-inactive-list"><div class="empty">Loading…</div></div>
     </div>
@@ -710,7 +713,7 @@
 <!-- SUCCESS OVERLAY -->
 <div id="success-overlay" class="success-overlay hidden">
   <div class="success-inner">
-    <div class="succ-icon" id="succ-icon">✓</div>
+    <div class="succ-icon" id="succ-icon"></div>
     <div id="succ-action" style="font-size:1.4rem;font-weight:800;color:#fff;margin-bottom:6px">Clocked In!</div>
     <div id="succ-name"   style="font-size:1.1rem;color:rgba(255,255,255,.9)"></div>
     <div id="succ-time"   style="font-size:1rem;color:rgba(255,255,255,.7);margin-top:4px"></div>
@@ -721,7 +724,7 @@
 <!-- MODAL: First-Login PIN Change -->
 <div id="modal-pin-change" class="modal-bd hidden">
   <div class="modal-box" style="max-width:360px">
-    <div class="modal-hd"><h3>🔐 Set Your PIN</h3></div>
+    <div class="modal-hd"><h3><span class="ico" data-icon="lock" data-size="18"></span> Set Your PIN</h3></div>
     <div style="padding:18px">
       <p style="font-size:.88rem;color:var(--muted);margin-bottom:14px">Your administrator set a temporary PIN. Please create your own secure PIN before continuing.</p>
       <div class="field"><label>New PIN (4–6 digits)</label><input id="fp-pin1" type="password" class="input" placeholder="Enter new PIN" maxlength="6" inputmode="numeric"></div>
@@ -735,7 +738,7 @@
 <!-- MODAL: Worker Change PIN -->
 <div id="modal-change-pin" class="modal-bd hidden" onclick="if(event.target===this)closeModal('modal-change-pin')">
   <div class="modal-box" style="max-width:360px">
-    <div class="modal-hd"><h3>🔑 Change PIN</h3><button class="modal-close" onclick="closeModal('modal-change-pin')">✕</button></div>
+    <div class="modal-hd"><h3><span class="ico" data-icon="key" data-size="18"></span> Change PIN</h3><button class="modal-close" onclick="closeModal('modal-change-pin')">✕</button></div>
     <div style="padding:18px">
       <div class="field"><label>Current PIN</label>         <input id="cp-current" type="password" class="input" placeholder="Enter current PIN"   maxlength="6" inputmode="numeric"></div>
       <div class="field"><label>New PIN (4–6 digits)</label><input id="cp-new1"    type="password" class="input" placeholder="New PIN"              maxlength="6" inputmode="numeric"></div>
@@ -836,7 +839,7 @@
 <!-- MODAL: Set Worker Limit -->
 <div id="modal-worker-limit" class="modal-bd hidden" onclick="if(event.target===this)closeModal('modal-worker-limit')">
   <div class="modal-box" style="max-width:400px">
-    <div class="modal-hd"><h3>👥 Set Worker Limit</h3><button class="modal-close" onclick="closeModal('modal-worker-limit')">✕</button></div>
+    <div class="modal-hd"><h3><span class="ico" data-icon="users" data-size="18"></span> Set Worker Limit</h3><button class="modal-close" onclick="closeModal('modal-worker-limit')">✕</button></div>
     <div style="padding:18px">
       <input type="hidden" id="wl-co-id">
       <p class="sub" id="wl-co-name" style="font-weight:600;margin-bottom:4px;font-size:14px"></p>
@@ -888,7 +891,7 @@
 <!-- MODAL: Customise Navigation Tabs -->
 <div id="modal-nav-customize" class="modal-bd hidden" onclick="if(event.target===this)closeNavCustomize()">
   <div class="modal-box" style="max-width:380px">
-    <div class="modal-hd"><h3>✏️ Customise Tabs</h3><button class="modal-close" onclick="closeNavCustomize()">✕</button></div>
+    <div class="modal-hd"><h3><span class="ico" data-icon="pencil" data-size="18"></span> Customise Tabs</h3><button class="modal-close" onclick="closeNavCustomize()">✕</button></div>
     <div style="padding:16px 18px">
       <p class="sub" style="margin-bottom:14px">Pin up to <strong>4 tabs</strong> to the bottom bar. The rest stay in <strong>More</strong>.</p>
       <div id="nav-customize-list"></div>
@@ -903,7 +906,7 @@
 <!-- MODAL: Set Subscription Expiry -->
 <div id="modal-sub-expiry" class="modal-bd hidden" onclick="if(event.target===this)closeModal('modal-sub-expiry')">
   <div class="modal-box" style="max-width:380px">
-    <div class="modal-hd"><h3>📅 Set Subscription Expiry</h3><button class="modal-close" onclick="closeModal('modal-sub-expiry')">✕</button></div>
+    <div class="modal-hd"><h3><span class="ico" data-icon="calendar" data-size="18"></span> Set Subscription Expiry</h3><button class="modal-close" onclick="closeModal('modal-sub-expiry')">✕</button></div>
     <div style="padding:18px">
       <input type="hidden" id="se-co-id">
       <p class="sub" id="se-co-name" style="font-weight:600;margin-bottom:12px;font-size:14px"></p>

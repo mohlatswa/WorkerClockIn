@@ -1,4 +1,4 @@
-var CACHE = 'wc-v8';
+var CACHE = 'wc-v9';
 var ASSETS = [
   './', './index.html', './worker.html', './app.js', './config.js',
   './style.css', './supabase.min.js', './manifest.json',

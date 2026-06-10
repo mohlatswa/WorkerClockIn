@@ -904,6 +904,22 @@ function closeFaceEnroll() {
   document.getElementById('modal-face-enroll').classList.add('hidden');
 }
 
+// ── Admin session helpers ─────────────────────────────────
+function aId()  { return S.admin && S.admin.id; }
+function aTok() { return S.admin && S.admin.session_token; }
+// Map an RPC result string to a user message; returns true if it was 'ok'.
+function rpcOk(res, msgEl) {
+  if (res === 'ok') return true;
+  var m;
+  if (res === 'unauthorized')      m = 'Session expired or not permitted — please log in again.';
+  else if (res === 'dupe')         m = 'That name/code/username is already in use.';
+  else if (res === 'bad_role')     m = 'Invalid role.';
+  else if (res === 'bad_company')  m = 'No company selected.';
+  else                             m = 'Action failed — please try again.';
+  if (msgEl) showMsg(msgEl, m, 'err'); else toast(m);
+  return false;
+}
+
 // ── Admin Login ───────────────────────────────────────────
 async function adminLogin() {
   var user = (document.getElementById('inp-auser').value || '').trim().toLowerCase();
@@ -913,47 +929,20 @@ async function adminLogin() {
   var btn = document.getElementById('login-btn');
   btn.disabled = true; btn.textContent = 'Logging in…';
   try {
-    // Lookup account to check lockout before verifying password
-    var lookR = await withTimeout(
-      db.from('admin_users').select('id,is_active,failed_attempts,locked_until').eq('username', user).maybeSingle(),
-      5000
-    );
-    if (lookR.data) {
-      if (!lookR.data.is_active) { showErr('err-admin', 'Account disabled. Contact your system administrator.'); return; }
-      if (lookR.data.locked_until && new Date(lookR.data.locked_until) > new Date()) {
-        var mins = Math.ceil((new Date(lookR.data.locked_until) - new Date()) / 60000);
-        showErr('err-admin', '🔒 Account locked. Try again in ' + mins + ' minute(s).'); return;
-      }
-    }
     var hashedPass = await sha256(pass);
-    // Use secure RPC — password_hash is never returned to the browser
-    var rpc = await withTimeout(
-      db.rpc('admin_login', { p_username: user, p_password_hash: hashedPass }),
-      8000
-    );
+    // Secure RPC: verifies password, tracks lockout and issues a session token,
+    // all server-side. The password hash is never returned to the browser.
+    var rpc = await withTimeout(db.rpc('admin_login_v2', { p_username: user, p_password_hash: hashedPass }), 8000);
     if (rpc.error) { showErr('err-admin', 'Database error: ' + rpc.error.message); return; }
     var row = rpc.data && rpc.data[0];
-    if (!row) {
-      if (lookR.data) {
-        var attempts = (lookR.data.failed_attempts || 0) + 1;
-        var upd = { failed_attempts: attempts };
-        if (attempts >= 5) {
-          upd.locked_until    = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-          upd.failed_attempts = 0;
-          showErr('err-admin', '🔒 Too many failed attempts. Account locked for 30 minutes.');
-        } else {
-          showErr('err-admin', 'Invalid username or password. ' + (5 - attempts) + ' attempt(s) remaining.');
-        }
-        try { await withTimeout(db.from('admin_users').update(upd).eq('id', lookR.data.id), 3000); } catch(e) {}
-      } else {
-        showErr('err-admin', 'Invalid username or password.');
-      }
+    if (!row || row.result !== 'ok') {
+      var r = row && row.result;
+      if (r === 'disabled')    showErr('err-admin', 'Account disabled. Contact your system administrator.');
+      else if (r === 'locked') showErr('err-admin', '🔒 Account locked. Try again in ' + (row.locked_minutes || 30) + ' minute(s).');
+      else                     showErr('err-admin', 'Invalid username or password.' + (row && row.attempts_left != null ? ' ' + row.attempts_left + ' attempt(s) remaining.' : ''));
       return;
     }
-    // Rebuild co object from flat RPC columns for compatibility with rest of app
     row.co = { name: row.co_name, code: row.co_code };
-    // Success — clear lockout
-    try { await withTimeout(db.from('admin_users').update({ failed_attempts: 0, locked_until: null }).eq('id', row.id), 3000); } catch(e) {}
     S.admin = row;
     localStorage.setItem('wc_admin_session', JSON.stringify(row));
     document.getElementById('inp-auser').value = '';
@@ -970,7 +959,10 @@ async function adminLogin() {
   } catch (e) { showErr('err-admin', 'Error: ' + e.message); }
   finally { btn.disabled = false; btn.textContent = 'Login'; }
 }
-function adminLogout() { S.admin = null; localStorage.removeItem('wc_admin_session'); localStorage.removeItem('wc_dash_cache'); showPg('home'); }
+function adminLogout() {
+  try { if (aId() && aTok()) db.rpc('admin_logout', { p_id: aId(), p_token: aTok() }); } catch (e) {}
+  S.admin = null; localStorage.removeItem('wc_admin_session'); localStorage.removeItem('wc_dash_cache'); showPg('home');
+}
 
 // ── Admin Forgot Password ─────────────────────────────────
 function forgotPassword() {
@@ -1546,19 +1538,21 @@ async function addAdmin() {
   if (!/^[a-z0-9_]+$/.test(user)) { showMsg('ca-msg', 'Username: letters, numbers and underscores only.', 'err'); return; }
   var cid = requireAdminCid(); if (!cid) return;
   try {
-    var r = await withTimeout(db.from('admin_users').insert({
-      username: user, password_hash: await sha256(pass), full_name: name, email: email || null,
-      role: role, company_id: cid, is_active: true
+    var r = await withTimeout(db.rpc('admin_manage_create', {
+      p_actor_id: aId(), p_token: aTok(), p_company_id: cid,
+      p_username: user, p_pw_hash: await sha256(pass), p_full_name: name, p_email: email || null, p_role: role
     }), 5000);
-    if (r.error) { showMsg('ca-msg', r.error.message.includes('unique') ? 'Username already exists.' : r.error.message, 'err'); return; }
+    if (r.error) { showMsg('ca-msg', 'Error: ' + r.error.message, 'err'); return; }
+    if (r.data === 'dupe') { showMsg('ca-msg', 'Username already exists.', 'err'); return; }
+    if (!rpcOk(r.data, 'ca-msg')) return;
     showMsg('ca-msg', '✅ ' + (ROLE_LABELS[role] || role) + ' "@' + user + '" created!', 'ok');
     ['ca-name', 'ca-user', 'ca-pass', 'ca-email'].forEach(function(id) { document.getElementById(id).value = ''; });
     setTimeout(function() { toggleAddAdmin(); loadCoAdmins(); }, 1400);
   } catch (e) { showMsg('ca-msg', 'Error: ' + e.message, 'err'); }
 }
 async function toggleAdmin(id, cur) {
-  var r = await withTimeout(db.from('admin_users').update({ is_active: !cur }).eq('id', id), 5000);
-  if (!r.error) { toast(cur ? 'Admin deactivated' : 'Admin reactivated'); loadCoAdmins(); }
+  var r = await withTimeout(db.rpc('admin_manage_toggle', { p_actor_id: aId(), p_token: aTok(), p_target_id: id, p_active: !cur }), 5000);
+  if (!r.error && rpcOk(r.data)) { toast(cur ? 'Admin deactivated' : 'Admin reactivated'); loadCoAdmins(); }
 }
 
 async function loadAdminInactive() {
@@ -1692,17 +1686,17 @@ async function adminRestoreWorker(id) {
   if (!r.error) { toast('Worker restored'); loadAdminInactive(); }
 }
 async function adminRestoreAccount(id) {
-  var r = await withTimeout(db.from('admin_users').update({ is_active: true }).eq('id', id), 5000);
-  if (!r.error) { toast('Account restored'); loadAdminInactive(); }
+  var r = await withTimeout(db.rpc('admin_manage_toggle', { p_actor_id: aId(), p_token: aTok(), p_target_id: id, p_active: true }), 5000);
+  if (!r.error && rpcOk(r.data)) { toast('Account restored'); loadAdminInactive(); }
 }
 
 async function resetPw(id, username) {
   var pw = prompt('Set new password for @' + username + ':');
   if (!pw) return;
   if (pw.length < 6) { toast('Password must be at least 6 characters.'); return; }
-  var r = await withTimeout(db.from('admin_users').update({ password_hash: await sha256(pw) }).eq('id', id), 5000);
-  if (!r.error) toast('✅ Password updated for @' + username);
-  else toast('Error: ' + r.error.message);
+  var r = await withTimeout(db.rpc('admin_manage_set_password', { p_actor_id: aId(), p_token: aTok(), p_target_id: id, p_new_hash: await sha256(pw) }), 5000);
+  if (r.error) { toast('Error: ' + r.error.message); return; }
+  if (rpcOk(r.data)) toast('✅ Password updated for @' + username);
 }
 
 // ── Setup ─────────────────────────────────────────────────
@@ -1810,8 +1804,9 @@ async function saveTimezone() {
   var tz = tzSel ? tzSel.value : '';
   if (!tz) { showMsg('tz-msg', 'Please select a timezone.', 'err'); return; }
   try {
-    var r = await withTimeout(db.from('companies').update({ timezone: tz }).eq('id', cid), 5000);
+    var r = await withTimeout(db.rpc('admin_set_timezone', { p_actor_id: aId(), p_token: aTok(), p_timezone: tz }), 5000);
     if (r.error) { showMsg('tz-msg', 'Save failed: ' + r.error.message, 'err'); return; }
+    if (!rpcOk(r.data, 'tz-msg')) return;
     if (S.admin) { S.admin.co_timezone = tz; localStorage.setItem('wc_admin_session', JSON.stringify(S.admin)); }
     showMsg('tz-msg', '✅ Timezone saved — times now display in ' + tz, 'ok');
   } catch(e) { showMsg('tz-msg', 'Error: ' + e.message, 'err'); }
@@ -1848,17 +1843,19 @@ async function saveProfile() {
   var name  = (document.getElementById('my-name').value  || '').trim();
   var email = (document.getElementById('my-email').value || '').trim();
   if (!name) { showMsg('profile-msg', 'Full name is required.', 'err'); return; }
-  var r = await withTimeout(db.from('admin_users').update({ full_name: name, email: email || null }).eq('id', S.admin.id), 5000);
+  var r = await withTimeout(db.rpc('admin_self_update', { p_id: aId(), p_token: aTok(), p_full_name: name, p_email: email || null }), 5000);
   if (r.error) { showMsg('profile-msg', 'Failed: ' + r.error.message, 'err'); return; }
+  if (!rpcOk(r.data, 'profile-msg')) return;
   S.admin.full_name = name; S.admin.email = email;
+  localStorage.setItem('wc_admin_session', JSON.stringify(S.admin));
   showMsg('profile-msg', '✅ Profile updated!', 'ok');
 }
 async function changeAdminPw() {
   var pw = document.getElementById('new-pw').value;
   if (!pw || pw.length < 6) { showMsg('pw-msg', 'Password must be at least 6 characters.', 'err'); return; }
-  var r = await withTimeout(db.from('admin_users').update({ password_hash: await sha256(pw) }).eq('id', S.admin.id), 5000);
-  if (r.error) showMsg('pw-msg', 'Failed: ' + r.error.message, 'err');
-  else { showMsg('pw-msg', '✅ Password updated!', 'ok'); document.getElementById('new-pw').value = ''; }
+  var r = await withTimeout(db.rpc('admin_self_set_password', { p_id: aId(), p_token: aTok(), p_new_hash: await sha256(pw) }), 5000);
+  if (r.error || !rpcOk(r.data, 'pw-msg')) { if (r.error) showMsg('pw-msg', 'Failed: ' + r.error.message, 'err'); return; }
+  showMsg('pw-msg', '✅ Password updated!', 'ok'); document.getElementById('new-pw').value = '';
 }
 
 // ── Edit Worker Modal ─────────────────────────────────────
@@ -1921,13 +1918,18 @@ async function saveEditAcct() {
   var pw    = (document.getElementById('eac-pw').value    || '').trim();
   if (!name) { showMsg('eac-msg', 'Full name required.', 'err'); return; }
   if (pw && pw.length < 6) { showMsg('eac-msg', 'Password must be at least 6 characters.', 'err'); return; }
-  var updates = { full_name: name, email: email || null };
-  if (pw) updates.password_hash = await sha256(pw);
   var wrap = document.getElementById('eac-role-wrap');
-  if (!wrap.classList.contains('hidden')) updates.role = document.getElementById('eac-role').value;
+  var role = !wrap.classList.contains('hidden') ? document.getElementById('eac-role').value : null;
   try {
-    var r = await withTimeout(db.from('admin_users').update(updates).eq('id', id), 5000);
+    var r = await withTimeout(db.rpc('admin_manage_update', {
+      p_actor_id: aId(), p_token: aTok(), p_target_id: id, p_full_name: name, p_email: email || null, p_role: role
+    }), 5000);
     if (r.error) { showMsg('eac-msg', 'Failed: ' + r.error.message, 'err'); return; }
+    if (!rpcOk(r.data, 'eac-msg')) return;
+    if (pw) {
+      var pr = await withTimeout(db.rpc('admin_manage_set_password', { p_actor_id: aId(), p_token: aTok(), p_target_id: id, p_new_hash: await sha256(pw) }), 5000);
+      if (pr.error || !rpcOk(pr.data, 'eac-msg')) { if (pr.error) showMsg('eac-msg', 'Failed: ' + pr.error.message, 'err'); return; }
+    }
     showMsg('eac-msg', '✅ Account updated!', 'ok');
     setTimeout(function() {
       closeModal('modal-edit-acct');
@@ -1939,7 +1941,10 @@ async function saveEditAcct() {
 }
 
 // ── Developer Panel ───────────────────────────────────────
-function devLogout() { S.admin = null; localStorage.removeItem('wc_admin_session'); localStorage.removeItem('wc_dash_cache'); showPg('home'); }
+function devLogout() {
+  try { if (aId() && aTok()) db.rpc('admin_logout', { p_id: aId(), p_token: aTok() }); } catch (e) {}
+  S.admin = null; localStorage.removeItem('wc_admin_session'); localStorage.removeItem('wc_dash_cache'); showPg('home');
+}
 // ── Nav pin / customise system ────────────────────────────
 var NAV_TABS = [
   { id: 'a-dash',     icon: 'dashboard', label: 'Dashboard',  saOnly: false },
@@ -2199,14 +2204,13 @@ async function saveWorkerLimit() {
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
     var r = await withTimeout(
-      db.rpc('set_worker_limit', {
-        p_company_id: coId,
-        p_new_limit:  newLimit,
-        p_admin_id:   S.admin.id
+      db.rpc('dev_set_worker_limit', {
+        p_actor_id: aId(), p_token: aTok(), p_company_id: coId, p_new_limit: newLimit
       }),
       5000
     );
     if (r.error) { showMsg('wl-msg', 'Failed: ' + r.error.message, 'err'); return; }
+    if (!rpcOk(r.data, 'wl-msg')) return;
     if (_cCache[coId]) _cCache[coId].worker_limit = newLimit;
     showMsg('wl-msg', '✅ Limit updated!', 'ok');
     setTimeout(function() { closeModal('modal-worker-limit'); loadDevCos(); }, 1200);
@@ -2235,8 +2239,9 @@ async function saveSubExpiry() {
   showMsg('se-msg', '', '');
   try {
     var expires = dateVal ? new Date(dateVal + 'T23:59:59').toISOString() : null;
-    var r = await withTimeout(db.from('companies').update({ subscription_expires_at: expires }).eq('id', coId), 5000);
+    var r = await withTimeout(db.rpc('dev_company_set_sub_expiry', { p_actor_id: aId(), p_token: aTok(), p_id: coId, p_expires: expires }), 5000);
     if (r.error) throw r.error;
+    if (!rpcOk(r.data, 'se-msg')) { btn.disabled = false; btn.textContent = 'Save'; return; }
     if (_cCache[coId]) _cCache[coId].subscription_expires_at = expires;
     showMsg('se-msg', '✅ Saved!', 'ok');
     setTimeout(function() { closeModal('modal-sub-expiry'); loadDevCos(); }, 1000);
@@ -2260,8 +2265,10 @@ async function addCompany() {
   var btn = document.getElementById('add-co-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
   try {
-    var r = await withTimeout(db.from('companies').insert({ name: name, code: code, is_active: true, clock_methods: methods }), 5000);
-    if (r.error) { showMsg('nc-msg', r.error.message.includes('unique') ? 'Code already exists.' : r.error.message, 'err'); return; }
+    var r = await withTimeout(db.rpc('dev_company_create', { p_actor_id: aId(), p_token: aTok(), p_name: name, p_code: code, p_methods: methods }), 5000);
+    if (r.error) { showMsg('nc-msg', 'Error: ' + r.error.message, 'err'); return; }
+    if (r.data === 'dupe') { showMsg('nc-msg', 'Code already exists.', 'err'); return; }
+    if (!rpcOk(r.data, 'nc-msg')) return;
     showMsg('nc-msg', '✅ Company "' + name + '" created!', 'ok');
     document.getElementById('nc-name').value = ''; document.getElementById('nc-code').value = '';
     document.getElementById('nc-face').checked = false; document.getElementById('nc-bio').checked = false;
@@ -2270,8 +2277,8 @@ async function addCompany() {
   finally { if (btn) { btn.disabled = false; btn.textContent = 'Create Company'; } }
 }
 async function devToggleCo(id, cur) {
-  var r = await withTimeout(db.from('companies').update({ is_active: !cur }).eq('id', id), 5000);
-  if (!r.error) { toast(cur ? 'Company deactivated' : 'Company reactivated'); loadDevCos(); }
+  var r = await withTimeout(db.rpc('dev_company_toggle', { p_actor_id: aId(), p_token: aTok(), p_id: id, p_active: !cur }), 5000);
+  if (!r.error && rpcOk(r.data)) { toast(cur ? 'Company deactivated' : 'Company reactivated'); loadDevCos(); }
 }
 function openEditCo(id) {
   var c = _cCache[id]; if (!c) { toast('Company data not loaded — refresh.'); return; }
@@ -2294,8 +2301,10 @@ async function saveEditCo() {
   if (document.getElementById('eco-face').checked) methods.push('face');
   if (document.getElementById('eco-bio').checked)  methods.push('biometric');
   try {
-    var r = await withTimeout(db.from('companies').update({ name: name, code: code, clock_methods: methods }).eq('id', id), 5000);
-    if (r.error) { showMsg('eco-msg', r.error.message.includes('unique') ? 'Code already exists.' : r.error.message, 'err'); return; }
+    var r = await withTimeout(db.rpc('dev_company_update', { p_actor_id: aId(), p_token: aTok(), p_id: id, p_name: name, p_code: code, p_methods: methods }), 5000);
+    if (r.error) { showMsg('eco-msg', 'Error: ' + r.error.message, 'err'); return; }
+    if (r.data === 'dupe') { showMsg('eco-msg', 'Code already exists.', 'err'); return; }
+    if (!rpcOk(r.data, 'eco-msg')) return;
     showMsg('eco-msg', '✅ Company updated!', 'ok');
     setTimeout(function() { closeModal('modal-edit-co'); loadDevCos(); }, 1200);
   } catch (e) { showMsg('eco-msg', 'Error: ' + e.message, 'err'); }
@@ -2375,19 +2384,21 @@ async function addDevAcct() {
   if (pass.length < 6) { showMsg('da-msg', 'Password must be at least 6 characters.', 'err'); return; }
   if (!/^[a-z0-9_]+$/.test(user)) { showMsg('da-msg', 'Username: letters, numbers and underscores only.', 'err'); return; }
   try {
-    var r = await withTimeout(db.from('admin_users').insert({
-      username: user, password_hash: await sha256(pass), full_name: name, email: email || null,
-      role: role, company_id: cid, is_active: true
+    var r = await withTimeout(db.rpc('admin_manage_create', {
+      p_actor_id: aId(), p_token: aTok(), p_company_id: cid,
+      p_username: user, p_pw_hash: await sha256(pass), p_full_name: name, p_email: email || null, p_role: role
     }), 5000);
-    if (r.error) { showMsg('da-msg', r.error.message.includes('unique') ? 'Username already exists.' : r.error.message, 'err'); return; }
+    if (r.error) { showMsg('da-msg', 'Error: ' + r.error.message, 'err'); return; }
+    if (r.data === 'dupe') { showMsg('da-msg', 'Username already exists.', 'err'); return; }
+    if (!rpcOk(r.data, 'da-msg')) return;
     showMsg('da-msg', '✅ ' + (ROLE_LABELS[role] || role) + ' "@' + user + '" created!', 'ok');
     ['da-name', 'da-user', 'da-pass', 'da-email'].forEach(function(id) { document.getElementById(id).value = ''; });
     setTimeout(function() { toggleAddDevAcct(); loadDevAccounts(); }, 1400);
   } catch (e) { showMsg('da-msg', 'Error: ' + e.message, 'err'); }
 }
 async function devToggleAcct(id, cur) {
-  var r = await withTimeout(db.from('admin_users').update({ is_active: !cur }).eq('id', id), 5000);
-  if (!r.error) { toast(cur ? 'Account deactivated' : 'Account reactivated'); loadDevAccounts(); }
+  var r = await withTimeout(db.rpc('admin_manage_toggle', { p_actor_id: aId(), p_token: aTok(), p_target_id: id, p_active: !cur }), 5000);
+  if (!r.error && rpcOk(r.data)) { toast(cur ? 'Account deactivated' : 'Account reactivated'); loadDevAccounts(); }
 }
 async function loadDevWorkers() {
   var el  = document.getElementById('dev-workers-list');
@@ -2526,12 +2537,12 @@ async function loadDevInactive() {
 }
 
 async function devRestoreCo(id) {
-  var r = await withTimeout(db.from('companies').update({ is_active: true }).eq('id', id), 5000);
-  if (!r.error) { toast('Company restored'); loadDevInactive(); }
+  var r = await withTimeout(db.rpc('dev_company_toggle', { p_actor_id: aId(), p_token: aTok(), p_id: id, p_active: true }), 5000);
+  if (!r.error && rpcOk(r.data)) { toast('Company restored'); loadDevInactive(); }
 }
 async function devRestoreAcct(id) {
-  var r = await withTimeout(db.from('admin_users').update({ is_active: true }).eq('id', id), 5000);
-  if (!r.error) { toast('Account restored'); loadDevInactive(); }
+  var r = await withTimeout(db.rpc('admin_manage_toggle', { p_actor_id: aId(), p_token: aTok(), p_target_id: id, p_active: true }), 5000);
+  if (!r.error && rpcOk(r.data)) { toast('Account restored'); loadDevInactive(); }
 }
 async function devRestoreWorker(id) {
   var r = await withTimeout(db.from('workers').update({ is_active: true }).eq('id', id), 5000);
@@ -2555,17 +2566,19 @@ async function saveDevProfile() {
   var name  = (document.getElementById('dev-profile-name').value  || '').trim();
   var email = (document.getElementById('dev-profile-email').value || '').trim();
   if (!name) { showMsg('dev-profile-msg', 'Full name required.', 'err'); return; }
-  var r = await withTimeout(db.from('admin_users').update({ full_name: name, email: email || null }).eq('id', S.admin.id), 5000);
+  var r = await withTimeout(db.rpc('admin_self_update', { p_id: aId(), p_token: aTok(), p_full_name: name, p_email: email || null }), 5000);
   if (r.error) { showMsg('dev-profile-msg', 'Failed: ' + r.error.message, 'err'); return; }
+  if (!rpcOk(r.data, 'dev-profile-msg')) return;
   S.admin.full_name = name; S.admin.email = email;
+  localStorage.setItem('wc_admin_session', JSON.stringify(S.admin));
   showMsg('dev-profile-msg', '✅ Profile updated!', 'ok');
 }
 async function changeDevPw() {
   var pw = document.getElementById('dev-new-pw').value;
   if (!pw || pw.length < 6) { showMsg('dev-pw-msg', 'Password must be at least 6 characters.', 'err'); return; }
-  var r = await withTimeout(db.from('admin_users').update({ password_hash: await sha256(pw) }).eq('id', S.admin.id), 5000);
-  if (r.error) showMsg('dev-pw-msg', 'Failed: ' + r.error.message, 'err');
-  else { showMsg('dev-pw-msg', '✅ Password updated!', 'ok'); document.getElementById('dev-new-pw').value = ''; }
+  var r = await withTimeout(db.rpc('admin_self_set_password', { p_id: aId(), p_token: aTok(), p_new_hash: await sha256(pw) }), 5000);
+  if (r.error || !rpcOk(r.data, 'dev-pw-msg')) { if (r.error) showMsg('dev-pw-msg', 'Failed: ' + r.error.message, 'err'); return; }
+  showMsg('dev-pw-msg', '✅ Password updated!', 'ok'); document.getElementById('dev-new-pw').value = '';
 }
 
 // ── PWA Install ───────────────────────────────────────────

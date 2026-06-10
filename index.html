@@ -563,6 +563,37 @@
       </div>
 
       <div class="card">
+        <h4><span class="ico" data-icon="clock" data-size="18"></span> Work Shift &amp; Overtime</h4>
+        <p class="sub" style="margin-bottom:14px">Used to flag late arrivals and calculate overtime in attendance reports.</p>
+        <div class="field-row">
+          <div class="field"><label>Shift Start</label><input id="sh-start" type="time" class="input" value="08:00"></div>
+          <div class="field"><label>Shift End</label>  <input id="sh-end"   type="time" class="input" value="17:00"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Late Grace (min)</label><input id="sh-grace" type="number" class="input" value="10" min="0" max="120"></div>
+          <div class="field"><label>Overtime Counts</label>
+            <select id="sh-otmode" class="input">
+              <option value="after_end">After shift end time</option>
+              <option value="daily_9">After 9 hours/day</option>
+              <option value="daily_8">After 8 hours/day</option>
+              <option value="weekly_45">Weekly over 45h only</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Working Days</label>
+          <div class="day-toggle" id="sh-days">
+            <span class="day-chip" data-day="1">Mon</span><span class="day-chip" data-day="2">Tue</span>
+            <span class="day-chip" data-day="3">Wed</span><span class="day-chip" data-day="4">Thu</span>
+            <span class="day-chip" data-day="5">Fri</span><span class="day-chip" data-day="6">Sat</span>
+            <span class="day-chip" data-day="7">Sun</span>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="saveShift()">Save Shift Settings</button>
+        <p class="msg hidden" id="sh-msg"></p>
+      </div>
+
+      <div class="card">
         <h4><span class="ico" data-icon="link" data-size="18"></span> Worker Portal Link</h4>
         <p class="sub" style="margin-bottom:10px">Share this link with workers — they sign in once and stay signed in.</p>
         <div class="link-box" id="portal-link">Loading…</div>

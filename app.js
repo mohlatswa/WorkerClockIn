@@ -145,6 +145,55 @@ function requireAdminCid() {
   return S.admin.company_id;
 }
 
+// ── Shifts & overtime ─────────────────────────────────────
+var DEFAULT_SHIFT = { shift_start: '08:00', shift_end: '17:00', shift_grace_min: 10, shift_ot_mode: 'after_end', work_days: [1, 2, 3, 4, 5] };
+var DOW_NAMES = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+function curShift() { return S.shift || DEFAULT_SHIFT; }
+function hmToMin(t) { if (!t) return 0; var p = String(t).split(':'); return (parseInt(p[0]) || 0) * 60 + (parseInt(p[1]) || 0); }
+function minToHM(m) { var h = Math.floor(m / 60), mm = m % 60; return (h < 10 ? '0' : '') + h + ':' + (mm < 10 ? '0' : '') + mm; }
+function localMinsOfDay(iso) {
+  var s = new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: _tz() });
+  return hmToMin(s);
+}
+var _DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
+function localDow(iso) { return _DOW[new Date(iso).toLocaleDateString('en-US', { weekday: 'short', timeZone: _tz() })] || 0; }
+function fmtHrs(h) { return (Math.round(h * 10) / 10) + 'h'; }
+// Returns { hours, isWorkDay, late, lateMin, ot } for an attendance record.
+function shiftCalc(rec) {
+  var sh = curShift(), res = { hours: 0, isWorkDay: true, late: false, lateMin: 0, ot: 0 };
+  if (!rec || !rec.clock_in_time) return res;
+  res.isWorkDay = (sh.work_days || []).indexOf(localDow(rec.clock_in_time)) !== -1;
+  var startMin = hmToMin(sh.shift_start), endMin = hmToMin(sh.shift_end), grace = sh.shift_grace_min || 0;
+  var inMin = localMinsOfDay(rec.clock_in_time);
+  if (res.isWorkDay && inMin > startMin + grace) { res.late = true; res.lateMin = inMin - startMin; }
+  if (rec.clock_out_time) {
+    res.hours = Math.max(0, (new Date(rec.clock_out_time) - new Date(rec.clock_in_time)) / 3600000);
+    if (!res.isWorkDay) res.ot = res.hours;
+    else if (sh.shift_ot_mode === 'daily_9') res.ot = Math.max(0, res.hours - 9);
+    else if (sh.shift_ot_mode === 'daily_8') res.ot = Math.max(0, res.hours - 8);
+    else if (sh.shift_ot_mode === 'weekly_45') res.ot = 0; // computed across the week at report level
+    else { var outMin = localMinsOfDay(rec.clock_out_time); if (outMin > endMin) res.ot = (outMin - endMin) / 60; }
+  }
+  return res;
+}
+async function loadShift(companyId) {
+  if (!companyId) return;
+  if (S.shift && S.shift._cid === companyId) return; // cached
+  try {
+    var r = await withTimeout(db.from('companies').select('shift_start,shift_end,shift_grace_min,shift_ot_mode,work_days').eq('id', companyId).single(), 4000);
+    if (r.data) {
+      S.shift = {
+        _cid: companyId,
+        shift_start: (r.data.shift_start || '08:00').slice(0, 5),
+        shift_end:   (r.data.shift_end   || '17:00').slice(0, 5),
+        shift_grace_min: r.data.shift_grace_min != null ? r.data.shift_grace_min : 10,
+        shift_ot_mode:   r.data.shift_ot_mode || 'after_end',
+        work_days:       r.data.work_days || [1, 2, 3, 4, 5]
+      };
+    }
+  } catch (e) {}
+}
+
 var _toastT;
 function toast(msg, dur) {
   var el = document.getElementById('toast');
@@ -513,6 +562,7 @@ async function enterWorkerDashboard() {
   document.getElementById('bio-reg-card').style.display  = (!w.biometric_enabled && window.PublicKeyCredential) ? '' : 'none';
   document.getElementById('face-reg-card').style.display = !w.face_descriptor ? '' : 'none';
 
+  await loadShift(w.company_id);
   await loadTodayRecord();
   await loadAttendanceHistory();
   startLocationWatch();
@@ -590,13 +640,17 @@ async function loadAttendanceHistory() {
       var chipClass = isActive ? 'hist-chip hist-chip-active' : 'hist-chip hist-chip-done';
       var chipLabel = isActive ? 'Active' : 'Done';
       var meth = rec.auth_method ? (rec.auth_method.charAt(0).toUpperCase() + rec.auth_method.slice(1)) : '';
+      var sc = shiftCalc(rec);
+      var lateTag = sc.late ? ' <span class="hist-chip hist-chip-absent">Late ' + sc.lateMin + 'm</span>' : '';
+      var otTag   = sc.ot >= 0.05 ? '<div class="hist-method" style="color:var(--amber)">OT ' + fmtHrs(sc.ot) + '</div>' : '';
       return '<div class="hist-row">' +
         '<div class="hist-left">' +
-          '<div class="hist-date">' + dateStr + '</div>' +
+          '<div class="hist-date">' + dateStr + lateTag + '</div>' +
           '<div class="hist-times">' + inStr + ' → ' + outStr + '</div>' +
         '</div>' +
         '<div class="hist-right">' +
           '<div class="hist-hrs">' + hrs + '</div>' +
+          otTag +
           '<div class="hist-method">' + meth + '</div>' +
           '<span class="' + chipClass + '">' + chipLabel + '</span>' +
         '</div>' +
@@ -1054,6 +1108,7 @@ function switchTab(btn, name) {
 // ── Dashboard ─────────────────────────────────────────────
 async function loadDashboard() {
   var cid = requireAdminCid(); if (!cid) return;
+  loadShift(cid);
 
   // ── Subscription banner ────────────────────────────────
   (async function() {
@@ -1433,10 +1488,13 @@ async function loadAttendance() {
     var totalHrs = r.data.reduce(function(s, rec) {
       return s + (rec.clock_in_time && rec.clock_out_time ? (new Date(rec.clock_out_time) - new Date(rec.clock_in_time)) / 3600000 : 0);
     }, 0);
+    var totalOt   = r.data.reduce(function(s, rec) { return s + shiftCalc(rec).ot; }, 0);
+    var lateCount = r.data.filter(function(rec) { return shiftCalc(rec).late; }).length;
     var stillin = r.data.filter(function(rec) { return rec.status === 'active'; }).length;
-    showMsg('att-summary', r.data.length + ' records · ' + totalHrs.toFixed(1) + 'h total · ' + stillin + ' still in', 'ok');
+    showMsg('att-summary', r.data.length + ' records · ' + totalHrs.toFixed(1) + 'h total · OT ' + fmtHrs(totalOt) + ' · ' + lateCount + ' late · ' + stillin + ' still in', 'ok');
     el.innerHTML = '<div class="card" style="padding:0 18px">' + r.data.map(function(rec) {
       var hrs = (rec.clock_in_time && rec.clock_out_time) ? ((new Date(rec.clock_out_time) - new Date(rec.clock_in_time)) / 3600000).toFixed(1) + 'h' : '--';
+      var sc = shiftCalc(rec);
       return '<div class="att-row">' +
         '<div class="att-name">' + (rec.w ? esc(rec.w.name) : 'Unknown') +
           (rec.w && rec.w.employee_id ? ' <small style="color:var(--muted)">(' + esc(rec.w.employee_id) + ')</small>' : '') +
@@ -1447,6 +1505,8 @@ async function loadAttendance() {
           '<span class="chip chip-in">▶ '  + fmtTime(rec.clock_in_time) + '</span>' +
           '<span class="chip chip-out">⏹ ' + (rec.clock_out_time ? fmtTime(rec.clock_out_time) : 'Still in') + '</span>' +
           '<span class="chip chip-hrs">⏱ ' + hrs + '</span>' +
+          (sc.late ? '<span class="chip chip-late">Late ' + sc.lateMin + 'm</span>' : '') +
+          (sc.ot >= 0.05 ? '<span class="chip chip-ot">OT ' + fmtHrs(sc.ot) + '</span>' : '') +
           '<span class="chip chip-mth">'   + (rec.auth_method || '') + '</span>' +
           (!rec.clock_out_time ? '<button class="btn btn-sm btn-outline" style="margin-left:6px;color:var(--red);border-color:var(--red);padding:2px 8px;font-size:.72rem" onclick="forceClockOut(\'' + rec.id + '\',\'' + escQ(rec.w ? rec.w.name : 'Worker') + '\')">Force Out</button>' : '') +
         '</div></div>';
@@ -1471,17 +1531,22 @@ async function downloadCSV() {
     if (mth) q = q.eq('auth_method', mth);
     var r = await withTimeout(q, 10000);
     if (!r.data || !r.data.length) { showMsg('csv-msg', 'No records found.', 'err'); return; }
-    var hdr  = ['Worker Name', 'Employee ID', 'Job Title', 'Date', 'Clock In', 'Clock Out', 'Hours', 'Auth Method', 'Status'];
+    await loadShift(cid);
+    var hdr  = ['Worker Name', 'Employee ID', 'Job Title', 'Date', 'Clock In', 'Clock Out', 'Hours', 'Late (min)', 'Overtime (h)', 'Auth Method', 'Status'];
     var rows = r.data.map(function(rec) {
       var cin  = rec.clock_in_time  ? new Date(rec.clock_in_time)  : null;
       var cout = rec.clock_out_time ? new Date(rec.clock_out_time) : null;
       var hrs  = (cin && cout) ? ((cout - cin) / 3600000).toFixed(2) : '';
+      var sc   = shiftCalc(rec);
       return [
         rec.w ? rec.w.name : '', rec.w ? rec.w.employee_id : '', rec.w ? rec.w.job_title || '' : '',
         cin  ? fmtDate(rec.clock_in_time) : '',
         cin  ? fmtTime(rec.clock_in_time) : '',
         cout ? fmtTime(rec.clock_out_time) : 'Still In',
-        hrs ? hrs + 'h' : '', rec.auth_method || '', rec.status || ''
+        hrs ? hrs + 'h' : '',
+        sc.late ? String(sc.lateMin) : '',
+        sc.ot >= 0.05 ? (Math.round(sc.ot * 100) / 100).toFixed(2) : '',
+        rec.auth_method || '', rec.status || ''
       ].map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
     });
     var csv  = '﻿' + [hdr.join(',')].concat(rows).join('\r\n');
@@ -1731,6 +1796,19 @@ async function loadSetup() {
     if (tzSel) tzSel.value = coTz;
   } catch(e) {}
 
+  // ── Work shift settings ────────────────────────────────
+  S.shift = null; await loadShift(cid);
+  var sh = curShift();
+  if (document.getElementById('sh-start'))  document.getElementById('sh-start').value  = sh.shift_start;
+  if (document.getElementById('sh-end'))    document.getElementById('sh-end').value    = sh.shift_end;
+  if (document.getElementById('sh-grace'))  document.getElementById('sh-grace').value  = sh.shift_grace_min;
+  if (document.getElementById('sh-otmode')) document.getElementById('sh-otmode').value = sh.shift_ot_mode;
+  document.querySelectorAll('#sh-days .day-chip').forEach(function(c) {
+    var d = parseInt(c.getAttribute('data-day'));
+    c.classList.toggle('on', (sh.work_days || []).indexOf(d) !== -1);
+    c.onclick = function() { c.classList.toggle('on'); };
+  });
+
   // ── Worker usage display ───────────────────────────────
   try {
     var coR2    = await withTimeout(db.from('companies').select('worker_limit').eq('id', cid).single(), 5000);
@@ -1810,6 +1888,25 @@ async function saveTimezone() {
     if (S.admin) { S.admin.co_timezone = tz; localStorage.setItem('wc_admin_session', JSON.stringify(S.admin)); }
     showMsg('tz-msg', '✅ Timezone saved — times now display in ' + tz, 'ok');
   } catch(e) { showMsg('tz-msg', 'Error: ' + e.message, 'err'); }
+}
+async function saveShift() {
+  var cid = requireAdminCid(); if (!cid) return;
+  var start = document.getElementById('sh-start').value || '08:00';
+  var end   = document.getElementById('sh-end').value   || '17:00';
+  var grace = parseInt(document.getElementById('sh-grace').value); if (isNaN(grace) || grace < 0) grace = 10;
+  var mode  = document.getElementById('sh-otmode').value || 'after_end';
+  var days  = [];
+  document.querySelectorAll('#sh-days .day-chip.on').forEach(function(c) { days.push(parseInt(c.getAttribute('data-day'))); });
+  if (!days.length) { showMsg('sh-msg', 'Select at least one working day.', 'err'); return; }
+  try {
+    var r = await withTimeout(db.rpc('admin_set_shift', {
+      p_actor_id: aId(), p_token: aTok(), p_start: start, p_end: end, p_grace: grace, p_ot_mode: mode, p_work_days: days
+    }), 5000);
+    if (r.error) { showMsg('sh-msg', 'Save failed: ' + r.error.message, 'err'); return; }
+    if (!rpcOk(r.data, 'sh-msg')) return;
+    S.shift = { _cid: cid, shift_start: start, shift_end: end, shift_grace_min: grace, shift_ot_mode: mode, work_days: days };
+    showMsg('sh-msg', '✅ Shift settings saved!', 'ok');
+  } catch(e) { showMsg('sh-msg', 'Error: ' + e.message, 'err'); }
 }
 function detectLocation() {
   if (!navigator.geolocation) { toast('Geolocation not available'); return; }

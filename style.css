@@ -359,6 +359,13 @@ body{
 .chip-out{background:var(--red-l);color:var(--red-d)}
 .chip-hrs{background:var(--brand-l);color:var(--brand-d)}
 .chip-mth{background:#F3E8FF;color:#6D28D9;text-transform:capitalize}
+.chip-late{background:var(--amber-l);color:#B45309}
+.chip-ot{background:#FFF7ED;color:#C2410C}
+/* Work-shift setup */
+.day-toggle{display:flex;gap:6px;flex-wrap:wrap}
+.day-chip{flex:1;min-width:42px;text-align:center;padding:9px 0;border:1.5px solid var(--border-strong);border-radius:var(--rsm);
+  font-size:.8rem;font-weight:600;color:var(--muted);cursor:pointer;user-select:none;transition:all .12s}
+.day-chip.on{background:var(--brand);border-color:var(--brand);color:#fff}
 
 /* ─── SETUP ─────────────────────────────────────────────────── */
 .link-box{background:var(--bg);border:1.5px dashed var(--border-strong);border-radius:var(--rsm);padding:11px 13px;font-size:.82rem;color:var(--ink-soft);word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}

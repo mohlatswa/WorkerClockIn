@@ -21,6 +21,12 @@ CREATE TABLE IF NOT EXISTS companies (
     worker_limit            INTEGER,                 -- NULL = unlimited
     timezone                TEXT DEFAULT 'Africa/Johannesburg',
     subscription_expires_at TIMESTAMPTZ,
+    -- Work-shift settings (late / overtime calculation)
+    shift_start             TIME DEFAULT '08:00',
+    shift_end               TIME DEFAULT '17:00',
+    shift_grace_min         INTEGER DEFAULT 10,
+    shift_ot_mode           TEXT DEFAULT 'after_end', -- after_end | daily_9 | daily_8 | weekly_45
+    work_days               INTEGER[] DEFAULT '{1,2,3,4,5}', -- ISO dow Mon=1..Sun=7
     created_at              TIMESTAMPTZ DEFAULT NOW()
 );
 

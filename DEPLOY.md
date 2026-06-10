@@ -44,14 +44,21 @@ database lockdown will break the old code, so the order matters:
    -- both should be FALSE
    ```
 
-## Still open (recommended next — Phase 2)
+## Phase 2 — admin/company write-hardening ✅ DONE
 
-Phase 1 stops attackers **reading** credentials. **Writes** are still open via
-the anon key: an attacker could overwrite an admin's `password_hash` (account
-takeover), tamper with companies/workers, or forge attendance. Closing this
-properly needs admin session tokens + RPC-gated writes (workers already have
-session tokens; admins don't yet). The plan and a minimal interim policy are
-documented at the bottom of `security_lockdown.sql`.
+Admins now get a server-issued **session token** (`admin_login_v2`), and every
+`admin_users` / `companies` write goes through a `SECURITY DEFINER` RPC that
+verifies the token + the actor's role/company. Direct anon INSERT/UPDATE/DELETE
+on those two tables is **revoked** (`workclock_revoke_admin_company_writes`).
+The account-takeover vector is closed (a direct `update admin_users` from the
+anon key now fails with 42501).
+
+## Still open — Phase 2b (next)
+
+`workers`, `workplaces` and `attendance` are still writable by the anon key
+within active companies (PIN resets, device rebind, forged attendance). Closing
+this means routing the worker clock-in path + admin worker/workplace management
+through session-verified RPCs, then revoking direct writes on those tables.
 
 The anon key is *meant* to be public — the fix is correct RLS + RPCs, never
 hiding the key.

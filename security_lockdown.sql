@@ -44,36 +44,33 @@ GRANT  SELECT (
 
 
 -- ════════════════════════════════════════════════════════════
---  PHASE 2 — STOP CREDENTIAL / DATA TAMPERING  (recommended next)
+--  PHASE 2 — STOP ADMIN / COMPANY TAMPERING   ✅ APPLIED
 --
---  Phase 1 stops attackers from READING credentials. Writes are
---  still open: with the anon key an attacker can currently
---    • UPDATE admin_users.password_hash for any admin id -> takeover
---    • INSERT / UPDATE companies (codes, active flag)
---    • UPDATE workers (reset PINs, rebind devices) for active cos
---    • forge attendance rows
---  because there is no logged-in identity at the DB layer — the
---  app uses the shared anon key for everything.
+--  admins now get a server-issued session token (admin_login_v2),
+--  and every admin_users / companies write goes through a
+--  SECURITY DEFINER RPC that verifies the token + the actor's
+--  role/company (admin_self_*, admin_manage_*, dev_company_*,
+--  dev_set_worker_limit, admin_set_timezone). Direct anon writes
+--  to those two tables are revoked:
+--    (migration: workclock_revoke_admin_company_writes)
 --
---  The correct fix is to (a) give admins a server-issued session
---  token (like workers already have), (b) move every privileged
---  write into a SECURITY DEFINER RPC that validates that token and
---  the caller's role/company, then (c) revoke direct INSERT/UPDATE
---  from anon on these tables. That is an app + DB change, so it is
---  intentionally left as a documented next step rather than run
---  blindly here (revoking writes without the RPCs would break the
---  admin panel).
+--    REVOKE INSERT, UPDATE, DELETE ON public.admin_users FROM anon, authenticated;
+--    REVOKE INSERT, UPDATE, DELETE ON public.companies  FROM anon, authenticated;
 --
---  Minimum hardening you CAN apply now without code changes:
---  tighten the "always true" policies so they at least require an
---  ACTIVE company context, matching the other tables. Uncomment to
---  apply (test admin login + company management afterwards):
+--  Verified: a direct `update admin_users` from the anon key now
+--  fails with 42501; the RPC path still works for a logged-in admin.
+-- ════════════════════════════════════════════════════════════
+
+
+-- ════════════════════════════════════════════════════════════
+--  PHASE 2b — REMAINING WRITES  (still open, next milestone)
 --
---  DROP POLICY IF EXISTS admin_users_update ON public.admin_users;
---  CREATE POLICY admin_users_update ON public.admin_users FOR UPDATE
---    USING (company_id IN (SELECT id FROM companies WHERE is_active))
---    WITH CHECK (company_id IN (SELECT id FROM companies WHERE is_active));
---  -- NOTE: developer accounts have company_id = NULL, so if you apply
---  -- the above, developer self-service (profile/password) must move to
---  -- an RPC first or those updates will be blocked.
+--  workers, workplaces and attendance are still writable by the
+--  anon key within ACTIVE companies. An attacker could still reset a
+--  worker's PIN, rebind devices, or forge/alter attendance rows.
+--  Closing this means routing the worker clock-in path and the admin
+--  worker/workplace management through session-verified RPCs (workers
+--  already have session tokens; clock-in would use worker_clock_action)
+--  and then revoking direct writes on those three tables. Tracked as
+--  the next security task.
 -- ════════════════════════════════════════════════════════════

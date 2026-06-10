@@ -1645,6 +1645,25 @@ async function loadSetup() {
     }
     if (upgEl) upgEl.classList.toggle('hidden', limit === null || used < limit);
   } catch (e) {}
+
+  // ── Subscription expiry display ────────────────────────
+  try {
+    var subR = await withTimeout(db.from('companies').select('subscription_expires_at').eq('id', cid).single(), 5000);
+    var expAt = subR.data && subR.data.subscription_expires_at ? new Date(subR.data.subscription_expires_at) : null;
+    var subEl = document.getElementById('sub-expiry-row');
+    if (subEl) {
+      if (!expAt) {
+        subEl.innerHTML = '<span style="color:#94A3B8">No expiry date set</span>';
+      } else if (expAt < new Date()) {
+        var daysAgo = Math.ceil((new Date() - expAt) / 86400000);
+        subEl.innerHTML = '<span style="color:var(--red);font-weight:700">⚠️ Expired ' + daysAgo + ' day' + (daysAgo === 1 ? '' : 's') + ' ago (' + expAt.toLocaleDateString('en-ZA', {day:'numeric',month:'long',year:'numeric'}) + ')</span>';
+      } else {
+        var daysLeft = Math.ceil((expAt - new Date()) / 86400000);
+        var col = daysLeft <= 7 ? '#F59E0B' : 'var(--green)';
+        subEl.innerHTML = '<span style="color:' + col + ';font-weight:700">✅ Paid until ' + expAt.toLocaleDateString('en-ZA', {day:'numeric',month:'long',year:'numeric'}) + (daysLeft <= 14 ? ' <span style="font-weight:400;font-size:.82em">(' + daysLeft + ' days left)</span>' : '') + '</span>';
+      }
+    }
+  } catch (e) {}
   // ──────────────────────────────────────────────────────
 }
 async function saveWorkplace() {
@@ -1957,14 +1976,28 @@ async function loadDevCos() {
       var empClr  = atLimit ? 'color:var(--red);font-weight:700' : 'color:var(--muted)';
       var monthly = lim !== null ? fmtRand(calcWlCost(lim)) + '/mo' : '—';
       var monClr  = lim !== null ? 'color:var(--green);font-weight:700' : 'color:var(--muted)';
+      var expAt   = c.subscription_expires_at ? new Date(c.subscription_expires_at) : null;
+      var subHtml;
+      if (!expAt) {
+        subHtml = '<span style="color:#94A3B8;font-size:.78rem">No expiry set</span>';
+      } else if (expAt < new Date()) {
+        subHtml = '<span style="color:var(--red);font-size:.78rem;font-weight:700">🔴 EXPIRED ' + expAt.toLocaleDateString('en-ZA', {day:'numeric',month:'short',year:'numeric'}) + '</span>';
+      } else {
+        var dl  = Math.ceil((expAt - new Date()) / 86400000);
+        var col = dl <= 7 ? '#F59E0B' : 'var(--green)';
+        subHtml = '<span style="color:' + col + ';font-size:.78rem;font-weight:700">✅ Paid until ' + expAt.toLocaleDateString('en-ZA', {day:'numeric',month:'short',year:'numeric'}) + (dl <= 14 ? ' (' + dl + 'd left)' : '') + '</span>';
+      }
       return '<div class="list-row">' +
         '<div class="row-info"><div class="av av-sm" style="background:var(--purple)">' + c.code.slice(0, 2) + '</div>' +
         '<div><div class="row-name">' + c.name + '</div>' +
         '<div class="row-meta">Code: ' + c.code +
           ' · <span style="' + empClr + '">' + empTxt + '</span>' +
           ' · <span style="' + monClr + '">' + monthly + '</span>' +
-        '</div></div></div>' +
+        '</div>' +
+        '<div class="row-meta">' + subHtml + '</div>' +
+        '</div></div>' +
         '<div class="row-btns">' +
+        '<button class="icon-btn" title="Set Subscription Expiry" onclick="openSubExpiryModal(\'' + c.id + '\')">📅</button>' +
         '<button class="icon-btn" title="Set Employee Limit" onclick="openWorkerLimitModal(\'' + c.id + '\',' + used + ')">👥</button>' +
         '<button class="icon-btn" onclick="openEditCo(\'' + c.id + '\')">✏️</button>' +
         '<button class="icon-btn" onclick="devToggleCo(\'' + c.id + '\',' + c.is_active + ')">' + (c.is_active ? '🚫' : '✅') + '</button>' +
@@ -2063,6 +2096,38 @@ async function saveWorkerLimit() {
     setTimeout(function() { closeModal('modal-worker-limit'); loadDevCos(); }, 1200);
   } catch (e) { showMsg('wl-msg', 'Error: ' + e.message, 'err'); }
   finally { if (btn) { btn.disabled = false; btn.textContent = 'Save Limit'; } }
+}
+function openSubExpiryModal(coId) {
+  var c = _cCache[coId]; if (!c) { toast('Company data not loaded — refresh.'); return; }
+  document.getElementById('se-co-id').value = coId;
+  document.getElementById('se-co-name').textContent = c.name;
+  var expAt = c.subscription_expires_at ? c.subscription_expires_at.slice(0, 10) : '';
+  document.getElementById('se-date').value = expAt;
+  document.getElementById('se-msg').classList.add('hidden');
+  document.getElementById('modal-sub-expiry').classList.remove('hidden');
+}
+function seQuick(months) {
+  var d = new Date();
+  d.setMonth(d.getMonth() + months);
+  document.getElementById('se-date').value = d.toISOString().slice(0, 10);
+}
+async function saveSubExpiry() {
+  var coId   = document.getElementById('se-co-id').value;
+  var dateVal = document.getElementById('se-date').value;
+  var btn = document.getElementById('se-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  showMsg('se-msg', '', '');
+  try {
+    var expires = dateVal ? new Date(dateVal + 'T23:59:59').toISOString() : null;
+    var r = await withTimeout(db.from('companies').update({ subscription_expires_at: expires }).eq('id', coId), 5000);
+    if (r.error) throw r.error;
+    if (_cCache[coId]) _cCache[coId].subscription_expires_at = expires;
+    showMsg('se-msg', '✅ Saved!', 'ok');
+    setTimeout(function() { closeModal('modal-sub-expiry'); loadDevCos(); }, 1000);
+  } catch (e) {
+    showMsg('se-msg', 'Error: ' + (e.message || 'Failed to save'), 'err');
+  }
+  btn.disabled = false; btn.textContent = 'Save';
 }
 function toggleAddCo() {
   var p = document.getElementById('add-co-panel'); p.classList.toggle('hidden');

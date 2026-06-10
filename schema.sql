@@ -70,6 +70,9 @@ CREATE INDEX IF NOT EXISTS idx_workers_employee_id     ON workers(employee_id);
 CREATE INDEX IF NOT EXISTS idx_workers_workplace_id    ON workers(workplace_id);
 CREATE INDEX IF NOT EXISTS idx_workers_active          ON workers(is_active);
 
+-- Add subscription expiry tracking to companies
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMPTZ;
+
 -- Disable RLS for initial setup (configure RLS policies for production)
 ALTER TABLE workplaces   DISABLE ROW LEVEL SECURITY;
 ALTER TABLE workers      DISABLE ROW LEVEL SECURITY;

@@ -368,7 +368,7 @@ async function initCo() {
   var code = coParam();
   if (code) {
     try {
-      var r = await wt(db.from('companies').select('id,name,code').eq('code',code.toUpperCase()).eq('is_active',true).maybeSingle());
+      var r = await wt(db.from('companies').select('id,name,code,subscription_expires_at').eq('code',code.toUpperCase()).eq('is_active',true).maybeSingle());
       if (r.data) { setCo(r.data); return; }
     } catch(e) {}
   }
@@ -381,6 +381,16 @@ async function initCo() {
 }
 
 function setCo(co) {
+  if (co.subscription_expires_at && new Date(co.subscription_expires_at) < new Date()) {
+    document.getElementById('idle-main').style.display = 'none';
+    var noCoEl = document.getElementById('idle-no-co');
+    noCoEl.innerHTML =
+      '<div style="font-size:3rem;margin-bottom:16px">🔒</div>' +
+      '<h2>Subscription Expired</h2>' +
+      '<p>This company\'s WorkClock subscription has expired.<br>Please contact Reatlegile Solutions to renew.</p>';
+    noCoEl.style.display = 'block';
+    return;
+  }
   G.companyId = co.id; G.companyName = co.name;
   localStorage.setItem('wc_company', JSON.stringify(co));
   document.getElementById('i-co').textContent = co.name;

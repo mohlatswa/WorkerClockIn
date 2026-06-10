@@ -506,6 +506,10 @@
         <p id="worker-upgrade-msg" class="hidden" style="margin-top:10px;font-size:13px;color:var(--red);font-weight:600;">
           ⚠️ Worker limit reached — contact Reatlegile Solutions to upgrade your plan.
         </p>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #E5E7EB;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94A3B8;margin-bottom:4px">Subscription Status</div>
+          <div id="sub-expiry-row" style="font-size:13px">Loading…</div>
+        </div>
       </div>
 
       <div class="card">
@@ -891,6 +895,34 @@
     <div class="modal-ft">
       <button class="btn btn-primary" onclick="saveNavCustomize()">Done</button>
       <button class="btn btn-outline" onclick="resetNavCustomize()">Reset</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Set Subscription Expiry -->
+<div id="modal-sub-expiry" class="modal-bd hidden" onclick="if(event.target===this)closeModal('modal-sub-expiry')">
+  <div class="modal-box" style="max-width:380px">
+    <div class="modal-hd"><h3>📅 Set Subscription Expiry</h3><button class="modal-close" onclick="closeModal('modal-sub-expiry')">✕</button></div>
+    <div style="padding:18px">
+      <input type="hidden" id="se-co-id">
+      <p class="sub" id="se-co-name" style="font-weight:600;margin-bottom:12px;font-size:14px"></p>
+      <div class="field">
+        <label>Paid Until (expiry date)</label>
+        <input id="se-date" type="date" class="input">
+        <p class="sub" style="margin-top:4px;font-size:.78rem;color:var(--muted)">Set to the last day of the paid period. Leave blank to remove the expiry.</p>
+      </div>
+      <p style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#94A3B8;margin-bottom:8px">Quick Set</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+        <button class="btn btn-outline btn-sm" onclick="seQuick(1)">+1 month</button>
+        <button class="btn btn-outline btn-sm" onclick="seQuick(3)">+3 months</button>
+        <button class="btn btn-outline btn-sm" onclick="seQuick(6)">+6 months</button>
+        <button class="btn btn-outline btn-sm" onclick="seQuick(12)">+1 year</button>
+      </div>
+      <div class="btn-row">
+        <button id="se-save-btn" class="btn btn-primary" onclick="saveSubExpiry()">Save</button>
+        <button class="btn btn-outline" onclick="closeModal('modal-sub-expiry')">Cancel</button>
+      </div>
+      <p class="msg hidden" id="se-msg"></p>
     </div>
   </div>
 </div>

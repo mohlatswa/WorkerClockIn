@@ -61,7 +61,22 @@ function fmtDateShort(iso) {
   return new Date(iso).toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short', timeZone: _tz() });
 }
 function vibrate(p) { if (navigator.vibrate) navigator.vibrate(p || 50); }
-function escQ(s) { return (s || '').replace(/'/g, "\\'"); }
+// Escape for safe insertion as HTML text/attribute content (prevents stored XSS).
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+// Escape for use inside a single-quoted JS string within an inline handler,
+// then HTML-escape so the surrounding attribute can't be broken out of.
+function escQ(s) { return esc(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")); }
+
+// Column lists that deliberately exclude credential columns (pin, session_token,
+// password_hash, reset_token, reset_expires) so they are never shipped to the browser.
+var WORKER_COLS = 'id,employee_id,name,phone,email,workplace_id,biometric_credential_id,' +
+  'biometric_enabled,is_active,job_title,company_id,face_descriptor,device_id,' +
+  'failed_attempts,locked_until,force_pin_change';
+var ADMIN_COLS = 'id,username,email,is_active,role,full_name,company_id,failed_attempts,locked_until';
 async function sha256(str) {
   var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
   return Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
@@ -206,9 +221,14 @@ async function saveForcedPin() {
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
     var hashed = await sha256(p1);
-    var r = await withTimeout(db.from('workers').update({ pin: hashed, force_pin_change: false }).eq('id', S.worker.id), 5000);
-    if (r.error) { showMsg('fp-msg', 'Error: ' + r.error.message, 'err'); return; }
-    S.worker.force_pin_change = false; S.worker.pin = hashed;
+    var r = await withTimeout(db.rpc('worker_set_pin', {
+      p_worker_id: S.worker.id,
+      p_session_token: localStorage.getItem('wc_session_token'),
+      p_new_pin_hash: hashed
+    }), 5000);
+    if (r.error)            { showMsg('fp-msg', 'Error: ' + r.error.message, 'err'); return; }
+    if (r.data !== 'ok')    { showMsg('fp-msg', 'Session expired — please sign in again.', 'err'); return; }
+    S.worker.force_pin_change = false;
     document.getElementById('modal-pin-change').classList.add('hidden');
     enterWorkerDashboard();
   } catch(e) { showMsg('fp-msg', 'Error: ' + e.message, 'err'); }
@@ -232,11 +252,17 @@ async function saveChangedPin() {
   var btn = document.getElementById('cp-save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
-    if (await sha256(cur) !== S.worker.pin) { showMsg('cp-msg', 'Current PIN is incorrect.', 'err'); return; }
     var newHash = await sha256(new1);
-    var r = await withTimeout(db.from('workers').update({ pin: newHash }).eq('id', S.worker.id), 5000);
-    if (r.error) { showMsg('cp-msg', 'Error: ' + r.error.message, 'err'); return; }
-    S.worker.pin = newHash;
+    var r = await withTimeout(db.rpc('worker_set_pin', {
+      p_worker_id: S.worker.id,
+      p_session_token: localStorage.getItem('wc_session_token'),
+      p_new_pin_hash: newHash,
+      p_current_pin_hash: await sha256(cur)
+    }), 5000);
+    if (r.error)                 { showMsg('cp-msg', 'Error: ' + r.error.message, 'err'); return; }
+    if (r.data === 'bad_current'){ showMsg('cp-msg', 'Current PIN is incorrect.', 'err'); return; }
+    if (r.data === 'bad_session'){ showMsg('cp-msg', 'Session expired — please sign in again.', 'err'); return; }
+    if (r.data !== 'ok')         { showMsg('cp-msg', 'Could not update PIN — please try again.', 'err'); return; }
     showMsg('cp-msg', '✅ PIN updated successfully!', 'ok');
     setTimeout(function() { closeModal('modal-change-pin'); }, 1500);
   } catch(e) { showMsg('cp-msg', 'Error: ' + e.message, 'err'); }
@@ -249,7 +275,7 @@ async function findWorker() {
   showErr('err-empid', '');
   if (!id) { showErr('err-empid', 'Please enter your Employee ID.'); return; }
   try {
-    var q = db.from('workers').select('*, workplace:workplaces(*)').eq('employee_id', id).eq('is_active', true);
+    var q = db.from('workers').select(WORKER_COLS + ', workplace:workplaces(*)').eq('employee_id', id).eq('is_active', true);
     if (S.companyId && S.fromUrl) q = q.eq('company_id', S.companyId);
     var r = await withTimeout(q.maybeSingle(), 5000);
     if (r.error && r.error.code === 'PGRST116') {
@@ -291,31 +317,49 @@ function renderDots() {
 }
 async function verifyPin() {
   if (!S.worker) return;
-  // Check account lockout
-  if (S.worker.locked_until && new Date(S.worker.locked_until) > new Date()) {
-    var mins = Math.ceil((new Date(S.worker.locked_until) - new Date()) / 60000);
-    showErr('err-pin', '🔒 Account locked. Try again in ' + mins + ' minute(s).');
+  var enteredHash = await sha256(S.npPin.join(''));
+  var deviceId = getDeviceId();
+  var row;
+  try {
+    var r = await withTimeout(
+      db.rpc('worker_login', { p_worker_id: S.worker.id, p_pin_hash: enteredHash, p_device_id: deviceId }),
+      6000
+    );
+    if (r.error) { showErr('err-pin', 'Connection error — please try again.'); npReset(); return; }
+    row = r.data && r.data[0];
+  } catch (e) { showErr('err-pin', 'Connection error — please try again.'); npReset(); return; }
+  if (!row) { showErr('err-pin', 'Something went wrong — please try again.'); npReset(); return; }
+
+  if (row.result !== 'ok') {
+    vibrate([50, 30, 50]);
+    if (row.result === 'locked') {
+      showErr('err-pin', '🔒 Account locked. Try again in ' + (row.locked_minutes || 30) + ' minute(s).');
+    } else if (row.result === 'wrong_device') {
+      showErr('err-pin', '🔒 This account is bound to another device. Ask your administrator to reset it.');
+      setTimeout(function () { S.worker = null; showPg('wlogin'); }, 3000);
+    } else if (row.result === 'bad_pin') {
+      showErr('err-pin', 'Incorrect PIN. ' + (row.attempts_left != null ? row.attempts_left : 0) + ' attempt(s) remaining.');
+    } else {
+      showErr('err-pin', 'Account not found.');
+    }
     npReset(); return;
   }
-  var enteredHash = await sha256(S.npPin.join(''));
-  if (enteredHash !== S.worker.pin) {
-    vibrate([50, 30, 50]);
-    var attempts = (S.worker.failed_attempts || 0) + 1;
-    var upd = { failed_attempts: attempts };
-    var msg;
-    if (attempts >= 5) {
-      upd.locked_until    = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-      upd.failed_attempts = 0;
-      msg = '🔒 Too many failed attempts — account locked for 30 minutes.';
-    } else {
-      msg = 'Incorrect PIN. ' + (5 - attempts) + ' attempt(s) remaining.';
-    }
-    try { await withTimeout(db.from('workers').update(upd).eq('id', S.worker.id), 3000); } catch(e) {}
-    S.worker.failed_attempts = upd.failed_attempts;
-    if (upd.locked_until) S.worker.locked_until = upd.locked_until;
-    showErr('err-pin', msg); npReset(); return;
+
+  // Success — token issued and verified server-side
+  localStorage.setItem('wc_session_token', row.session_token);
+  localStorage.setItem('wc_worker_id', S.worker.id);
+  S.authMethod = 'pin';
+  S.worker.force_pin_change = row.force_pin_change;
+  if (row.face_descriptor != null) S.worker.face_descriptor = row.face_descriptor;
+  if (!S.worker.device_id) S.worker.device_id = deviceId;
+  if (S.worker.force_pin_change) {
+    document.getElementById('fp-pin1').value = '';
+    document.getElementById('fp-pin2').value = '';
+    document.getElementById('fp-msg').classList.add('hidden');
+    document.getElementById('modal-pin-change').classList.remove('hidden');
+    return;
   }
-  await secureSignIn('pin');
+  enterWorkerDashboard();
 }
 
 // ── Biometric ─────────────────────────────────────────────
@@ -330,7 +374,7 @@ async function homeBiometric() {
     var workerId = new TextDecoder().decode(cred.response.userHandle);
     if (!workerId) { toast('Biometric not linked to an account. Use Employee ID.'); return; }
     var r = await withTimeout(
-      db.from('workers').select('*, workplace:workplaces(*)').eq('id', workerId).eq('is_active', true).maybeSingle(),
+      db.from('workers').select(WORKER_COLS + ', workplace:workplaces(*)').eq('id', workerId).eq('is_active', true).maybeSingle(),
       5000
     );
     if (!r.data) { toast('Account not found.'); return; }
@@ -740,7 +784,7 @@ async function faceFrame() {
     if (_faceStream) { _faceStream.getTracks().forEach(function(t) { t.stop(); }); _faceStream = null; }
     try {
       var r = await withTimeout(
-        db.from('workers').select('*, workplace:workplaces(*)').eq('id', match.label).eq('is_active', true).maybeSingle(),
+        db.from('workers').select(WORKER_COLS + ', workplace:workplaces(*)').eq('id', match.label).eq('is_active', true).maybeSingle(),
         5000
       );
       if (!r.data) { statusEl.textContent = '❌ Account not found.'; setTimeout(function() { showPg('home'); }, 2000); return; }
@@ -892,31 +936,28 @@ async function sendOtp() {
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
   showMsg('fpw-send-msg', '⏳ Sending…', 'ok');
   try {
-    var r = await withTimeout(
-      db.from('admin_users').select('id,email,full_name').eq('username', username).eq('is_active', true).maybeSingle(),
-      5000
-    );
-    if (!r.data)       { showMsg('fpw-send-msg', 'Username not found or account inactive.', 'err'); return; }
-    if (!r.data.email) { showMsg('fpw-send-msg', 'No email on file for this account. Contact your system administrator.', 'err'); return; }
-    var otp     = String(Math.floor(100000 + Math.random() * 900000));
-    var hash    = await sha256(otp);
-    var expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-    var upd = await withTimeout(db.from('admin_users').update({ reset_token: hash, reset_expires: expires }).eq('id', r.data.id), 5000);
-    if (upd.error) { showMsg('fpw-send-msg', 'Error: ' + upd.error.message, 'err'); return; }
     if (typeof emailjs === 'undefined' || EMAILJS_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
       showMsg('fpw-send-msg', 'Email service not configured — contact your system administrator to reset your password.', 'err'); return;
     }
-    var expiry = new Date(Date.now() + 15 * 60 * 1000);
-    var timeStr = expiry.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
+    // OTP is generated and stored (hashed) entirely server-side; the plain code is
+    // returned only so the browser can email it. The stored hash is never exposed.
+    var r = await withTimeout(db.rpc('request_password_reset', { p_username: username }), 6000);
+    if (r.error) { showMsg('fpw-send-msg', 'Error: ' + r.error.message, 'err'); return; }
+    var row = r.data && r.data[0];
+    if (!row || !row.email) {
+      showMsg('fpw-send-msg', 'No account with an email on file matches that username. Contact your system administrator.', 'err');
+      return;
+    }
+    var timeStr = new Date(Date.now() + 15 * 60 * 1000).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
     await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      to_email: r.data.email,
-      to_name:  r.data.full_name || username,
-      passcode: otp,
+      to_email: row.email,
+      to_name:  row.full_name || username,
+      passcode: row.otp,
       time:     timeStr
     });
     var s1 = document.getElementById('fpw-step1'); if (s1) s1.classList.add('hidden');
     var s2 = document.getElementById('fpw-step2'); if (s2) s2.classList.remove('hidden');
-    showMsg('fpw-reset-msg', '✅ Code sent to ' + r.data.email + ' (valid 15 min)', 'ok');
+    showMsg('fpw-reset-msg', '✅ Code sent to ' + esc(row.email) + ' (valid 15 min)', 'ok');
   } catch(e) { showMsg('fpw-send-msg', 'Error: ' + (e.text || e.message || 'Failed to send'), 'err'); }
   finally { if (btn) { btn.disabled = false; btn.textContent = 'Send Code'; } }
 }
@@ -928,17 +969,14 @@ async function resetAdminPassword() {
   if (!newpw || newpw.length < 6) { showMsg('fpw-reset-msg', 'New password must be at least 6 characters.', 'err'); return; }
   showMsg('fpw-reset-msg', '⏳ Verifying…', 'ok');
   try {
-    var r = await withTimeout(
-      db.from('admin_users').select('id,reset_token,reset_expires').eq('username', username).eq('is_active', true).maybeSingle(),
-      5000
-    );
-    if (!r.data || !r.data.reset_token)           { showMsg('fpw-reset-msg', 'No reset request found — please start over.', 'err'); return; }
-    if (new Date(r.data.reset_expires) < new Date()) { showMsg('fpw-reset-msg', 'Code expired — request a new one.', 'err'); return; }
-    if (await sha256(otp) !== r.data.reset_token)  { showMsg('fpw-reset-msg', 'Incorrect code. Try again.', 'err'); return; }
-    await withTimeout(
-      db.from('admin_users').update({ password_hash: await sha256(newpw), reset_token: null, reset_expires: null }).eq('id', r.data.id),
-      5000
-    );
+    var r = await withTimeout(db.rpc('verify_password_reset', {
+      p_username: username, p_otp: otp, p_new_pw_hash: await sha256(newpw)
+    }), 6000);
+    if (r.error) { showMsg('fpw-reset-msg', 'Error: ' + r.error.message, 'err'); return; }
+    if (r.data === 'no_request') { showMsg('fpw-reset-msg', 'No reset request found — please start over.', 'err'); return; }
+    if (r.data === 'expired')    { showMsg('fpw-reset-msg', 'Code expired — request a new one.', 'err'); return; }
+    if (r.data === 'bad_code')   { showMsg('fpw-reset-msg', 'Incorrect code. Try again.', 'err'); return; }
+    if (r.data !== 'ok')         { showMsg('fpw-reset-msg', 'Could not reset password — please try again.', 'err'); return; }
     showMsg('fpw-reset-msg', '✅ Password reset! You can now log in.', 'ok');
     setTimeout(hideForgotPw, 2000);
   } catch(e) { showMsg('fpw-reset-msg', 'Error: ' + e.message, 'err'); }
@@ -1046,7 +1084,7 @@ async function loadDashboard() {
     el.innerHTML = recs.length
       ? recs.slice(0, 15).map(function(r) {
           return '<div class="act-item">' +
-            '<div><div class="act-name">' + (r.w ? r.w.name : 'Unknown') + '</div>' +
+            '<div><div class="act-name">' + (r.w ? esc(r.w.name) : 'Unknown') + '</div>' +
             '<div class="act-time">' + fmtTime(r.clock_in_time) + (r.clock_out_time ? ' → ' + fmtTime(r.clock_out_time) : '') + ' · ' + (r.auth_method || '') + '</div></div>' +
             '<span class="act-tag ' + (r.clock_out_time ? 'tag-out' : 'tag-in') + '">' + (r.clock_out_time ? 'Done' : 'Active') + '</span>' +
             '</div>';
@@ -1102,8 +1140,8 @@ async function loadAbsent() {
       return '<div class="list-row">' +
         '<div class="row-info">' +
         '<div class="av av-sm" style="background:#fee2e2;color:var(--red)">' + initials(w.name) + '</div>' +
-        '<div><div class="row-name">' + w.name + '</div>' +
-        '<div class="row-meta">' + w.employee_id + (w.job_title ? ' · ' + w.job_title : '') + '</div></div>' +
+        '<div><div class="row-name">' + esc(w.name) + '</div>' +
+        '<div class="row-meta">' + esc(w.employee_id) + (w.job_title ? ' · ' + esc(w.job_title) : '') + '</div></div>' +
         '</div>' +
         '<span class="badge-absent">Not In</span>' +
         '</div>';
@@ -1141,7 +1179,7 @@ async function loadWorkers() {
       banner.classList.toggle('hidden', !atLimit);
     }
     // ──────────────────────────────────────────────────────
-    var r = await withTimeout(db.from('workers').select('*').eq('company_id', cid).eq('is_active', true).order('name'), 5000);
+    var r = await withTimeout(db.from('workers').select(WORKER_COLS).eq('company_id', cid).eq('is_active', true).order('name'), 5000);
     if (r.error || !r.data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
     r.data.forEach(function(w) { _wCache[w.id] = Object.assign({}, w, { _ctx: 'admin' }); });
     if (!r.data.length) {
@@ -1152,12 +1190,12 @@ async function loadWorkers() {
       '<div class="list-group-hd">✅ Active Workers (' + r.data.length + ')</div>' +
       '<div class="card" style="padding:0 18px">' + r.data.map(function(w) {
         var isLocked = w.locked_until && new Date(w.locked_until) > new Date();
-        var meta = w.employee_id + (w.job_title ? ' · ' + w.job_title : '')
+        var meta = esc(w.employee_id) + (w.job_title ? ' · ' + esc(w.job_title) : '')
           + (w.biometric_enabled ? ' · 🔏' : '') + (w.face_descriptor ? ' · 🤳' : '')
           + (w.device_id         ? ' · 📱' : '') + (isLocked ? ' · 🔒' : '');
         return '<div class="list-row">' +
           '<div class="row-info"><div class="av av-sm">' + initials(w.name) + '</div>' +
-          '<div><div class="row-name">' + w.name + '</div>' +
+          '<div><div class="row-name">' + esc(w.name) + '</div>' +
           '<div class="row-meta">' + meta + '</div></div></div>' +
           '<div class="row-btns">' +
           '<button class="icon-btn" title="Edit" onclick="openEditWorker(\'' + w.id + '\')">✏️</button>' +
@@ -1317,7 +1355,7 @@ async function loadWorkerOptions() {
       5000
     );
     sel.innerHTML = '<option value="">All Workers</option>' + (r.data || []).map(function(w) {
-      return '<option value="' + w.id + '">' + w.name + (w.job_title ? ' · ' + w.job_title : '') + ' (' + w.employee_id + ')</option>';
+      return '<option value="' + w.id + '">' + esc(w.name) + (w.job_title ? ' · ' + esc(w.job_title) : '') + ' (' + esc(w.employee_id) + ')</option>';
     }).join('');
   } catch (e) {}
 }
@@ -1352,9 +1390,9 @@ async function loadAttendance() {
     el.innerHTML = '<div class="card" style="padding:0 18px">' + r.data.map(function(rec) {
       var hrs = (rec.clock_in_time && rec.clock_out_time) ? ((new Date(rec.clock_out_time) - new Date(rec.clock_in_time)) / 3600000).toFixed(1) + 'h' : '--';
       return '<div class="att-row">' +
-        '<div class="att-name">' + (rec.w ? rec.w.name : 'Unknown') +
-          (rec.w && rec.w.employee_id ? ' <small style="color:var(--muted)">(' + rec.w.employee_id + ')</small>' : '') +
-          (rec.w && rec.w.job_title   ? ' <small style="color:var(--blue)">· ' + rec.w.job_title + '</small>' : '') +
+        '<div class="att-name">' + (rec.w ? esc(rec.w.name) : 'Unknown') +
+          (rec.w && rec.w.employee_id ? ' <small style="color:var(--muted)">(' + esc(rec.w.employee_id) + ')</small>' : '') +
+          (rec.w && rec.w.job_title   ? ' <small style="color:var(--blue)">· ' + esc(rec.w.job_title) + '</small>' : '') +
         '</div>' +
         '<div class="att-date">' + fmtDate(rec.clock_in_time) + '</div>' +
         '<div class="att-chips">' +
@@ -1415,7 +1453,7 @@ async function loadCoAdmins() {
   var cid = requireAdminCid(); if (!cid) return;
   try {
     var r = await withTimeout(
-      db.from('admin_users').select('*').eq('company_id', cid).neq('role', 'developer').order('full_name'),
+      db.from('admin_users').select(ADMIN_COLS).eq('company_id', cid).neq('role', 'developer').order('full_name'),
       5000
     );
     if (r.error || !r.data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
@@ -1423,11 +1461,11 @@ async function loadCoAdmins() {
     el.innerHTML = '<div class="card" style="padding:0 18px">' + r.data.map(function(a) {
       var col = ROLE_COLORS[a.role] || 'var(--blue)';
       return '<div class="list-row">' +
-        '<div class="row-info"><div class="av av-sm" style="background:' + col + '">' + initials(a.full_name || a.username) + '</div>' +
-        '<div><div class="row-name">' + (a.full_name || a.username) + ' <small style="color:var(--muted)">@' + a.username + '</small></div>' +
+        '<div class="row-info"><div class="av av-sm" style="background:' + col + '">' + initialsesc(a.full_name || a.username) + '</div>' +
+        '<div><div class="row-name">' + esc(a.full_name || a.username) + ' <small style="color:var(--muted)">@' + esc(a.username) + '</small></div>' +
         '<div class="row-meta"><span class="role-pill" style="background:' + col + '22;color:' + col + '">' +
           (ROLE_LABELS[a.role] || a.role) + '</span>' +
-          (a.email ? ' · ' + a.email : '') + (!a.is_active ? ' · <em>Inactive</em>' : '') +
+          (a.email ? ' · ' + esc(a.email) : '') + (!a.is_active ? ' · <em>Inactive</em>' : '') +
         '</div></div></div>' +
         '<div class="row-btns">' +
         '<button class="icon-btn" onclick="openEditAcct(\'' + a.id + '\',\'' + escQ(a.full_name || '') + '\',\'' + escQ(a.email || '') + '\',\'' + a.role + '\',\'sa\')">✏️</button>' +
@@ -1474,9 +1512,9 @@ async function loadAdminInactive() {
   try {
     var isSA = S.admin && S.admin.role === 'super_admin';
     var queries = [
-      withTimeout(db.from('workers').select('*').eq('company_id', cid).eq('is_active', false).order('name'), 5000)
+      withTimeout(db.from('workers').select(WORKER_COLS).eq('company_id', cid).eq('is_active', false).order('name'), 5000)
     ];
-    if (isSA) queries.push(withTimeout(db.from('admin_users').select('*').eq('company_id', cid).neq('role', 'developer').eq('is_active', false).order('full_name'), 5000));
+    if (isSA) queries.push(withTimeout(db.from('admin_users').select(ADMIN_COLS).eq('company_id', cid).neq('role', 'developer').eq('is_active', false).order('full_name'), 5000));
     var results = await Promise.all(queries);
     var wks  = results[0].data || [];
     var accs = isSA ? (results[1].data || []) : [];
@@ -1527,8 +1565,8 @@ async function loadAdminInactive() {
           '<div class="row-info">' +
             '<div class="av av-sm" style="background:#94A3B8;opacity:.8">' + initials(w.name) + '</div>' +
             '<div style="min-width:0">' +
-              '<div class="row-name" style="color:#64748B">' + w.name + '</div>' +
-              '<div class="row-meta">' + w.employee_id + (w.job_title ? ' · ' + w.job_title : '') + badges + '</div>' +
+              '<div class="row-name" style="color:#64748B">' + esc(w.name) + '</div>' +
+              '<div class="row-meta">' + esc(w.employee_id) + (w.job_title ? ' · ' + esc(w.job_title) : '') + badges + '</div>' +
             '</div>' +
           '</div>' +
           '<div class="row-btns">' +
@@ -1549,10 +1587,10 @@ async function loadAdminInactive() {
           var col = ROLE_COLORS[a.role] || 'var(--blue)';
           return '<div class="list-row">' +
             '<div class="row-info">' +
-              '<div class="av av-sm" style="background:#94A3B8;opacity:.8">' + initials(a.full_name || a.username) + '</div>' +
+              '<div class="av av-sm" style="background:#94A3B8;opacity:.8">' + initialsesc(a.full_name || a.username) + '</div>' +
               '<div style="min-width:0">' +
-                '<div class="row-name" style="color:#64748B">' + (a.full_name || a.username) + ' <small>@' + a.username + '</small></div>' +
-                '<div class="row-meta"><span class="role-pill" style="background:' + col + '22;color:' + col + '">' + (ROLE_LABELS[a.role] || a.role) + '</span>' + (a.email ? ' · ' + a.email : '') + '</div>' +
+                '<div class="row-name" style="color:#64748B">' + esc(a.full_name || a.username) + ' <small>@' + esc(a.username) + '</small></div>' +
+                '<div class="row-meta"><span class="role-pill" style="background:' + col + '22;color:' + col + '">' + (ROLE_LABELS[a.role] || a.role) + '</span>' + (a.email ? ' · ' + esc(a.email) : '') + '</div>' +
               '</div>' +
             '</div>' +
             '<div class="row-btns">' +
@@ -1573,7 +1611,7 @@ async function loadAdminInactive() {
 async function exportInactiveWorkers() {
   var cid = requireAdminCid(); if (!cid) return;
   try {
-    var r = await withTimeout(db.from('workers').select('*').eq('company_id', cid).eq('is_active', false).order('name'), 5000);
+    var r = await withTimeout(db.from('workers').select(WORKER_COLS).eq('company_id', cid).eq('is_active', false).order('name'), 5000);
     if (!r.data || !r.data.length) { toast('No inactive workers to export.'); return; }
     var hdr = ['Name', 'Employee ID', 'Job Title', 'Biometric', 'Face Recognition', 'Device Bound'];
     var rows = r.data.map(function(w) {
@@ -2011,8 +2049,8 @@ async function loadDevCos() {
       }
       return '<div class="list-row">' +
         '<div class="row-info"><div class="av av-sm" style="background:var(--purple)">' + c.code.slice(0, 2) + '</div>' +
-        '<div><div class="row-name">' + c.name + '</div>' +
-        '<div class="row-meta">Code: ' + c.code +
+        '<div><div class="row-name">' + esc(c.name) + '</div>' +
+        '<div class="row-meta">Code: ' + esc(c.code) +
           ' · <span style="' + empClr + '">' + empTxt + '</span>' +
           ' · <span style="' + monClr + '">' + monthly + '</span>' +
         '</div>' +
@@ -2214,12 +2252,12 @@ async function loadDevAccounts() {
     try {
       var cosR = await withTimeout(db.from('companies').select('id,name').eq('is_active', true).order('name'), 5000);
       filterSel.innerHTML = '<option value="">All Companies</option>' + (cosR.data || []).map(function(c) {
-        return '<option value="' + c.id + '">' + c.name + '</option>';
+        return '<option value="' + c.id + '">' + esc(c.name) + '</option>';
       }).join('');
     } catch (e) {}
   }
   try {
-    var q   = db.from('admin_users').select('*, co:companies(name,code)').neq('role', 'developer').order('full_name');
+    var q   = db.from('admin_users').select(ADMIN_COLS + ', co:companies(name,code)').neq('role', 'developer').order('full_name');
     var fco = filterSel.value;
     if (fco) q = q.eq('company_id', fco);
     var r = await withTimeout(q, 5000);
@@ -2232,10 +2270,10 @@ async function loadDevAccounts() {
     function renderAcctRow(a) {
       var col = ROLE_COLORS[a.role] || 'var(--blue)';
       return '<div class="list-row">' +
-        '<div class="row-info"><div class="av av-sm" style="background:' + col + '">' + initials(a.full_name || a.username) + '</div>' +
-        '<div><div class="row-name">' + (a.full_name || a.username) + ' <small style="color:var(--muted)">@' + a.username + '</small></div>' +
+        '<div class="row-info"><div class="av av-sm" style="background:' + col + '">' + initialsesc(a.full_name || a.username) + '</div>' +
+        '<div><div class="row-name">' + esc(a.full_name || a.username) + ' <small style="color:var(--muted)">@' + esc(a.username) + '</small></div>' +
         '<div class="row-meta"><span class="role-pill" style="background:' + col + '22;color:' + col + '">' +
-          (ROLE_LABELS[a.role] || a.role) + '</span> 🏢 ' + (a.co ? a.co.name : '—') +
+          (ROLE_LABELS[a.role] || a.role) + '</span> 🏢 ' + (a.co ? esc(a.co.name) : '—') +
         '</div></div></div>' +
         '<div class="row-btns">' +
         '<button class="icon-btn" onclick="openEditAcct(\'' + a.id + '\',\'' + escQ(a.full_name || '') + '\',\'' + escQ(a.email || '') + '\',\'' + a.role + '\',\'dev\')">✏️</button>' +
@@ -2264,7 +2302,7 @@ function toggleAddDevAcct() {
     withTimeout(db.from('companies').select('id,name').eq('is_active', true).order('name'), 5000)
       .then(function(r) {
         document.getElementById('da-company').innerHTML = '<option value="">Select Company…</option>' +
-          (r.data || []).map(function(c) { return '<option value="' + c.id + '">' + c.name + '</option>'; }).join('');
+          (r.data || []).map(function(c) { return '<option value="' + c.id + '">' + esc(c.name) + '</option>'; }).join('');
       }).catch(function() {});
     document.getElementById('da-name').focus();
   }
@@ -2302,7 +2340,7 @@ async function loadDevWorkers() {
     try {
       var cosR = await withTimeout(db.from('companies').select('id,name').eq('is_active', true).order('name'), 5000);
       sel.innerHTML = '<option value="">Select a company…</option>' + (cosR.data || []).map(function(c) {
-        return '<option value="' + c.id + '">' + c.name + '</option>';
+        return '<option value="' + c.id + '">' + esc(c.name) + '</option>';
       }).join('');
     } catch (e) {}
   }
@@ -2310,7 +2348,7 @@ async function loadDevWorkers() {
   if (!cid) { el.innerHTML = '<div class="empty">Select a company above</div>'; return; }
   el.innerHTML = '<div class="empty">Loading…</div>';
   try {
-    var r = await withTimeout(db.from('workers').select('*').eq('company_id', cid).order('name'), 5000);
+    var r = await withTimeout(db.from('workers').select(WORKER_COLS).eq('company_id', cid).order('name'), 5000);
     if (r.error || !r.data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
     if (!r.data.length) { el.innerHTML = '<div class="empty">No workers in this company</div>'; return; }
     r.data.forEach(function(w) { _wCache[w.id] = Object.assign({}, w, { _ctx: 'dev' }); });
@@ -2321,8 +2359,8 @@ async function loadDevWorkers() {
     function renderWorkerRow(w) {
       return '<div class="list-row">' +
         '<div class="row-info"><div class="av av-sm">' + initials(w.name) + '</div>' +
-        '<div><div class="row-name">' + w.name + '</div>' +
-        '<div class="row-meta">' + w.employee_id + (w.job_title ? ' · ' + w.job_title : '') +
+        '<div><div class="row-name">' + esc(w.name) + '</div>' +
+        '<div class="row-meta">' + esc(w.employee_id) + (w.job_title ? ' · ' + esc(w.job_title) : '') +
           (w.biometric_enabled ? ' · 🔏' : '') + (w.face_descriptor ? ' · 🤳' : '') +
         '</div></div></div>' +
         '<div class="row-btns">' +
@@ -2357,8 +2395,8 @@ async function loadDevInactive() {
   try {
     var [cosR, accR, wkR] = await Promise.all([
       withTimeout(db.from('companies').select('*').eq('is_active', false).order('name'), 5000),
-      withTimeout(db.from('admin_users').select('*, co:companies(name,code)').neq('role', 'developer').eq('is_active', false).order('full_name'), 5000),
-      withTimeout(db.from('workers').select('*, co:companies(name)').eq('is_active', false).order('name'), 5000)
+      withTimeout(db.from('admin_users').select(ADMIN_COLS + ', co:companies(name,code)').neq('role', 'developer').eq('is_active', false).order('full_name'), 5000),
+      withTimeout(db.from('workers').select(WORKER_COLS + ', co:companies(name)').eq('is_active', false).order('name'), 5000)
     ]);
 
     var cos  = cosR.data  || [];
@@ -2379,8 +2417,8 @@ async function loadDevInactive() {
         var used = 0;
         return '<div class="list-row">' +
           '<div class="row-info"><div class="av av-sm" style="background:#94A3B8">' + c.code.slice(0, 2) + '</div>' +
-          '<div><div class="row-name" style="color:var(--muted)">' + c.name + '</div>' +
-          '<div class="row-meta">Code: ' + c.code + '</div></div></div>' +
+          '<div><div class="row-name" style="color:var(--muted)">' + esc(c.name) + '</div>' +
+          '<div class="row-meta">Code: ' + esc(c.code) + '</div></div></div>' +
           '<div class="row-btns">' +
           '<button class="icon-btn" onclick="openEditCo(\'' + c.id + '\')">✏️</button>' +
           '<button class="btn btn-sm" style="background:#D1FAE5;color:#065F46;border:1px solid #6EE7B7;border-radius:8px;padding:4px 10px;font-size:.78rem;cursor:pointer" onclick="devRestoreCo(\'' + c.id + '\')">✅ Restore</button>' +
@@ -2396,9 +2434,9 @@ async function loadDevInactive() {
       html += '<div class="card" style="padding:0 18px;margin-bottom:16px">' + accs.map(function(a) {
         var col = ROLE_COLORS[a.role] || 'var(--blue)';
         return '<div class="list-row">' +
-          '<div class="row-info"><div class="av av-sm" style="background:#94A3B8">' + initials(a.full_name || a.username) + '</div>' +
-          '<div><div class="row-name" style="color:var(--muted)">' + (a.full_name || a.username) + ' <small>@' + a.username + '</small></div>' +
-          '<div class="row-meta"><span class="role-pill" style="background:' + col + '22;color:' + col + '">' + (ROLE_LABELS[a.role] || a.role) + '</span> 🏢 ' + (a.co ? a.co.name : '—') + '</div>' +
+          '<div class="row-info"><div class="av av-sm" style="background:#94A3B8">' + initialsesc(a.full_name || a.username) + '</div>' +
+          '<div><div class="row-name" style="color:var(--muted)">' + esc(a.full_name || a.username) + ' <small>@' + esc(a.username) + '</small></div>' +
+          '<div class="row-meta"><span class="role-pill" style="background:' + col + '22;color:' + col + '">' + (ROLE_LABELS[a.role] || a.role) + '</span> 🏢 ' + (a.co ? esc(a.co.name) : '—') + '</div>' +
           '</div></div>' +
           '<div class="row-btns">' +
           '<button class="icon-btn" onclick="openEditAcct(\'' + a.id + '\',\'' + escQ(a.full_name || '') + '\',\'' + escQ(a.email || '') + '\',\'' + a.role + '\',\'dev\')">✏️</button>' +
@@ -2415,8 +2453,8 @@ async function loadDevInactive() {
       html += '<div class="card" style="padding:0 18px;margin-bottom:16px">' + wks.map(function(w) {
         return '<div class="list-row">' +
           '<div class="row-info"><div class="av av-sm" style="background:#94A3B8">' + initials(w.name) + '</div>' +
-          '<div><div class="row-name" style="color:var(--muted)">' + w.name + '</div>' +
-          '<div class="row-meta">' + w.employee_id + (w.job_title ? ' · ' + w.job_title : '') + ' · 🏢 ' + (w.co ? w.co.name : '—') + '</div>' +
+          '<div><div class="row-name" style="color:var(--muted)">' + esc(w.name) + '</div>' +
+          '<div class="row-meta">' + esc(w.employee_id) + (w.job_title ? ' · ' + esc(w.job_title) : '') + ' · 🏢 ' + (w.co ? esc(w.co.name) : '—') + '</div>' +
           '</div></div>' +
           '<div class="row-btns">' +
           '<button class="icon-btn" onclick="openEditWorker(\'' + w.id + '\')">✏️</button>' +

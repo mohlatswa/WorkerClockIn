@@ -398,6 +398,26 @@ body{
   border-radius:var(--rfull);font-size:.88rem;font-weight:500;z-index:9000;max-width:90%;text-align:center;box-shadow:var(--sh-lg);animation:toastIn .25s ease}
 @keyframes toastIn{from{transform:translate(-50%,12px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
 
+/* ─── PRINT / PDF report ────────────────────────────────────── */
+#print-area{display:none}
+@media print{
+  body{background:#fff}
+  body *{visibility:hidden}
+  #print-area,#print-area *{visibility:visible}
+  #print-area{display:block;position:absolute;inset:0;padding:24px;color:#0F172A;font-size:12px}
+  .pr-head{text-align:center;margin-bottom:18px;border-bottom:2px solid #4F46E5;padding-bottom:12px}
+  .pr-head h1{font-size:20px;font-weight:800;color:#4338CA;letter-spacing:-.02em}
+  .pr-title{font-size:14px;font-weight:700;margin-top:2px}
+  .pr-sub{font-size:11px;color:#64748B;margin-top:4px}
+  .pr-table{width:100%;border-collapse:collapse;margin-top:6px}
+  .pr-table th{background:#EEF2FF;color:#3730A3;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.04em;padding:7px 8px;border-bottom:1px solid #C7D2FE}
+  .pr-table td{padding:6px 8px;border-bottom:1px solid #E7E9EE}
+  .pr-table .c{text-align:center}.pr-table .r{text-align:right}
+  .pr-table tfoot td{font-weight:800;border-top:2px solid #4F46E5;background:#F8FAFF}
+  .pr-foot{margin-top:16px;font-size:10px;color:#94A3B8;text-align:center}
+  @page{margin:14mm}
+}
+
 /* ═══════════════ DESKTOP / RESPONSIVE (≥ 800px) ═══════════════ */
 @media (min-width:800px){
   #app{max-width:100%}

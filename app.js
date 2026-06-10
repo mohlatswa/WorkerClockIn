@@ -31,6 +31,7 @@ var S = {
 };
 var _wCache = {};
 var _cCache = {};
+var _attData = null; // last loaded attendance report (for summary / print)
 var ROLE_LABELS = { super_admin: 'Super Admin', admin: 'Admin', developer: 'Developer' };
 var ROLE_COLORS = { super_admin: 'var(--green)', admin: 'var(--blue)', developer: 'var(--purple)' };
 
@@ -112,7 +113,9 @@ var ICONS = {
   briefcase:'<rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
   wifi:'<path d="M5 12.55a11 11 0 0 1 14 0"/><path d="M8.5 16.05a6 6 0 0 1 7 0"/><path d="M2 8.82a15 15 0 0 1 20 0"/><line x1="12" x2="12.01" y1="20" y2="20"/>',
   device:'<rect width="14" height="20" x="5" y="2" rx="2.5"/><path d="M12 18h.01"/>',
-  search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>'
+  search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>',
+  history:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
+  printer:'<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/>'
 };
 function icon(name, size) {
   var p = ICONS[name]; if (!p) return '';
@@ -1095,6 +1098,7 @@ function switchTab(btn, name) {
   if (name === 'a-admins')   loadCoAdmins();
   if (name === 'a-absent')   loadAbsent();
   if (name === 'a-inactive') loadAdminInactive();
+  if (name === 'a-audit')    loadAudit();
   if (name === 'a-setup')   loadSetup();
   if (name === 'a-att') {
     var today = new Date().toISOString().slice(0, 10);
@@ -1207,6 +1211,62 @@ async function loadDashboard() {
       toast('⚠️ Showing last cached data — check your connection');
     }
   }
+}
+
+// ── Activity / Audit Log ──────────────────────────────────
+function auditSummary(wmap, a) {
+  var nd = a.new_data || {}, od = a.old_data || {};
+  if (a.table_name === 'workers') {
+    var nm = nd.name || od.name || 'Worker', emp = nd.employee_id || od.employee_id || '';
+    if (a.operation === 'INSERT') return { who: nm, emp: emp, what: 'Worker added' };
+    if (a.operation === 'DELETE') return { who: nm, emp: emp, what: 'Worker removed' };
+    var ch = [];
+    if (od.is_active !== nd.is_active)              ch.push(nd.is_active ? 'reactivated' : 'deactivated');
+    if (od.name !== nd.name)                        ch.push('name → ' + (nd.name || '—'));
+    if (od.job_title !== nd.job_title)              ch.push('job → ' + (nd.job_title || '—'));
+    if (od.employee_id !== nd.employee_id)          ch.push('ID → ' + (nd.employee_id || '—'));
+    if (!!od.device_id !== !!nd.device_id)          ch.push(nd.device_id ? 'device bound' : 'device reset');
+    if (od.biometric_enabled !== nd.biometric_enabled) ch.push(nd.biometric_enabled ? 'biometric on' : 'biometric off');
+    if ((od.locked_until || null) !== (nd.locked_until || null)) ch.push(nd.locked_until ? 'locked' : 'unlocked');
+    if (!od.force_pin_change && nd.force_pin_change) ch.push('PIN reset');
+    return { who: nm, emp: emp, what: ch.length ? 'Updated: ' + ch.join(', ') : 'Updated' };
+  }
+  if (a.table_name === 'attendance') {
+    var wi = wmap[nd.worker_id || od.worker_id] || {};
+    var nm2 = wi.name || 'Worker', emp2 = wi.emp || '';
+    if (a.operation === 'INSERT') return { who: nm2, emp: emp2, what: 'Clocked in' };
+    if (a.operation === 'DELETE') return { who: nm2, emp: emp2, what: 'Attendance deleted' };
+    if (!od.clock_out_time && nd.clock_out_time) return { who: nm2, emp: emp2, what: 'Clocked out' };
+    return { who: nm2, emp: emp2, what: 'Attendance updated' };
+  }
+  return { who: a.table_name, emp: '', what: a.operation };
+}
+function renderAuditRow(wmap, a) {
+  var s = auditSummary(wmap, a);
+  var col = a.operation === 'INSERT' ? 'var(--green)' : a.operation === 'DELETE' ? 'var(--red)' : 'var(--brand)';
+  var when = a.changed_at ? new Date(a.changed_at).toLocaleString('en-ZA', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: _tz() }) : '';
+  var ico = a.table_name === 'attendance' ? 'clock' : 'user';
+  return '<div class="list-row"><div class="row-info">' +
+    '<div class="av av-sm" style="background:' + col + '1f;color:' + col + '">' + icon(ico, 16) + '</div>' +
+    '<div style="min-width:0"><div class="row-name">' + esc(s.who) + (s.emp ? ' <small style="color:var(--muted)">(' + esc(s.emp) + ')</small>' : '') + '</div>' +
+    '<div class="row-meta">' + esc(s.what) + '</div></div></div>' +
+    '<div class="hist-method" style="white-space:nowrap;align-self:flex-start">' + when + '</div></div>';
+}
+async function loadAudit() {
+  var el = document.getElementById('audit-list'); if (!el) return;
+  var cid = requireAdminCid(); if (!cid) return;
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    var wR = await withTimeout(db.from('workers').select('id,name,employee_id').eq('company_id', cid), 5000);
+    var wmap = {}; (wR.data || []).forEach(function(w) { wmap[w.id] = { name: w.name, emp: w.employee_id }; });
+    var r = await withTimeout(
+      db.from('audit_log').select('*').eq('company_id', cid).order('changed_at', { ascending: false }).limit(150),
+      8000
+    );
+    var rows = r.data || [];
+    if (!rows.length) { el.innerHTML = '<div class="card"><div class="empty">No activity recorded yet</div></div>'; return; }
+    el.innerHTML = '<div class="card" style="padding:0 18px">' + rows.map(function(a) { return renderAuditRow(wmap, a); }).join('') + '</div>';
+  } catch (e) { el.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
 }
 
 // ── Absent Today ──────────────────────────────────────────
@@ -1484,7 +1544,8 @@ async function loadAttendance() {
     if (mth) q = q.eq('auth_method', mth);
     var r = await withTimeout(q, 10000);
     if (r.error) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
-    if (!r.data || !r.data.length) { el.innerHTML = '<div class="empty">No records match the filters</div>'; return; }
+    if (!r.data || !r.data.length) { _attData = null; el.innerHTML = '<div class="empty">No records match the filters</div>'; return; }
+    _attData = { rows: r.data, from: from, to: to };
     var totalHrs = r.data.reduce(function(s, rec) {
       return s + (rec.clock_in_time && rec.clock_out_time ? (new Date(rec.clock_out_time) - new Date(rec.clock_in_time)) / 3600000 : 0);
     }, 0);
@@ -1557,6 +1618,36 @@ async function downloadCSV() {
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
     showMsg('csv-msg', '✅ Downloaded ' + r.data.length + ' records', 'ok');
   } catch (e) { showMsg('csv-msg', 'Export failed: ' + e.message, 'err'); }
+}
+// Per-worker hours/OT/late summary → printable (Save as PDF from the print dialog)
+function printAttSummary() {
+  if (!_attData || !_attData.rows.length) { showMsg('csv-msg', 'Run a report first, then print.', 'err'); return; }
+  var byW = {};
+  _attData.rows.forEach(function(rec) {
+    var key = (rec.w && rec.w.employee_id) || rec.worker_id;
+    if (!byW[key]) byW[key] = { name: rec.w ? rec.w.name : 'Unknown', emp: rec.w ? rec.w.employee_id : '', job: (rec.w && rec.w.job_title) || '', days: 0, hours: 0, ot: 0, late: 0 };
+    var sc = shiftCalc(rec), w = byW[key];
+    w.days += 1;
+    w.hours += (rec.clock_in_time && rec.clock_out_time) ? (new Date(rec.clock_out_time) - new Date(rec.clock_in_time)) / 3600000 : 0;
+    w.ot += sc.ot; if (sc.late) w.late += 1;
+  });
+  var list = Object.keys(byW).map(function(k) { return byW[k]; }).sort(function(a, b) { return a.name.localeCompare(b.name); });
+  var tH = 0, tO = 0, tL = 0, tD = 0;
+  list.forEach(function(w) { tH += w.hours; tO += w.ot; tL += w.late; tD += w.days; });
+  var sh = curShift();
+  var body = list.map(function(w) {
+    return '<tr><td>' + esc(w.name) + '</td><td>' + esc(w.emp || '') + '</td><td>' + esc(w.job || '') + '</td>' +
+      '<td class="c">' + w.days + '</td><td class="r">' + w.hours.toFixed(1) + '</td><td class="r">' + w.ot.toFixed(1) + '</td><td class="c">' + w.late + '</td></tr>';
+  }).join('');
+  document.getElementById('print-area').innerHTML =
+    '<div class="pr-head"><h1>' + esc((S.admin && S.admin.co_name) || 'WorkClock') + '</h1>' +
+    '<div class="pr-title">Attendance Summary</div>' +
+    '<div class="pr-sub">' + esc(_attData.from) + ' to ' + esc(_attData.to) + ' &middot; Shift ' + sh.shift_start + '–' + sh.shift_end + ' &middot; OT: ' + sh.shift_ot_mode.replace('_', ' ') + '</div></div>' +
+    '<table class="pr-table"><thead><tr><th>Worker</th><th>Emp ID</th><th>Job</th><th class="c">Days</th><th class="r">Hours</th><th class="r">OT (h)</th><th class="c">Late</th></tr></thead>' +
+    '<tbody>' + body + '</tbody>' +
+    '<tfoot><tr><td colspan="3">Total — ' + list.length + ' workers</td><td class="c">' + tD + '</td><td class="r">' + tH.toFixed(1) + '</td><td class="r">' + tO.toFixed(1) + '</td><td class="c">' + tL + '</td></tr></tfoot></table>' +
+    '<div class="pr-foot">Generated ' + new Date().toLocaleString('en-ZA', { timeZone: _tz() }) + ' · WorkClock by Reatlegile Solutions</div>';
+  window.print();
 }
 
 // ── Company Admins ────────────────────────────────────────
@@ -2050,6 +2141,7 @@ var NAV_TABS = [
   { id: 'a-absent',   icon: 'userx',     label: 'Absent',     saOnly: false },
   { id: 'a-admins',   icon: 'key',       label: 'Admins',     saOnly: true  },
   { id: 'a-inactive', icon: 'archive',   label: 'Inactive',   saOnly: false },
+  { id: 'a-audit',    icon: 'history',   label: 'Activity',   saOnly: false },
   { id: 'a-setup',    icon: 'settings',  label: 'Setup',      saOnly: false },
 ];
 var DEFAULT_PINS = ['a-dash', 'a-workers', 'a-att', 'a-absent'];

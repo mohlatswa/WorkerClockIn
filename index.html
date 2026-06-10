@@ -319,6 +319,9 @@
     <button class="bnav-item bnav-overflow" data-tab="a-inactive" onclick="switchTab(this,'a-inactive')">
       <span class="bnav-icon" data-icon="archive" data-size="21"></span><span class="bnav-lbl">Inactive</span>
     </button>
+    <button class="bnav-item bnav-overflow" data-tab="a-audit" onclick="switchTab(this,'a-audit')">
+      <span class="bnav-icon" data-icon="history" data-size="21"></span><span class="bnav-lbl">Activity</span>
+    </button>
     <button class="bnav-item bnav-overflow" data-tab="a-setup" onclick="switchTab(this,'a-setup')">
       <span class="bnav-icon" data-icon="settings" data-size="21"></span><span class="bnav-lbl">Setup</span>
     </button>
@@ -438,6 +441,7 @@
         <div class="btn-row" style="margin-top:4px">
           <button class="btn btn-primary" onclick="loadAttendance()"><span class="ico" data-icon="search" data-size="17"></span> View Report</button>
           <button class="btn btn-outline" onclick="downloadCSV()"><span class="ico" data-icon="download" data-size="17"></span> Export CSV</button>
+          <button class="btn btn-outline" onclick="printAttSummary()"><span class="ico" data-icon="printer" data-size="17"></span> Print / PDF</button>
         </div>
         <p class="msg hidden" id="att-summary" style="margin-top:8px"></p>
         <p class="msg hidden" id="csv-msg"></p>
@@ -492,6 +496,16 @@
       </div>
       <p class="sub" style="margin-bottom:14px">All removed or deactivated users are stored here. You can restore them at any time or export the list.</p>
       <div id="admin-inactive-list"><div class="empty">Loading…</div></div>
+    </div>
+
+    <!-- Activity Log Tab -->
+    <div id="a-audit" class="tab-pane">
+      <div class="tab-bar">
+        <span class="sec-lbl"><span class="ico" data-icon="history" data-size="15"></span> Activity Log</span>
+        <button class="btn btn-outline btn-sm" onclick="loadAudit()"><span class="ico" data-icon="refresh" data-size="16"></span> Refresh</button>
+      </div>
+      <p class="sub" style="margin-bottom:14px">Recent changes to workers and attendance for your company.</p>
+      <div id="audit-list"><div class="empty">Loading…</div></div>
     </div>
 
     <!-- Setup Tab -->
@@ -961,6 +975,9 @@
     </div>
   </div>
 </div>
+
+<!-- PRINT AREA (populated by printAttSummary, only visible when printing) -->
+<div id="print-area"></div>
 
 <!-- TOAST -->
 <div id="toast" class="toast hidden"></div>

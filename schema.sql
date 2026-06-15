@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS workers (
 CREATE TABLE IF NOT EXISTS attendance (
     id                  UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     worker_id           UUID NOT NULL REFERENCES workers(id) ON DELETE CASCADE,
+    company_id          UUID REFERENCES companies(id) ON DELETE CASCADE,
     workplace_id        UUID REFERENCES workplaces(id) ON DELETE SET NULL,
     clock_in_time       TIMESTAMPTZ,
     clock_out_time      TIMESTAMPTZ,
@@ -79,8 +80,8 @@ CREATE TABLE IF NOT EXISTS attendance (
     clock_in_longitude  DECIMAL(11, 8),
     clock_out_latitude  DECIMAL(10, 8),
     clock_out_longitude DECIMAL(11, 8),
-    auth_method         VARCHAR(20) CHECK (auth_method IS NULL OR auth_method IN ('pin','biometric','qr','nfc','face')),
-    status              VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active','completed')),
+    auth_method         VARCHAR(20) CHECK (auth_method IS NULL OR auth_method IN ('pin','biometric','qr','nfc','face','portal')),
+    status              VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active','completed','missed')),
     notes               TEXT,
     created_at          TIMESTAMPTZ DEFAULT NOW()
 );
@@ -98,6 +99,7 @@ CREATE TABLE IF NOT EXISTS admin_users (
     locked_until  TIMESTAMPTZ,
     reset_token   VARCHAR(64),                      -- SHA-256 hash of the reset OTP
     reset_expires TIMESTAMPTZ,
+    session_token TEXT,                             -- server-issued admin session (admin_login_v2)
     is_active     BOOLEAN DEFAULT TRUE,
     created_at    TIMESTAMPTZ DEFAULT NOW()
 );
@@ -116,6 +118,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 
 -- ── Indexes ─────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_attendance_worker_id ON attendance(worker_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_company   ON attendance(company_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_clock_in  ON attendance(clock_in_time);
 CREATE INDEX IF NOT EXISTS idx_workers_company       ON workers(company_id);
 CREATE INDEX IF NOT EXISTS idx_workers_employee_id   ON workers(company_id, employee_id);
@@ -133,8 +136,18 @@ ALTER TABLE attendance  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_log   ENABLE ROW LEVEL SECURITY;
 
--- The server-side auth RPCs (admin_login, restore_worker_session,
--- worker_login, worker_set_pin, request_password_reset,
--- verify_password_reset, set_worker_limit) are defined as
--- SECURITY DEFINER functions. See the Supabase migrations:
+-- The server-side auth RPCs (admin_login / admin_login_v2,
+-- restore_worker_session, worker_login, worker_set_pin,
+-- request_password_reset, verify_password_reset, set_worker_limit) are
+-- defined as SECURITY DEFINER functions. See the Supabase migrations:
 --   workclock_secure_auth_rpcs  (the PIN / password-reset RPCs)
+--
+-- Phase 2b write-hardening RPCs (route all worker/workplace/attendance
+-- writes through the server so direct anon writes can be revoked):
+--   worker_clock_action                         -> phase2b_worker_clock_rpc.sql
+--   _wc_admin, admin_worker_create/update/toggle/reset_security/
+--   set_face/set_biometric, admin_workplace_save,
+--   worker_set_biometric/set_face/biometric_login/logout
+--                                               -> phase2b_admin_worker_workplace_rpcs.sql
+-- After those are live + verified, the workers/workplaces/attendance
+-- INSERT/UPDATE/DELETE revokes (Section C of the clock-RPC file) close Phase 2b.

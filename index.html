@@ -414,6 +414,7 @@
           <button class="btn btn-primary btn-full" style="margin-top:14px" onclick="nwDone()">✓ Complete Enrollment</button>
         </div>
       </div>
+      <input type="text" class="input" placeholder="🔍 Search workers by name, employee ID or job title…" oninput="filterRows(this,'workers-list')" style="margin-bottom:10px">
       <div id="workers-list"><div class="empty">Loading…</div></div>
     </div>
 
@@ -485,6 +486,7 @@
         </div>
         <p class="msg hidden" id="ca-msg"></p>
       </div>
+      <input type="text" class="input" placeholder="🔍 Search accounts by name, username, role or email…" oninput="filterRows(this,'co-admins-list')" style="margin-bottom:10px">
       <div id="co-admins-list"><div class="empty">Loading…</div></div>
     </div>
 
@@ -683,6 +685,7 @@
         </div>
         <p class="msg hidden" id="nc-msg"></p>
       </div>
+      <input type="text" class="input" placeholder="🔍 Search companies by name or code…" oninput="filterRows(this,'dev-cos-list')" style="margin-bottom:10px">
       <div id="dev-cos-list"><div class="empty">Loading…</div></div>
     </div>
 
@@ -713,6 +716,7 @@
       <div style="margin-bottom:10px">
         <select id="dev-filter-co" class="input" onchange="loadDevAccounts()" style="width:100%"><option value="">All Companies</option></select>
       </div>
+      <input type="text" class="input" placeholder="🔍 Search accounts by name, username or company…" oninput="filterRows(this,'dev-accounts-list')" style="margin-bottom:10px">
       <div id="dev-accounts-list"><div class="empty">Loading…</div></div>
     </div>
 
@@ -720,6 +724,7 @@
       <div style="margin-bottom:10px">
         <select id="dev-filter-co-wk" class="input" onchange="loadDevWorkers()" style="width:100%"><option value="">Select a company…</option></select>
       </div>
+      <input type="text" class="input" placeholder="🔍 Search workers by name or employee ID…" oninput="filterRows(this,'dev-workers-list')" style="margin-bottom:10px">
       <div id="dev-workers-list"><div class="empty">Select a company above</div></div>
     </div>
 

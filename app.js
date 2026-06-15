@@ -318,17 +318,23 @@ async function secureSignIn(method) {
   var w = S.worker;
   if (!w) return;
   var deviceId = getDeviceId();
-  // Device binding: reject if registered to a different device
-  if (w.device_id && w.device_id !== deviceId) {
-    showErr('err-pin', '🔒 This account is bound to another device. Ask your administrator to reset it.');
-    setTimeout(function() { S.worker = null; showPg('wlogin'); }, 3000);
-    return;
-  }
-  // Issue a new session token and register device on first sign-in
+  // Server issues the session token + enforces device binding (returns
+  // 'wrong_device' if bound elsewhere). Token is generated client-side
+  // and stored by the RPC, mirroring worker_login's success path.
   var sessionToken = genToken();
-  var updates = { session_token: sessionToken, failed_attempts: 0, locked_until: null };
-  if (!w.device_id) updates.device_id = deviceId;
-  try { await withTimeout(db.from('workers').update(updates).eq('id', w.id), 5000); } catch(e) {}
+  try {
+    var r = await withTimeout(db.rpc('worker_biometric_login', {
+      p_worker_id: w.id, p_device_id: deviceId, p_new_token: sessionToken
+    }), 5000);
+    if (r.error) { showErr('err-pin', 'Connection error — please try again.'); return; }
+    if (r.data === 'wrong_device') {
+      showErr('err-pin', '🔒 This account is bound to another device. Ask your administrator to reset it.');
+      setTimeout(function() { S.worker = null; showPg('wlogin'); }, 3000);
+      return;
+    }
+    if (r.data !== 'ok') { showErr('err-pin', 'Account not available — ask your administrator.'); return; }
+  } catch (e) { showErr('err-pin', 'Connection error — please try again.'); return; }
+  if (!w.device_id) w.device_id = deviceId;
   localStorage.setItem('wc_session_token', sessionToken);
   S.authMethod = method;
   if (S.worker.force_pin_change) {
@@ -534,8 +540,9 @@ async function workerRegBio() {
       timeout: 60000
     }});
     if (!cred) return;
-    var r = await db.from('workers').update({ biometric_credential_id: b64(cred.rawId), biometric_enabled: true }).eq('id', S.worker.id);
+    var r = await db.rpc('worker_set_biometric', { p_worker_id: S.worker.id, p_token: localStorage.getItem('wc_session_token'), p_credential_id: b64(cred.rawId) });
     if (r.error) throw r.error;
+    if (r.data !== 'ok') { showMsg('bio-reg-msg', 'Session expired — please sign in again.', 'err'); return; }
     S.worker.biometric_enabled = true;
     document.getElementById('bio-reg-card').style.display = 'none';
     showMsg('bio-reg-msg', '✅ Biometric registered! Use fingerprint to clock in next time.', 'ok');
@@ -766,35 +773,40 @@ async function clockAction() {
   btn.disabled = true;
   var action = S.clockStatus === 'in' ? 'out' : 'in';
   try {
-    if (action === 'in') {
-      var todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-      try {
-        await withTimeout(
-          db.from('attendance').update({ status: 'completed', clock_out_time: todayStart.toISOString() })
-            .eq('worker_id', S.worker.id).eq('status', 'active').lt('clock_in_time', todayStart.toISOString()),
-          5000
-        );
-      } catch(e) {}
-      var ins = await withTimeout(db.from('attendance').insert({
-        worker_id:           S.worker.id,
-        clock_in_time:       new Date().toISOString(),
-        auth_method:         S.authMethod,
-        status:              'active',
-        clock_in_latitude:   S.userLoc ? S.userLoc.latitude  : null,
-        clock_in_longitude:  S.userLoc ? S.userLoc.longitude : null
-      }).select().single(), 8000);
-      if (ins.error) throw ins.error;
-      S.attendanceId = ins.data.id; S.clockStatus = 'in';
-    } else {
-      var upd = await withTimeout(db.from('attendance').update({
-        clock_out_time:      new Date().toISOString(),
-        status:              'completed',
-        clock_out_latitude:  S.userLoc ? S.userLoc.latitude  : null,
-        clock_out_longitude: S.userLoc ? S.userLoc.longitude : null
-      }).eq('id', S.attendanceId), 8000);
-      if (upd.error) throw upd.error;
-      S.clockStatus = 'out';
+    // Server-side clock: validates session token, active+non-expired
+    // company and (on clock-in) the geofence — none of it trusted from
+    // the browser. Requires the worker_clock_action RPC to be deployed
+    // (phase2b_worker_clock_rpc.sql sections A+B) BEFORE this code ships.
+    var r = await withTimeout(db.rpc('worker_clock_action', {
+      p_worker_id:   S.worker.id,
+      p_token:       localStorage.getItem('wc_session_token'),
+      p_action:      action,
+      p_lat:         S.userLoc ? S.userLoc.latitude  : null,
+      p_lng:         S.userLoc ? S.userLoc.longitude : null,
+      p_auth_method: S.authMethod || 'pin'
+    }), 8000);
+    if (r.error) throw r.error;
+    var res = r.data || {};
+    if (!res.ok) {
+      if (res.error === 'too_far') {
+        toast('❌ Too far — ' + res.distance + 'm from workplace (max ' + res.radius + 'm)');
+      } else if (res.error === 'expired') {
+        toast('❌ This company’s subscription has expired. Contact your administrator.');
+      } else if (res.error === 'inactive') {
+        toast('❌ This account or company is no longer active.');
+      } else if (res.error === 'bad_session') {
+        toast('🔒 Session expired — please sign in again.');
+        setTimeout(logoutWorker, 1500);
+      } else if (res.error === 'no_open_session') {
+        toast('No open session to clock out of.');
+      } else {
+        toast('❌ Could not clock ' + action + ' — please try again.');
+      }
+      btn.disabled = false; setClockBtn(true);
+      return;
     }
+    if (action === 'in') { S.attendanceId = res.attendance_id; S.clockStatus = 'in'; }
+    else                 { S.clockStatus = 'out'; }
     vibrate([50, 30, 100]);
     showSuccess(action);
     await loadTodayRecord();
@@ -819,7 +831,7 @@ function showSuccess(action) {
 async function logoutWorker() {
   if (S.geoWatcher) { navigator.geolocation.clearWatch(S.geoWatcher); S.geoWatcher = null; }
   if (S.worker) {
-    try { await withTimeout(db.from('workers').update({ session_token: null }).eq('id', S.worker.id), 3000); } catch(e) {}
+    try { await withTimeout(db.rpc('worker_logout', { p_worker_id: S.worker.id, p_token: localStorage.getItem('wc_session_token') }), 3000); } catch(e) {}
   }
   S.worker = null; S.userLoc = null; S.clockStatus = 'out'; S.attendanceId = null;
   localStorage.removeItem('wc_worker_id');
@@ -962,8 +974,11 @@ async function captureEnroll() {
     var det = await faceapi.detectSingleFace(video, faceDetectOpts()).withFaceLandmarks(true).withFaceDescriptor();
     if (!det) { statusEl.textContent = '❌ No face detected — ensure good lighting.'; btn.disabled = false; return; }
     var descriptor = JSON.stringify(Array.from(det.descriptor));
-    var r = await withTimeout(db.from('workers').update({ face_descriptor: descriptor }).eq('id', _enrollTarget.id), 5000);
+    var r = _enrollTarget.ctx === 'worker'
+      ? await withTimeout(db.rpc('worker_set_face', { p_worker_id: _enrollTarget.id, p_token: localStorage.getItem('wc_session_token'), p_descriptor: descriptor }), 5000)
+      : await withTimeout(db.rpc('admin_worker_set_face', { p_actor_id: aId(), p_token: aTok(), p_id: _enrollTarget.id, p_descriptor: descriptor }), 5000);
     if (r.error) throw r.error;
+    if (r.data !== 'ok') { statusEl.textContent = '❌ Not permitted — please sign in again.'; btn.disabled = false; return; }
     vibrate([50, 30, 100]); statusEl.textContent = '✅ Face enrolled for ' + _enrollTarget.name + '!';
     if (_enrollTarget.ctx === 'worker') {
       S.worker.face_descriptor = descriptor;
@@ -1333,16 +1348,73 @@ async function loadAbsent() {
   } catch(e) { el.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
 }
 
+function _fmtLocalInput(d) {
+  var p = function(n) { return (n < 10 ? '0' : '') + n; };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+         ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
 async function forceClockOut(attId, workerName) {
-  if (!confirm('Force clock out "' + workerName + '"?\nClock-out time will be set to now.')) return;
+  var rec = _attData && _attData.rows && _attData.rows.filter(function(x) { return x.id === attId; })[0];
+  var inT = rec && rec.clock_in_time ? new Date(rec.clock_in_time) : null;
+  // Admin enters the REAL clock-out time — never auto-fabricated.
+  var ans = prompt(
+    'Set the actual clock-out time for "' + workerName + '"\n' +
+    'Format: YYYY-MM-DD HH:MM (24-hour)' +
+    (inT ? '\nClocked in: ' + _fmtLocalInput(inT) : ''),
+    _fmtLocalInput(inT || new Date())
+  );
+  if (!ans) return;
+  var when = new Date(ans.trim().replace(' ', 'T'));
+  if (isNaN(when.getTime())) { toast('Invalid date/time — use YYYY-MM-DD HH:MM'); return; }
+  if (inT && when <= inT) { toast('Clock-out must be after clock-in.'); return; }
   try {
-    var r = await withTimeout(
-      db.from('attendance').update({ clock_out_time: new Date().toISOString(), status: 'completed' }).eq('id', attId),
-      5000
-    );
-    if (!r.error) { toast('✅ ' + workerName + ' clocked out'); loadAttendance(); }
-    else toast('Error: ' + r.error.message);
+    var r = await withTimeout(db.rpc('admin_set_attendance_clockout', {
+      p_actor_id: aId(), p_token: aTok(), p_id: attId, p_clock_out: when.toISOString()
+    }), 5000);
+    if (r.error) { toast('Error: ' + r.error.message); return; }
+    if (r.data === 'bad_time') { toast('Clock-out must be after clock-in.'); return; }
+    if (!rpcOk(r.data)) return;
+    toast('✅ ' + workerName + ' clocked out'); loadAttendance();
   } catch(e) { toast('Error: ' + e.message); }
+}
+
+// ── Generic list search ───────────────────────────────────
+// Client-side filter for the admin/dev lists. Matches the query against
+// each row's visible text — which already contains name, company code,
+// employee ID, username, role and email — so a single box searches them
+// all. Hides a group header + its card when nothing in that group matches.
+var _listQ = {}, _listObs = {};
+function filterRows(input, containerId) {
+  _listQ[containerId] = (input.value || '').trim().toLowerCase();
+  // Watch the list once: when it re-renders (after an edit/toggle reload)
+  // the observer reapplies the active query so the search isn't lost.
+  if (!_listObs[containerId]) {
+    var c = document.getElementById(containerId);
+    if (c && window.MutationObserver) {
+      _listObs[containerId] = new MutationObserver(function() { applyListFilter(containerId); });
+      _listObs[containerId].observe(c, { childList: true, subtree: true });
+    }
+  }
+  applyListFilter(containerId);
+}
+// Reapply the saved query for a list (only inline styles change, so this
+// never triggers the childList observer above — no feedback loop).
+function applyListFilter(containerId) {
+  var c = document.getElementById(containerId);
+  if (!c) return;
+  var q = _listQ[containerId] || '';
+  c.querySelectorAll('.list-row').forEach(function(row) {
+    row.style.display = (!q || row.textContent.toLowerCase().indexOf(q) !== -1) ? '' : 'none';
+  });
+  c.querySelectorAll('.list-group-hd').forEach(function(hd) {
+    var card = hd.nextElementSibling;
+    if (!card) return;
+    var rows = card.querySelectorAll('.list-row'), anyVisible = false;
+    rows.forEach(function(r) { if (r.style.display !== 'none') anyVisible = true; });
+    var show = !q || anyVisible || rows.length === 0;
+    hd.style.display   = show ? '' : 'none';
+    card.style.display = show ? '' : 'none';
+  });
 }
 
 // ── Workers (Admin) ───────────────────────────────────────
@@ -1412,41 +1484,20 @@ async function addWorker() {
   var btn = document.getElementById('add-worker-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
-    // ── Worker limit check ─────────────────────────────────
-    var coR = await withTimeout(db.from('companies').select('worker_limit').eq('id', cid).single(), 5000);
-    if (!coR.error && coR.data && coR.data.worker_limit !== null) {
-      var countR = await withTimeout(
-        db.from('workers').select('*', { count: 'exact', head: true }).eq('company_id', cid).eq('is_active', true),
-        5000
-      );
-      var current = countR.count || 0;
-      if (current >= coR.data.worker_limit) {
-        showMsg('nw-msg',
-          '⚠️ Worker limit reached (' + current + ' / ' + coR.data.worker_limit + '). ' +
-          'Please upgrade your subscription to add more workers.',
-          'err');
-        return;
-      }
-    }
-    // ──────────────────────────────────────────────────────
+    // Worker limit + uniqueness are enforced server-side in the RPC.
     var hashedPin = await sha256(pin);
-    var wpR = await withTimeout(db.from('workplaces').select('id').eq('company_id', cid).limit(1), 5000);
-    var r   = await withTimeout(db.from('workers').insert({
-      employee_id:      empId,
-      name:             name,
-      job_title:        job || null,
-      pin:              hashedPin,
-      force_pin_change: true,
-      workplace_id:     (wpR.data && wpR.data[0]) ? wpR.data[0].id : null,
-      company_id:       cid,
-      is_active:        true
-    }).select('id,name,employee_id').single(), 5000);
-    if (r.error) {
-      showMsg('nw-msg', r.error.message.includes('unique') ? 'Employee ID already exists.' : r.error.message, 'err'); return;
-    }
-    _newWorkerId   = r.data.id;
-    _newWorkerName = r.data.name;
-    _newWorkerEmpId = r.data.employee_id;
+    var r = await withTimeout(db.rpc('admin_worker_create', {
+      p_actor_id: aId(), p_token: aTok(), p_company_id: cid,
+      p_employee_id: empId, p_name: name, p_job_title: job || null,
+      p_pin_hash: hashedPin
+    }), 5000);
+    if (r.error) { showMsg('nw-msg', 'Error: ' + r.error.message, 'err'); return; }
+    if (r.data === 'dupe')         { showMsg('nw-msg', 'Employee ID already exists.', 'err'); return; }
+    if (r.data === 'limit')        { showMsg('nw-msg', '⚠️ Worker limit reached. Please upgrade your subscription to add more workers.', 'err'); return; }
+    if (r.data === 'unauthorized') { showMsg('nw-msg', 'Session expired or not permitted — please log in again.', 'err'); return; }
+    _newWorkerId    = r.data;   // success = the new worker's UUID
+    _newWorkerName  = name;
+    _newWorkerEmpId = empId;
     ['nw-id', 'nw-name', 'nw-job', 'nw-pin'].forEach(function(id) { document.getElementById(id).value = ''; });
     document.getElementById('nw-s2-name').textContent  = _newWorkerName;
     document.getElementById('nw-s2-empid').textContent = 'Employee ID: ' + _newWorkerEmpId;
@@ -1487,25 +1538,21 @@ function nwDone() {
   loadWorkers();
 }
 async function toggleWorker(id, cur) {
-  var r = await withTimeout(db.from('workers').update({ is_active: !cur }).eq('id', id), 5000);
-  if (!r.error) {
-    if (cur) {
-      toast('Worker removed — moved to Inactive tab');
-      loadWorkers();
-    } else {
-      toast('Worker restored to active');
-      loadWorkers();
-    }
+  var r = await withTimeout(db.rpc('admin_worker_toggle', { p_actor_id: aId(), p_token: aTok(), p_id: id, p_active: !cur }), 5000);
+  if (!r.error && rpcOk(r.data)) {
+    toast(cur ? 'Worker removed — moved to Inactive tab' : 'Worker restored to active');
+    loadWorkers();
   }
 }
 async function resetWorkerSecurity(id, name) {
   if (!confirm('Reset security for "' + name + '"?\n\n• Removes device binding (they can register a new device)\n• Clears any account lockout\n• Invalidates active session')) return;
   try {
     var r = await withTimeout(
-      db.from('workers').update({ device_id: null, session_token: null, failed_attempts: 0, locked_until: null }).eq('id', id),
+      db.rpc('admin_worker_reset_security', { p_actor_id: aId(), p_token: aTok(), p_id: id }),
       5000
     );
     if (r.error) { toast('Error: ' + r.error.message); return; }
+    if (!rpcOk(r.data)) return;
     toast('Security reset for ' + name); loadWorkers();
   } catch(e) { toast('Error: ' + e.message); }
 }
@@ -1522,8 +1569,9 @@ async function adminRegBio(workerId, workerName, ctx) {
       timeout: 60000
     }});
     if (!cred) return;
-    var r = await withTimeout(db.from('workers').update({ biometric_credential_id: b64(cred.rawId), biometric_enabled: true }).eq('id', workerId), 5000);
+    var r = await withTimeout(db.rpc('admin_worker_set_biometric', { p_actor_id: aId(), p_token: aTok(), p_id: workerId, p_credential_id: b64(cred.rawId) }), 5000);
     if (r.error) throw r.error;
+    if (!rpcOk(r.data)) return;
     if (ctx === 'nw') { nwMarkBioDone(); return; }
     toast('✅ Biometric registered for ' + workerName); loadWorkers();
   } catch (e) { toast(e.name === 'NotAllowedError' ? 'Cancelled.' : '❌ ' + e.message); }
@@ -1572,11 +1620,22 @@ async function loadAttendance() {
     }, 0);
     var totalOt   = r.data.reduce(function(s, rec) { return s + shiftCalc(rec).ot; }, 0);
     var lateCount = r.data.filter(function(rec) { return shiftCalc(rec).late; }).length;
-    var stillin = r.data.filter(function(rec) { return rec.status === 'active'; }).length;
-    showMsg('att-summary', r.data.length + ' records · ' + totalHrs.toFixed(1) + 'h total · OT ' + fmtHrs(totalOt) + ' · ' + lateCount + ' late · ' + stillin + ' still in', 'ok');
+    var today0 = new Date(); today0.setHours(0, 0, 0, 0);
+    var isMissed = function(rec) {
+      return rec.status === 'missed' ||
+             (rec.status === 'active' && rec.clock_in_time && new Date(rec.clock_in_time) < today0);
+    };
+    var stillin = r.data.filter(function(rec) { return rec.status === 'active' && !isMissed(rec); }).length;
+    var missedCount = r.data.filter(isMissed).length;
+    showMsg('att-summary', r.data.length + ' records · ' + totalHrs.toFixed(1) + 'h total · OT ' + fmtHrs(totalOt) + ' · ' + lateCount + ' late · ' + stillin + ' still in' + (missedCount ? ' · ⚠ ' + missedCount + ' need review' : ''), 'ok');
     el.innerHTML = '<div class="card" style="padding:0 18px">' + r.data.map(function(rec) {
       var hrs = (rec.clock_in_time && rec.clock_out_time) ? ((new Date(rec.clock_out_time) - new Date(rec.clock_in_time)) / 3600000).toFixed(1) + 'h' : '--';
       var sc = shiftCalc(rec);
+      var missed = isMissed(rec);
+      var outChip = rec.clock_out_time
+        ? '<span class="chip chip-out">⏹ ' + fmtTime(rec.clock_out_time) + '</span>'
+        : (missed ? '<span class="chip chip-late">⚠ Missed clock-out</span>'
+                  : '<span class="chip chip-out">⏹ Still in</span>');
       return '<div class="att-row">' +
         '<div class="att-name">' + (rec.w ? esc(rec.w.name) : 'Unknown') +
           (rec.w && rec.w.employee_id ? ' <small style="color:var(--muted)">(' + esc(rec.w.employee_id) + ')</small>' : '') +
@@ -1585,12 +1644,12 @@ async function loadAttendance() {
         '<div class="att-date">' + fmtDate(rec.clock_in_time) + '</div>' +
         '<div class="att-chips">' +
           '<span class="chip chip-in">▶ '  + fmtTime(rec.clock_in_time) + '</span>' +
-          '<span class="chip chip-out">⏹ ' + (rec.clock_out_time ? fmtTime(rec.clock_out_time) : 'Still in') + '</span>' +
+          outChip +
           '<span class="chip chip-hrs">⏱ ' + hrs + '</span>' +
           (sc.late ? '<span class="chip chip-late">Late ' + sc.lateMin + 'm</span>' : '') +
           (sc.ot >= 0.05 ? '<span class="chip chip-ot">OT ' + fmtHrs(sc.ot) + '</span>' : '') +
           '<span class="chip chip-mth">'   + (rec.auth_method || '') + '</span>' +
-          (!rec.clock_out_time ? '<button class="btn btn-sm btn-outline" style="margin-left:6px;color:var(--red);border-color:var(--red);padding:2px 8px;font-size:.72rem" onclick="forceClockOut(\'' + rec.id + '\',\'' + escQ(rec.w ? rec.w.name : 'Worker') + '\')">Force Out</button>' : '') +
+          (!rec.clock_out_time ? '<button class="btn btn-sm btn-outline" style="margin-left:6px;color:var(--red);border-color:var(--red);padding:2px 8px;font-size:.72rem" onclick="forceClockOut(\'' + rec.id + '\',\'' + escQ(rec.w ? rec.w.name : 'Worker') + '\')">' + (missed ? 'Set clock-out' : 'Force Out') + '</button>' : '') +
         '</div></div>';
     }).join('') + '</div>';
   } catch (e) { el.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
@@ -1859,8 +1918,8 @@ async function exportInactiveWorkers() {
 }
 
 async function adminRestoreWorker(id) {
-  var r = await withTimeout(db.from('workers').update({ is_active: true }).eq('id', id), 5000);
-  if (!r.error) { toast('Worker restored'); loadAdminInactive(); }
+  var r = await withTimeout(db.rpc('admin_worker_toggle', { p_actor_id: aId(), p_token: aTok(), p_id: id, p_active: true }), 5000);
+  if (!r.error && rpcOk(r.data)) { toast('Worker restored'); loadAdminInactive(); }
 }
 async function adminRestoreAccount(id) {
   var r = await withTimeout(db.rpc('admin_manage_toggle', { p_actor_id: aId(), p_token: aTok(), p_target_id: id, p_active: true }), 5000);
@@ -1975,17 +2034,16 @@ async function saveWorkplace() {
   if (!name || isNaN(lat) || isNaN(lng)) { showMsg('wp-msg', 'Name, Latitude and Longitude are required.', 'err'); return; }
   var cid = requireAdminCid(); if (!cid) return;
   try {
-    var exR     = await withTimeout(db.from('workplaces').select('id').eq('company_id', cid).limit(1), 5000);
-    var payload = { name: name, address: addr, latitude: lat, longitude: lng, radius_meters: radius, company_id: cid };
-    var r = exR.data && exR.data.length
-      ? await withTimeout(db.from('workplaces').update(payload).eq('id', exR.data[0].id), 5000)
-      : await withTimeout(db.from('workplaces').insert(payload), 5000);
+    var exR  = await withTimeout(db.from('workplaces').select('id').eq('company_id', cid).limit(1), 5000);
+    var wpId = (exR.data && exR.data.length) ? exR.data[0].id : null;
+    // RPC upserts the workplace and backfills unassigned workers' workplace_id.
+    var r = await withTimeout(db.rpc('admin_workplace_save', {
+      p_actor_id: aId(), p_token: aTok(), p_company_id: cid, p_id: wpId,
+      p_name: name, p_address: addr, p_lat: lat, p_lng: lng, p_radius: radius
+    }), 5000);
     if (r.error) { showMsg('wp-msg', 'Save failed: ' + r.error.message, 'err'); return; }
+    if (!rpcOk(r.data, 'wp-msg')) return;
     showMsg('wp-msg', '✅ Workplace saved!', 'ok');
-    var wpR = await withTimeout(db.from('workplaces').select('id').eq('company_id', cid).limit(1), 5000);
-    if (wpR.data && wpR.data[0]) {
-      await withTimeout(db.from('workers').update({ workplace_id: wpR.data[0].id }).eq('company_id', cid).is('workplace_id', null), 5000);
-    }
   } catch (e) { showMsg('wp-msg', 'Error: ' + e.message, 'err'); }
 }
 async function saveTimezone() {
@@ -2088,13 +2146,17 @@ async function saveEditWorker() {
   var pin   = (document.getElementById('ewk-pin').value   || '').trim();
   if (!empId || !name) { showMsg('ewk-msg', 'Employee ID and Name required.', 'err'); return; }
   if (pin && pin.length < 4) { showMsg('ewk-msg', 'PIN must be at least 4 digits.', 'err'); return; }
-  var updates = { employee_id: empId, name: name, job_title: job || null };
-  if (pin) { updates.pin = await sha256(pin); updates.force_pin_change = false; }
+  var pinHash = pin ? await sha256(pin) : null;
   var btn = document.getElementById('edit-worker-save-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
-    var r = await withTimeout(db.from('workers').update(updates).eq('id', id), 5000);
-    if (r.error) { showMsg('ewk-msg', r.error.message.includes('unique') ? 'Employee ID already in use.' : r.error.message, 'err'); return; }
+    var r = await withTimeout(db.rpc('admin_worker_update', {
+      p_actor_id: aId(), p_token: aTok(), p_id: id,
+      p_employee_id: empId, p_name: name, p_job_title: job || null, p_pin_hash: pinHash
+    }), 5000);
+    if (r.error) { showMsg('ewk-msg', 'Error: ' + r.error.message, 'err'); return; }
+    if (r.data === 'dupe') { showMsg('ewk-msg', 'Employee ID already in use.', 'err'); return; }
+    if (!rpcOk(r.data, 'ewk-msg')) return;
     showMsg('ewk-msg', '✅ Worker updated!', 'ok');
     setTimeout(function() {
       closeModal('modal-edit-worker');
@@ -2662,8 +2724,8 @@ async function loadDevWorkers() {
   } catch (e) { el.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
 }
 async function devToggleWorker(id, cur) {
-  var r = await withTimeout(db.from('workers').update({ is_active: !cur }).eq('id', id), 5000);
-  if (!r.error) { toast(cur ? 'Worker deactivated' : 'Worker reactivated'); loadDevWorkers(); }
+  var r = await withTimeout(db.rpc('admin_worker_toggle', { p_actor_id: aId(), p_token: aTok(), p_id: id, p_active: !cur }), 5000);
+  if (!r.error && rpcOk(r.data)) { toast(cur ? 'Worker deactivated' : 'Worker reactivated'); loadDevWorkers(); }
 }
 
 async function loadDevInactive() {
@@ -2755,8 +2817,8 @@ async function devRestoreAcct(id) {
   if (!r.error && rpcOk(r.data)) { toast('Account restored'); loadDevInactive(); }
 }
 async function devRestoreWorker(id) {
-  var r = await withTimeout(db.from('workers').update({ is_active: true }).eq('id', id), 5000);
-  if (!r.error) { toast('Worker restored'); loadDevInactive(); }
+  var r = await withTimeout(db.rpc('admin_worker_toggle', { p_actor_id: aId(), p_token: aTok(), p_id: id, p_active: true }), 5000);
+  if (!r.error && rpcOk(r.data)) { toast('Worker restored'); loadDevInactive(); }
 }
 
 function loadDevSystem() {

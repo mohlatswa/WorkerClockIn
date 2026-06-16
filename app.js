@@ -2954,6 +2954,7 @@ function checkIOSInstall() {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────
+var APP_VERSION = 'v17';   // bump alongside the sw.js CACHE version on each deploy
 document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Start error tracking (no-op until a Sentry DSN is configured)
@@ -2961,6 +2962,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Replace all static [data-icon] placeholders with inline SVG
   hydrateIcons();
+
+  // 0. Stamp the running app version into every footer (.app-ver)
+  document.querySelectorAll('.app-ver').forEach(function(e) { e.textContent = APP_VERSION; });
 
   // 1. Sync init from localStorage — instant, no Supabase needed
   try {

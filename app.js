@@ -560,6 +560,7 @@ async function authBiometric() {
 }
 async function workerRegBio() {
   if (!window.PublicKeyCredential) { showMsg('bio-reg-msg', 'Biometric not supported.', 'err'); return; }
+  if (!(await ensureBiometricConsent(S.worker && S.worker.name, true))) return;
   try {
     var cred = await navigator.credentials.create({ publicKey: {
       challenge: crypto.getRandomValues(new Uint8Array(32)),
@@ -986,6 +987,7 @@ function stopFaceRecog() {
 // ── Face Enrolment ────────────────────────────────────────
 var _enrollStream = null, _enrollTarget = null;
 async function adminEnrollFace(workerId, workerName, ctx) {
+  if (!(await ensureBiometricConsent(workerName, ctx === 'worker'))) return;
   _enrollTarget = { id: workerId, name: workerName, ctx: ctx || 'admin' };
   document.getElementById('enroll-title').textContent   = 'Enrol Face — ' + workerName;
   document.getElementById('enroll-status').textContent  = '⏳ Loading models…';
@@ -1001,6 +1003,31 @@ async function adminEnrollFace(workerId, workerName, ctx) {
     document.getElementById('enroll-status').textContent = 'Position ' + workerName + '\'s face clearly, then tap Capture.';
     document.getElementById('enroll-snap-btn').disabled = false;
   } catch (e) { document.getElementById('enroll-status').textContent = e.name === 'NotAllowedError' ? '❌ Camera access denied' : '❌ ' + e.message; }
+}
+// ── Biometric consent gate (POPIA) ────────────────────────
+// Shows the consent notice + checkbox; resolves true only if agreed.
+// Required before any face/fingerprint enrolment. The server stamps
+// workers.biometric_consent_at when enrolment succeeds.
+var _consentResolve = null;
+function ensureBiometricConsent(name, isSelf) {
+  return new Promise(function(resolve) {
+    _consentResolve = resolve;
+    document.getElementById('consent-who').textContent = isSelf
+      ? 'You are about to enrol your own biometric data for clock-in.'
+      : 'You are enrolling biometric data for ' + name + '. The worker must be present and agree.';
+    document.getElementById('consent-agree-text').textContent = isSelf
+      ? 'I have read the above and consent to my biometric data being used for clock-in.'
+      : name + ' has read the above and consents to their biometric data being used for clock-in.';
+    document.getElementById('consent-check').checked = false;
+    document.getElementById('consent-agree-btn').disabled = true;
+    document.getElementById('modal-consent').classList.remove('hidden');
+  });
+}
+function consentToggle(cb) { document.getElementById('consent-agree-btn').disabled = !cb.checked; }
+function consentResolve(ok) {
+  document.getElementById('modal-consent').classList.add('hidden');
+  var r = _consentResolve; _consentResolve = null;
+  if (r) r(ok === true && document.getElementById('consent-check').checked);
 }
 function workerEnrollFace() { if (S.worker) adminEnrollFace(S.worker.id, S.worker.name, 'worker'); }
 async function captureEnroll() {
@@ -1495,6 +1522,7 @@ async function loadWorkers() {
           '<button class="icon-btn" title="Edit" onclick="openEditWorker(\'' + w.id + '\')">' + icon('pencil', 18) + '</button>' +
           '<button class="icon-btn ib-teal" title="Enrol face" onclick="adminEnrollFace(\'' + w.id + '\',\'' + escQ(w.name) + '\',\'admin\')">' + icon('camera', 18) + '</button>' +
           '<button class="icon-btn ib-violet" title="Register biometric" onclick="adminRegBio(\'' + w.id + '\',\'' + escQ(w.name) + '\')">' + icon('fingerprint', 18) + '</button>' +
+          ((w.biometric_enabled || w.face_descriptor) ? '<button class="icon-btn ib-danger" title="Delete biometric data &amp; withdraw consent" onclick="clearWorkerBiometric(\'' + w.id + '\',\'' + escQ(w.name) + '\')">' + icon('ban', 18) + '</button>' : '') +
           '<button class="icon-btn ib-warn" title="Reset device &amp; unlock" onclick="resetWorkerSecurity(\'' + w.id + '\',\'' + escQ(w.name) + '\')">' + icon('shield', 18) + '</button>' +
           '<button class="icon-btn ib-danger" title="Remove worker" onclick="toggleWorker(\'' + w.id + '\',true)">' + icon('ban', 18) + '</button>' +
           '</div></div>';
@@ -1594,9 +1622,19 @@ async function resetWorkerSecurity(id, name) {
     toast('Security reset for ' + name); loadWorkers();
   } catch(e) { toast('Error: ' + e.message); }
 }
+// POPIA withdrawal: delete a worker's biometric data + consent record.
+async function clearWorkerBiometric(id, name) {
+  if (!confirm('Delete biometric data for "' + name + '" and withdraw consent?\n\nTheir face/fingerprint data is permanently removed. They can re-enrol later with fresh consent.')) return;
+  try {
+    var r = await withTimeout(db.rpc('admin_worker_clear_biometric', { p_actor_id: aId(), p_token: aTok(), p_id: id }), 5000);
+    if (r.error) { toast('Error: ' + r.error.message); return; }
+    if (!rpcOk(r.data)) return;
+    toast('Biometric data deleted for ' + name); loadWorkers();
+  } catch (e) { toast('Error: ' + e.message); }
+}
 async function adminRegBio(workerId, workerName, ctx) {
   if (!window.PublicKeyCredential) { toast('WebAuthn not supported here'); return; }
-  if (ctx !== 'nw' && !confirm('Register biometric for "' + workerName + '"?\n\nThe worker must be present on this device.')) return;
+  if (!(await ensureBiometricConsent(workerName, false))) return;
   try {
     var cred = await navigator.credentials.create({ publicKey: {
       challenge: crypto.getRandomValues(new Uint8Array(32)),

@@ -183,7 +183,9 @@ BEGIN
   SELECT company_id INTO v_co FROM workers WHERE id = p_id;
   IF v_co IS NULL THEN RETURN 'not_found'; END IF;
   IF a.role <> 'developer' AND a.company_id <> v_co THEN RETURN 'unauthorized'; END IF;
-  UPDATE workers SET face_descriptor = p_descriptor, updated_at = NOW() WHERE id = p_id;
+  UPDATE workers SET face_descriptor = p_descriptor,
+                     biometric_consent_at = COALESCE(biometric_consent_at, NOW()),
+                     updated_at = NOW() WHERE id = p_id;
   RETURN 'ok';
 END;
 $$;
@@ -201,7 +203,30 @@ BEGIN
   IF v_co IS NULL THEN RETURN 'not_found'; END IF;
   IF a.role <> 'developer' AND a.company_id <> v_co THEN RETURN 'unauthorized'; END IF;
   UPDATE workers SET biometric_credential_id = p_credential_id,
-                     biometric_enabled = TRUE, updated_at = NOW()
+                     biometric_enabled = TRUE,
+                     biometric_consent_at = COALESCE(biometric_consent_at, NOW()),
+                     updated_at = NOW()
+   WHERE id = p_id;
+  RETURN 'ok';
+END;
+$$;
+
+-- 2g. Withdraw biometric consent: delete the biometric data + consent
+--     record (a POPIA data-subject right).
+CREATE OR REPLACE FUNCTION public.admin_worker_clear_biometric(
+  p_actor_id UUID, p_token TEXT, p_id UUID
+) RETURNS TEXT
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE a admin_users; v_co UUID;
+BEGIN
+  a := _wc_admin(p_actor_id, p_token);
+  IF a.id IS NULL THEN RETURN 'unauthorized'; END IF;
+  SELECT company_id INTO v_co FROM workers WHERE id = p_id;
+  IF v_co IS NULL THEN RETURN 'not_found'; END IF;
+  IF a.role <> 'developer' AND a.company_id <> v_co THEN RETURN 'unauthorized'; END IF;
+  UPDATE workers SET face_descriptor = NULL, biometric_credential_id = NULL,
+                     biometric_enabled = FALSE, biometric_consent_at = NULL,
+                     updated_at = NOW()
    WHERE id = p_id;
   RETURN 'ok';
 END;
@@ -294,8 +319,9 @@ BEGIN
   IF NOT FOUND OR w.session_token IS NULL OR w.session_token <> p_token THEN
     RETURN 'unauthorized';
   END IF;
-  UPDATE workers SET biometric_credential_id = p_credential_id,
-                     biometric_enabled = TRUE, updated_at = NOW()
+  UPDATE workers SET biometric_credential_id = p_credential_id, biometric_enabled = TRUE,
+                     biometric_consent_at = COALESCE(biometric_consent_at, NOW()),
+                     updated_at = NOW()
    WHERE id = p_worker_id;
   RETURN 'ok';
 END;
@@ -313,7 +339,9 @@ BEGIN
   IF NOT FOUND OR w.session_token IS NULL OR w.session_token <> p_token THEN
     RETURN 'unauthorized';
   END IF;
-  UPDATE workers SET face_descriptor = p_descriptor, updated_at = NOW()
+  UPDATE workers SET face_descriptor = p_descriptor,
+                     biometric_consent_at = COALESCE(biometric_consent_at, NOW()),
+                     updated_at = NOW()
    WHERE id = p_worker_id;
   RETURN 'ok';
 END;
@@ -368,6 +396,7 @@ GRANT EXECUTE ON FUNCTION
   public.admin_worker_reset_security(UUID,TEXT,UUID),
   public.admin_worker_set_face(UUID,TEXT,UUID,TEXT),
   public.admin_worker_set_biometric(UUID,TEXT,UUID,TEXT),
+  public.admin_worker_clear_biometric(UUID,TEXT,UUID),
   public.admin_workplace_save(UUID,TEXT,UUID,UUID,TEXT,TEXT,DOUBLE PRECISION,DOUBLE PRECISION,INTEGER),
   public.admin_set_attendance_clockout(UUID,TEXT,UUID,TIMESTAMPTZ),
   public.worker_set_biometric(UUID,TEXT,TEXT),

@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS workers (
     force_pin_change        BOOLEAN DEFAULT FALSE,
     biometric_credential_id TEXT,                      -- WebAuthn credential id (public)
     biometric_enabled       BOOLEAN DEFAULT FALSE,
+    biometric_consent_at    TIMESTAMPTZ,               -- POPIA: when biometric consent was given (NULL = none)
     face_descriptor         TEXT,                      -- JSON float array (face-api.js)
     device_id               TEXT,                      -- device binding
     session_token           TEXT,                      -- server-issued session

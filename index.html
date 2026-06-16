@@ -811,6 +811,34 @@
   </div>
 </div>
 
+<!-- MODAL: Biometric consent (POPIA) -->
+<div id="modal-consent" class="modal-bd hidden">
+  <div class="modal-box">
+    <div class="modal-hd"><h3>Biometric Data Consent</h3></div>
+    <div style="padding:18px;max-height:70vh;overflow:auto">
+      <p id="consent-who" style="font-weight:600;margin-bottom:12px"></p>
+      <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:12px 14px;font-size:.82rem;color:#475569;line-height:1.5">
+        <strong>What &amp; why (POPIA notice):</strong>
+        <ul style="margin:8px 0 0;padding-left:18px">
+          <li><strong>What we store:</strong> a mathematical template of the face (not a photo) and/or a device fingerprint key — never an actual fingerprint image.</li>
+          <li><strong>Why:</strong> only to verify identity at clock-in and prevent buddy-clocking.</li>
+          <li><strong>Who can see it:</strong> the employer and Reatlegile Solutions (the system provider).</li>
+          <li><strong>How long:</strong> only while the person is an active employee.</li>
+          <li><strong>It is voluntary:</strong> a PIN can be used instead. Consent can be withdrawn at any time via the administrator, who will delete the biometric data.</li>
+        </ul>
+      </div>
+      <label style="display:flex;align-items:flex-start;gap:10px;margin-top:14px;font-size:.88rem;cursor:pointer">
+        <input type="checkbox" id="consent-check" onchange="consentToggle(this)" style="margin-top:3px;width:18px;height:18px;flex:none">
+        <span id="consent-agree-text">I have read the above and consent to my biometric data being used for clock-in.</span>
+      </label>
+      <div class="btn-row" style="margin-top:16px">
+        <button id="consent-agree-btn" class="btn btn-primary" onclick="consentResolve(true)" disabled>Agree &amp; Continue</button>
+        <button class="btn btn-outline" onclick="consentResolve(false)">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Edit Worker -->
 <div id="modal-edit-worker" class="modal-bd hidden" onclick="if(event.target===this)closeModal('modal-edit-worker')">
   <div class="modal-box">

@@ -89,6 +89,8 @@ function esc(s) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
   });
 }
+// Initials for an avatar, HTML-escaped. Used by the account/admin lists.
+function initialsesc(n) { return esc(initials(n)); }
 // Escape for use inside a single-quoted JS string within an inline handler,
 // then HTML-escape so the surrounding attribute can't be broken out of.
 function escQ(s) { return esc(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")); }
@@ -2954,7 +2956,7 @@ function checkIOSInstall() {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────
-var APP_VERSION = 'v18';   // bump alongside the sw.js CACHE version on each deploy
+var APP_VERSION = 'v19';   // bump alongside the sw.js CACHE version on each deploy
 document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Start error tracking (no-op until a Sentry DSN is configured)

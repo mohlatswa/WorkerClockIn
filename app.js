@@ -807,15 +807,22 @@ async function clockAction() {
     // company and (on clock-in) the geofence — none of it trusted from
     // the browser. Requires the worker_clock_action RPC to be deployed
     // (phase2b_worker_clock_rpc.sql sections A+B) BEFORE this code ships.
-    var r = await withTimeout(db.rpc('worker_clock_action', {
+    var clockArgs = {
       p_worker_id:   S.worker.id,
       p_token:       localStorage.getItem('wc_session_token'),
       p_action:      action,
       p_lat:         S.userLoc ? S.userLoc.latitude  : null,
       p_lng:         S.userLoc ? S.userLoc.longitude : null,
-      p_auth_method: S.authMethod || 'pin',
-      p_device_label: deviceLabel()
-    }), 8000);
+      p_auth_method: S.authMethod || 'pin'
+    };
+    var r = await withTimeout(db.rpc('worker_clock_action',
+      Object.assign({ p_device_label: deviceLabel() }, clockArgs)), 8000);
+    // Fallback for the brief window before the device-label DB migration is
+    // applied (old 6-arg RPC won't accept p_device_label). Safe to remove once
+    // phase2b_device_label.sql has been run.
+    if (r.error && /PGRST202|p_device_label|find the function|schema cache/i.test(r.error.message || '')) {
+      r = await withTimeout(db.rpc('worker_clock_action', clockArgs), 8000);
+    }
     if (r.error) throw r.error;
     var res = r.data || {};
     if (!res.ok) {

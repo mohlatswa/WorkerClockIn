@@ -138,13 +138,43 @@ var ICONS = {
   device:'<rect width="14" height="20" x="5" y="2" rx="2.5"/><path d="M12 18h.01"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>',
   history:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
-  printer:'<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/>'
+  printer:'<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/>',
+  eye:'<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+  'eye-off':'<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/>'
 };
 function icon(name, size) {
   var p = ICONS[name]; if (!p) return '';
   var s = size || 22;
   return '<svg class="ico-svg" width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" ' +
     'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>';
+}
+// Add a show/hide "eye" toggle to every password / PIN field so the value
+// can be viewed and confirmed while typing. Runs once over the static HTML.
+function initPwToggles() {
+  document.querySelectorAll('input[type="password"]').forEach(function (inp) {
+    if (inp.dataset.pwToggle) return;
+    inp.dataset.pwToggle = '1';
+    var wrap = document.createElement('div');
+    wrap.style.position = 'relative';
+    wrap.style.width = '100%';
+    inp.parentNode.insertBefore(wrap, inp);
+    wrap.appendChild(inp);
+    inp.style.paddingRight = '44px';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.tabIndex = -1;
+    btn.setAttribute('aria-label', 'Show or hide');
+    btn.style.cssText = 'position:absolute;right:6px;top:50%;transform:translateY(-50%);' +
+      'background:none;border:0;padding:6px;cursor:pointer;color:#94A3B8;display:flex;align-items:center';
+    btn.innerHTML = icon('eye', 18);
+    btn.onclick = function () {
+      var hidden = inp.type === 'password';
+      inp.type = hidden ? 'text' : 'password';
+      btn.innerHTML = icon(hidden ? 'eye-off' : 'eye', 18);
+      inp.focus();
+    };
+    wrap.appendChild(btn);
+  });
 }
 function hydrateIcons(root) {
   (root || document).querySelectorAll('[data-icon]').forEach(function (el) {
@@ -2956,7 +2986,7 @@ function checkIOSInstall() {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────
-var APP_VERSION = 'v19';   // bump alongside the sw.js CACHE version on each deploy
+var APP_VERSION = 'v20';   // bump alongside the sw.js CACHE version on each deploy
 document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Start error tracking (no-op until a Sentry DSN is configured)
@@ -2967,6 +2997,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Stamp the running app version into every footer (.app-ver)
   document.querySelectorAll('.app-ver').forEach(function(e) { e.textContent = APP_VERSION; });
+
+  // 0. Add show/hide eye toggles to every password / PIN field
+  initPwToggles();
 
   // 1. Sync init from localStorage — instant, no Supabase needed
   try {

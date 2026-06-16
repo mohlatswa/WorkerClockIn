@@ -2664,9 +2664,9 @@ async function loadDevAccounts() {
   el.innerHTML  = '<div class="empty">Loading…</div>';
   if (filterSel.options.length <= 1) {
     try {
-      var cosR = await withTimeout(db.from('companies').select('id,name').eq('is_active', true).order('name'), 5000);
+      var cosR = await withTimeout(db.from('companies').select('id,name,is_active').order('name'), 5000);
       filterSel.innerHTML = '<option value="">All Companies</option>' + (cosR.data || []).map(function(c) {
-        return '<option value="' + c.id + '">' + esc(c.name) + '</option>';
+        return '<option value="' + c.id + '">' + esc(c.name) + (c.is_active ? '' : ' (inactive)') + '</option>';
       }).join('');
     } catch (e) {}
   }
@@ -2754,9 +2754,9 @@ async function loadDevWorkers() {
   var sel = document.getElementById('dev-filter-co-wk');
   if (sel.options.length <= 1) {
     try {
-      var cosR = await withTimeout(db.from('companies').select('id,name').eq('is_active', true).order('name'), 5000);
+      var cosR = await withTimeout(db.from('companies').select('id,name,is_active').order('name'), 5000);
       sel.innerHTML = '<option value="">Select a company…</option>' + (cosR.data || []).map(function(c) {
-        return '<option value="' + c.id + '">' + esc(c.name) + '</option>';
+        return '<option value="' + c.id + '">' + esc(c.name) + (c.is_active ? '' : ' (inactive)') + '</option>';
       }).join('');
     } catch (e) {}
   }
@@ -2954,7 +2954,7 @@ function checkIOSInstall() {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────
-var APP_VERSION = 'v17';   // bump alongside the sw.js CACHE version on each deploy
+var APP_VERSION = 'v18';   // bump alongside the sw.js CACHE version on each deploy
 document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Start error tracking (no-op until a Sentry DSN is configured)

@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS attendance (
     clock_out_longitude DECIMAL(11, 8),
     auth_method         VARCHAR(20) CHECK (auth_method IS NULL OR auth_method IN ('pin','biometric','qr','nfc','face','portal')),
     status              VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active','completed','missed')),
+    device_label        TEXT,                      -- human-readable sign-in device (OS · browser)
     notes               TEXT,
     created_at          TIMESTAMPTZ DEFAULT NOW()
 );

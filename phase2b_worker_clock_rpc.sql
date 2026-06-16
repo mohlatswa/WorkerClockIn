@@ -56,6 +56,9 @@ ALTER TABLE public.attendance
   ADD CONSTRAINT attendance_status_check
   CHECK (status IN ('active','completed','missed'));
 
+-- Human-readable sign-in device captured by the browser at clock-in.
+ALTER TABLE public.attendance ADD COLUMN IF NOT EXISTS device_label TEXT;
+
 
 -- ════════════════════════════════════════════════════════════
 --  SECTION B — the server-side clock RPC
@@ -75,13 +78,19 @@ ALTER TABLE public.attendance
 --                       | 'too_far' | 'no_open_session' | 'bad_action' }
 -- ════════════════════════════════════════════════════════════
 
+-- Drop the earlier 6-arg version so only one (7-arg) signature exists —
+-- PostgREST does not handle overloaded RPCs well.
+DROP FUNCTION IF EXISTS public.worker_clock_action(
+  UUID, TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT);
+
 CREATE OR REPLACE FUNCTION public.worker_clock_action(
   p_worker_id   UUID,
   p_token       TEXT,
   p_action      TEXT,            -- 'in' | 'out'
   p_lat         DOUBLE PRECISION DEFAULT NULL,
   p_lng         DOUBLE PRECISION DEFAULT NULL,
-  p_auth_method TEXT DEFAULT 'pin'
+  p_auth_method TEXT DEFAULT 'pin',
+  p_device_label TEXT DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -148,9 +157,9 @@ BEGIN
 
     INSERT INTO attendance (worker_id, company_id, workplace_id,
                             clock_in_time, clock_in_latitude,
-                            clock_in_longitude, auth_method, status)
+                            clock_in_longitude, auth_method, device_label, status)
     VALUES (w.id, w.company_id, w.workplace_id, NOW(), p_lat, p_lng,
-            COALESCE(p_auth_method, 'pin'), 'active')
+            COALESCE(p_auth_method, 'pin'), p_device_label, 'active')
     RETURNING id INTO v_att_id;
 
     RETURN jsonb_build_object('ok', true, 'action', 'in',
@@ -179,7 +188,7 @@ $$;
 -- anon may EXECUTE the RPC (it self-authorises via the token);
 -- it does NOT get direct table writes once Section C is applied.
 GRANT EXECUTE ON FUNCTION public.worker_clock_action(UUID, TEXT, TEXT,
-  DOUBLE PRECISION, DOUBLE PRECISION, TEXT) TO anon, authenticated;
+  DOUBLE PRECISION, DOUBLE PRECISION, TEXT, TEXT) TO anon, authenticated;
 
 
 -- ════════════════════════════════════════════════════════════

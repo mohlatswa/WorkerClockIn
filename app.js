@@ -310,6 +310,36 @@ function getDeviceId() {
   }
   return id;
 }
+// Human-readable device label for the sign-in/clock-in record. Browsers
+// don't expose the exact model (privacy), so this is OS + type + browser,
+// e.g. "Android phone · Chrome", "iPhone · Safari", "Windows desktop · Edge".
+function deviceLabel() {
+  try {
+    var ua  = navigator.userAgent || '';
+    var uad = navigator.userAgentData;
+    var os;
+    if (uad && uad.platform) os = uad.platform;
+    else if (/Android/i.test(ua)) os = 'Android';
+    else if (/iPhone|iPod/i.test(ua)) os = 'iPhone';
+    else if (/iPad/i.test(ua)) os = 'iPad';
+    else if (/Windows/i.test(ua)) os = 'Windows';
+    else if (/Mac OS X|Macintosh/i.test(ua)) os = 'macOS';
+    else if (/Linux/i.test(ua)) os = 'Linux';
+    else os = '';
+    var type = (uad && typeof uad.mobile === 'boolean')
+      ? (uad.mobile ? 'phone' : 'desktop')
+      : (/iPad|Tablet/i.test(ua) ? 'tablet' : (/Mobi|Android|iPhone/i.test(ua) ? 'phone' : 'desktop'));
+    var br = 'Browser';
+    if (/Edg\//i.test(ua))                br = 'Edge';
+    else if (/OPR\/|Opera/i.test(ua))     br = 'Opera';
+    else if (/SamsungBrowser/i.test(ua))  br = 'Samsung Internet';
+    else if (/Chrome\//i.test(ua))        br = 'Chrome';
+    else if (/Firefox\//i.test(ua))       br = 'Firefox';
+    else if (/Safari\//i.test(ua))        br = 'Safari';
+    var dev = os ? (/phone|tablet|desktop/.test(type) && !/iPhone|iPad/i.test(os) ? os + ' ' + type : os) : type;
+    return (dev + ' · ' + br).slice(0, 80);
+  } catch (e) { return 'Unknown device'; }
+}
 function genToken() {
   var arr = crypto.getRandomValues(new Uint8Array(32));
   return Array.from(arr).map(function(b) { return b.toString(16).padStart(2,'0'); }).join('');
@@ -783,7 +813,8 @@ async function clockAction() {
       p_action:      action,
       p_lat:         S.userLoc ? S.userLoc.latitude  : null,
       p_lng:         S.userLoc ? S.userLoc.longitude : null,
-      p_auth_method: S.authMethod || 'pin'
+      p_auth_method: S.authMethod || 'pin',
+      p_device_label: deviceLabel()
     }), 8000);
     if (r.error) throw r.error;
     var res = r.data || {};
@@ -1649,6 +1680,7 @@ async function loadAttendance() {
           (sc.late ? '<span class="chip chip-late">Late ' + sc.lateMin + 'm</span>' : '') +
           (sc.ot >= 0.05 ? '<span class="chip chip-ot">OT ' + fmtHrs(sc.ot) + '</span>' : '') +
           '<span class="chip chip-mth">'   + (rec.auth_method || '') + '</span>' +
+          (rec.device_label ? '<span class="chip chip-mth" title="Sign-in device">📱 ' + esc(rec.device_label) + '</span>' : '') +
           (!rec.clock_out_time ? '<button class="btn btn-sm btn-outline" style="margin-left:6px;color:var(--red);border-color:var(--red);padding:2px 8px;font-size:.72rem" onclick="forceClockOut(\'' + rec.id + '\',\'' + escQ(rec.w ? rec.w.name : 'Worker') + '\')">' + (missed ? 'Set clock-out' : 'Force Out') + '</button>' : '') +
         '</div></div>';
     }).join('') + '</div>';
@@ -1673,7 +1705,7 @@ async function downloadCSV() {
     var r = await withTimeout(q, 10000);
     if (!r.data || !r.data.length) { showMsg('csv-msg', 'No records found.', 'err'); return; }
     await loadShift(cid);
-    var hdr  = ['Worker Name', 'Employee ID', 'Job Title', 'Date', 'Clock In', 'Clock Out', 'Hours', 'Late (min)', 'Overtime (h)', 'Auth Method', 'Status'];
+    var hdr  = ['Worker Name', 'Employee ID', 'Job Title', 'Date', 'Clock In', 'Clock Out', 'Hours', 'Late (min)', 'Overtime (h)', 'Auth Method', 'Device', 'Status'];
     var rows = r.data.map(function(rec) {
       var cin  = rec.clock_in_time  ? new Date(rec.clock_in_time)  : null;
       var cout = rec.clock_out_time ? new Date(rec.clock_out_time) : null;
@@ -1687,7 +1719,7 @@ async function downloadCSV() {
         hrs ? hrs + 'h' : '',
         sc.late ? String(sc.lateMin) : '',
         sc.ot >= 0.05 ? (Math.round(sc.ot * 100) / 100).toFixed(2) : '',
-        rec.auth_method || '', rec.status || ''
+        rec.auth_method || '', rec.device_label || '', rec.status || ''
       ].map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
     });
     var csv  = '﻿' + [hdr.join(',')].concat(rows).join('\r\n');

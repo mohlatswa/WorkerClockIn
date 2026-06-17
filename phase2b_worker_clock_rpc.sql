@@ -78,10 +78,11 @@ ALTER TABLE public.attendance ADD COLUMN IF NOT EXISTS device_label TEXT;
 --                       | 'too_far' | 'no_open_session' | 'bad_action' }
 -- ════════════════════════════════════════════════════════════
 
--- Drop the earlier 6-arg version so only one (7-arg) signature exists —
--- PostgREST does not handle overloaded RPCs well.
+-- Drop earlier signatures so only one exists — PostgREST dislikes overloads.
 DROP FUNCTION IF EXISTS public.worker_clock_action(
   UUID, TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT);
+DROP FUNCTION IF EXISTS public.worker_clock_action(
+  UUID, TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT, TEXT);
 
 CREATE OR REPLACE FUNCTION public.worker_clock_action(
   p_worker_id   UUID,
@@ -90,7 +91,8 @@ CREATE OR REPLACE FUNCTION public.worker_clock_action(
   p_lat         DOUBLE PRECISION DEFAULT NULL,
   p_lng         DOUBLE PRECISION DEFAULT NULL,
   p_auth_method TEXT DEFAULT 'pin',
-  p_device_label TEXT DEFAULT NULL
+  p_device_label TEXT DEFAULT NULL,
+  p_at          TIMESTAMPTZ DEFAULT NULL  -- offline entries: the real time it happened
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -158,7 +160,7 @@ BEGIN
     INSERT INTO attendance (worker_id, company_id, workplace_id,
                             clock_in_time, clock_in_latitude,
                             clock_in_longitude, auth_method, device_label, status)
-    VALUES (w.id, w.company_id, w.workplace_id, NOW(), p_lat, p_lng,
+    VALUES (w.id, w.company_id, w.workplace_id, COALESCE(p_at, NOW()), p_lat, p_lng,
             COALESCE(p_auth_method, 'pin'), p_device_label, 'active')
     RETURNING id INTO v_att_id;
 
@@ -167,7 +169,7 @@ BEGIN
 
   ELSIF p_action = 'out' THEN
     UPDATE attendance
-       SET clock_out_time = NOW(), status = 'completed',
+       SET clock_out_time = COALESCE(p_at, NOW()), status = 'completed',
            clock_out_latitude = p_lat, clock_out_longitude = p_lng
      WHERE id = (SELECT id FROM attendance
                   WHERE worker_id = w.id AND status = 'active'
@@ -188,7 +190,7 @@ $$;
 -- anon may EXECUTE the RPC (it self-authorises via the token);
 -- it does NOT get direct table writes once Section C is applied.
 GRANT EXECUTE ON FUNCTION public.worker_clock_action(UUID, TEXT, TEXT,
-  DOUBLE PRECISION, DOUBLE PRECISION, TEXT, TEXT) TO anon, authenticated;
+  DOUBLE PRECISION, DOUBLE PRECISION, TEXT, TEXT, TIMESTAMPTZ) TO anon, authenticated;
 
 
 -- ════════════════════════════════════════════════════════════

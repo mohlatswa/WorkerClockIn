@@ -6,7 +6,7 @@ function setConnDot(ok){
   var el=document.getElementById('conn-dot');
   if(el){ el.style.background=ok?'#10B981':'#EF4444'; el.title=ok?'Connected to server':'Server unreachable'; }
 }
-window.addEventListener('online',  function(){ setConnDot(true);  });
+window.addEventListener('online',  function(){ setConnDot(true); if (typeof flushClockQueue === 'function') flushClockQueue(); });
 window.addEventListener('offline', function(){ setConnDot(false); toast('📶 Internet connection lost'); });
 // Health-check Supabase every 2 minutes
 setInterval(async function(){
@@ -831,48 +831,56 @@ function setClockBtn(enabled) {
 }
 
 // ── Clock In / Out ────────────────────────────────────────
+function _clockQueue()    { try { return JSON.parse(localStorage.getItem('wc_clock_queue') || '[]'); } catch (e) { return []; } }
+function _setClockQueue(q) { localStorage.setItem('wc_clock_queue', JSON.stringify(q)); }
+// Send one clock action server-side. withTime=true uses the stored offline
+// timestamp; otherwise the server stamps NOW(). The fallback covers the brief
+// window before the offline (p_at) migration is applied.
+async function sendClock(item, withTime) {
+  var args = {
+    p_worker_id:    item.worker_id,
+    p_token:        item.token,
+    p_action:       item.action,
+    p_lat:          item.lat,
+    p_lng:          item.lng,
+    p_auth_method:  item.auth_method,
+    p_device_label: item.device_label,
+    p_at:           withTime ? item.at : null
+  };
+  var r = await withTimeout(db.rpc('worker_clock_action', args), 8000);
+  if (r.error && /PGRST202|p_at|p_device_label|find the function|schema cache/i.test(r.error.message || '')) {
+    delete args.p_at; delete args.p_device_label;
+    r = await withTimeout(db.rpc('worker_clock_action', args), 8000);
+  }
+  return r;
+}
 async function clockAction() {
   var btn = document.getElementById('clk-btn');
   btn.disabled = true;
   var action = S.clockStatus === 'in' ? 'out' : 'in';
+  var item = {
+    worker_id:    S.worker.id,
+    token:        localStorage.getItem('wc_session_token'),
+    action:       action,
+    lat:          S.userLoc ? S.userLoc.latitude  : null,
+    lng:          S.userLoc ? S.userLoc.longitude : null,
+    auth_method:  S.authMethod || 'pin',
+    device_label: deviceLabel(),
+    at:           new Date().toISOString()
+  };
+  // Offline → save locally and sync later, keeping the real clock time.
+  if (!navigator.onLine) { _queueOfflineClock(item, action); btn.disabled = false; setClockBtn(true); return; }
   try {
-    // Server-side clock: validates session token, active+non-expired
-    // company and (on clock-in) the geofence — none of it trusted from
-    // the browser. Requires the worker_clock_action RPC to be deployed
-    // (phase2b_worker_clock_rpc.sql sections A+B) BEFORE this code ships.
-    var clockArgs = {
-      p_worker_id:   S.worker.id,
-      p_token:       localStorage.getItem('wc_session_token'),
-      p_action:      action,
-      p_lat:         S.userLoc ? S.userLoc.latitude  : null,
-      p_lng:         S.userLoc ? S.userLoc.longitude : null,
-      p_auth_method: S.authMethod || 'pin'
-    };
-    var r = await withTimeout(db.rpc('worker_clock_action',
-      Object.assign({ p_device_label: deviceLabel() }, clockArgs)), 8000);
-    // Fallback for the brief window before the device-label DB migration is
-    // applied (old 6-arg RPC won't accept p_device_label). Safe to remove once
-    // phase2b_device_label.sql has been run.
-    if (r.error && /PGRST202|p_device_label|find the function|schema cache/i.test(r.error.message || '')) {
-      r = await withTimeout(db.rpc('worker_clock_action', clockArgs), 8000);
-    }
-    if (r.error) throw r.error;
+    var r = await sendClock(item, false);
+    if (r.error) { _queueOfflineClock(item, action); btn.disabled = false; setClockBtn(true); return; }
     var res = r.data || {};
     if (!res.ok) {
-      if (res.error === 'too_far') {
-        toast('❌ Too far — ' + res.distance + 'm from workplace (max ' + res.radius + 'm)');
-      } else if (res.error === 'expired') {
-        toast('❌ This company’s subscription has expired. Contact your administrator.');
-      } else if (res.error === 'inactive') {
-        toast('❌ This account or company is no longer active.');
-      } else if (res.error === 'bad_session') {
-        toast('🔒 Session expired — please sign in again.');
-        setTimeout(logoutWorker, 1500);
-      } else if (res.error === 'no_open_session') {
-        toast('No open session to clock out of.');
-      } else {
-        toast('❌ Could not clock ' + action + ' — please try again.');
-      }
+      if (res.error === 'too_far')              toast('❌ Too far — ' + res.distance + 'm from workplace (max ' + res.radius + 'm)');
+      else if (res.error === 'expired')         toast('❌ This company’s subscription has expired. Contact your administrator.');
+      else if (res.error === 'inactive')        toast('❌ This account or company is no longer active.');
+      else if (res.error === 'bad_session')   { toast('🔒 Session expired — please sign in again.'); setTimeout(logoutWorker, 1500); }
+      else if (res.error === 'no_open_session') toast('No open session to clock out of.');
+      else                                      toast('❌ Could not clock ' + action + ' — please try again.');
       btn.disabled = false; setClockBtn(true);
       return;
     }
@@ -882,8 +890,38 @@ async function clockAction() {
     showSuccess(action);
     await loadTodayRecord();
     await loadAttendanceHistory();
-  } catch (e) { toast('❌ ' + e.message); }
+  } catch (e) {
+    // network/transport failure → queue for sync when back online
+    _queueOfflineClock(item, action);
+  }
   btn.disabled = false; setClockBtn(true);
+}
+function _queueOfflineClock(item, action) {
+  var q = _clockQueue(); q.push(item); _setClockQueue(q);
+  S.clockStatus = action === 'in' ? 'in' : 'out';
+  if (action === 'in') S.attendanceId = null;
+  vibrate([50, 30, 100]);
+  showSuccess(action);
+  toast('📶 Saved offline — will sync automatically when you reconnect');
+}
+// Replay queued offline clock actions, in order, once back online.
+async function flushClockQueue() {
+  if (!navigator.onLine) return;
+  var q = _clockQueue();
+  if (!q.length) return;
+  var remaining = [], synced = 0;
+  for (var i = 0; i < q.length; i++) {
+    try {
+      var r = await sendClock(q[i], true);
+      if (r.error) { remaining.push(q[i]); continue; }  // still unreachable → retry later
+      synced++;                                          // ok or server-rejected → done
+    } catch (e) { remaining.push(q[i]); }
+  }
+  _setClockQueue(remaining);
+  if (synced > 0) {
+    toast('✅ Synced ' + synced + ' offline clock action' + (synced > 1 ? 's' : ''));
+    if (S.worker) { try { await loadTodayRecord(); await loadAttendanceHistory(); } catch (e) {} }
+  }
 }
 function showSuccess(action) {
   var overlay = document.getElementById('success-overlay');
@@ -2986,7 +3024,7 @@ function checkIOSInstall() {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────
-var APP_VERSION = 'v22';   // bump alongside the sw.js CACHE version on each deploy
+var APP_VERSION = 'v23';   // bump alongside the sw.js CACHE version on each deploy
 document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Start error tracking (no-op until a Sentry DSN is configured)
@@ -3000,6 +3038,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Add show/hide eye toggles to every password / PIN field
   initPwToggles();
+
+  // 0. Sync any clock actions saved offline on a previous visit
+  flushClockQueue();
 
   // 1. Sync init from localStorage — instant, no Supabase needed
   try {

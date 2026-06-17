@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WorkClock — Data Processing Agreement (Template)</title>
+<style>
+  body { margin:0; font-family:'Inter',-apple-system,Segoe UI,Roboto,sans-serif; color:#1E293B; line-height:1.6; background:#fff; }
+  .wrap { max-width:820px; margin:0 auto; padding:32px 22px 70px; }
+  h1 { font-size:1.5rem; margin:0 0 4px; }
+  h2 { font-size:1.05rem; margin:24px 0 6px; color:#312E81; }
+  p, li { font-size:.92rem; }
+  ul { padding-left:20px; }
+  .sub { color:#64748B; font-size:.9rem; }
+  code { background:#EEF2FF; padding:1px 5px; border-radius:4px; }
+  .sign { margin-top:34px; display:flex; gap:40px; flex-wrap:wrap; }
+  .sign div { flex:1; min-width:230px; border-top:1px solid #1E293B; padding-top:6px; font-size:.85rem; color:#64748B; }
+  .note { background:#FFFBEB; border:1px solid #FDE68A; border-radius:8px; padding:12px 14px; font-size:.88rem; margin-top:18px; }
+  @media print { .note { display:none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Data Processing Agreement</h1>
+  <p class="sub">Under the Protection of Personal Information Act, 2013 (POPIA) · WorkClock attendance system</p>
+
+  <h2>1. Parties</h2>
+  <p>This Agreement is between:</p>
+  <ul>
+    <li><strong>[CLIENT COMPANY NAME]</strong> ("the Responsible Party"), and</li>
+    <li><strong>Reatlegile Solutions</strong> ("the Operator"), provider of WorkClock.</li>
+  </ul>
+
+  <h2>2. Subject matter</h2>
+  <p>The Operator processes personal information on behalf of the Responsible Party
+  solely to provide the WorkClock staff time-and-attendance service.</p>
+
+  <h2>3. Nature &amp; purpose of processing</h2>
+  <ul>
+    <li><strong>Categories of data subjects:</strong> the Responsible Party's employees/workers.</li>
+    <li><strong>Categories of personal information:</strong> name, employee ID, job title, contact details, hashed PIN, clock-in/out times, GPS location, sign-in device, and (where the data subject consents) biometric templates (facial recognition / device security key).</li>
+    <li><strong>Purpose:</strong> recording attendance, hours, lateness and overtime; identity verification at clock-in.</li>
+  </ul>
+
+  <h2>4. Operator obligations</h2>
+  <p>The Operator shall:</p>
+  <ul>
+    <li>Process personal information <strong>only on the documented instructions</strong> of the Responsible Party and only for the purpose above;</li>
+    <li>Treat all personal information as <strong>confidential</strong> and ensure persons authorised to process it are bound by confidentiality;</li>
+    <li>Implement appropriate, reasonable <strong>technical and organisational security measures</strong> (s19 POPIA) — see §6;</li>
+    <li>Not engage another sub-processor without the Responsible Party's prior general authorisation (see §5);</li>
+    <li>Assist the Responsible Party in responding to data-subject requests and in meeting its POPIA obligations;</li>
+    <li><strong>Notify the Responsible Party without undue delay</strong> on becoming aware of any security compromise affecting their data;</li>
+    <li>On termination, <strong>delete or return</strong> all personal information at the Responsible Party's choice.</li>
+  </ul>
+
+  <h2>5. Sub-processors</h2>
+  <p>The Responsible Party authorises the use of <strong>Supabase</strong> (cloud
+  database hosting, EU region) as a sub-processor. The Operator remains liable for
+  the sub-processor's compliance and shall inform the Responsible Party of any
+  intended change.</p>
+
+  <h2>6. Security measures</h2>
+  <ul>
+    <li>Credentials (PINs/passwords) stored as one-way hashes;</li>
+    <li>Encryption in transit (HTTPS/TLS);</li>
+    <li>Row-level security and server-side access controls; the public application key cannot directly write attendance, worker or workplace records;</li>
+    <li>Administrator session tokens and account-lockout protection;</li>
+    <li>Biometric processing only with the data subject's explicit consent, with withdrawal/deletion on request.</li>
+  </ul>
+
+  <h2>7. Cross-border transfer</h2>
+  <p>Personal information may be processed on servers in the <strong>European
+  Union</strong>, which affords an adequate level of protection under POPIA s72.</p>
+
+  <h2>8. Data-subject rights &amp; breach</h2>
+  <p>The Operator shall assist the Responsible Party in giving effect to data
+  subjects' rights of access, correction, deletion and objection, and in reporting
+  any security compromise to the Information Regulator and affected data subjects
+  as required by s22 POPIA.</p>
+
+  <h2>9. Duration &amp; termination</h2>
+  <p>This Agreement runs for the term of the WorkClock service agreement. On
+  termination the Operator will delete or return all personal information within
+  <strong>[30]</strong> days, save where retention is required by law.</p>
+
+  <div class="sign">
+    <div>Signed for the Responsible Party<br>Name / Date / Signature</div>
+    <div>Signed for the Operator (Reatlegile Solutions)<br>Name / Date / Signature</div>
+  </div>
+
+  <div class="note">
+    <strong>Note for Reatlegile Solutions:</strong> this is a starting template, not
+    legal advice. Fill in every <code>[BRACKETED]</code> value and have it reviewed
+    by a legal professional before signing with clients.
+  </div>
+</div>
+</body>
+</html>

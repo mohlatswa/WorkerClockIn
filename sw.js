@@ -1,8 +1,8 @@
-var CACHE = 'wc-v21';
+var CACHE = 'wc-v22';
 var ASSETS = [
   './', './index.html', './app.js', './config.js',
   './style.css', './supabase.min.js', './manifest.json',
-  './icon-192.png', './icon-512.png', './promo.html'
+  './icon-192.png', './icon-512.png', './promo.html', './privacy.html'
 ];
 
 self.addEventListener('install', function(e) {

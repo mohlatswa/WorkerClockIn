@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WorkClock — Privacy Notice</title>
+<style>
+  :root { --indigo:#312E81; --indigo2:#4F46E5; --ink:#1E293B; --muted:#64748B; --line:#E2E8F0; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:'Inter',-apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink); background:#F8FAFC; line-height:1.6; }
+  header { background:linear-gradient(135deg,var(--indigo),var(--indigo2)); color:#fff; padding:32px 20px; }
+  .wrap { max-width:820px; margin:0 auto; padding:0 20px; }
+  header h1 { margin:0 0 4px; font-size:1.6rem; }
+  header p { margin:0; opacity:.85; font-size:.9rem; }
+  main { padding:28px 0 60px; }
+  h2 { font-size:1.15rem; margin:28px 0 8px; color:var(--indigo); }
+  h3 { font-size:1rem; margin:18px 0 6px; }
+  p, li { font-size:.95rem; }
+  ul { padding-left:20px; }
+  table { width:100%; border-collapse:collapse; margin:10px 0; font-size:.9rem; }
+  th, td { border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top; }
+  th { background:#EEF2FF; }
+  .note { background:#FFFBEB; border:1px solid #FDE68A; border-radius:8px; padding:12px 14px; font-size:.9rem; }
+  .tag { display:inline-block; background:#EEF2FF; color:var(--indigo2); border-radius:6px; padding:1px 7px; font-size:.78rem; font-weight:600; }
+  a { color:var(--indigo2); }
+  footer { border-top:1px solid var(--line); padding:20px; text-align:center; color:var(--muted); font-size:.8rem; }
+  code { background:#EEF2FF; padding:1px 5px; border-radius:4px; font-size:.85em; }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>WorkClock — Privacy Notice</h1>
+  <p>How we handle your personal information · Compliant with POPIA (Act 4 of 2013)</p>
+</div></header>
+
+<main class="wrap">
+  <p><strong>Last updated:</strong> [DATE] &nbsp;·&nbsp; <strong>Effective:</strong> [DATE]</p>
+
+  <p>WorkClock is a staff time-and-attendance system. This notice explains what
+  personal information we collect when you use it, why, how we protect it, and
+  the rights you have under the <strong>Protection of Personal Information Act
+  (POPIA)</strong>.</p>
+
+  <h2>1. Who is responsible for your information</h2>
+  <table>
+    <tr><th>Role</th><th>Who</th><th>Responsibility</th></tr>
+    <tr><td>Responsible Party</td><td>Your employer — <strong>[EMPLOYER / COMPANY NAME]</strong></td><td>Decides why your attendance data is collected and used.</td></tr>
+    <tr><td>Operator</td><td><strong>Reatlegile Solutions</strong> (the system provider)</td><td>Operates the software and stores the data on the employer's behalf.</td></tr>
+    <tr><td>Sub-processor</td><td><strong>Supabase</strong> (database hosting, EU&nbsp;region)</td><td>Stores the data securely under contract.</td></tr>
+  </table>
+
+  <h2>2. What we collect</h2>
+  <table>
+    <tr><th>Information</th><th>Why</th></tr>
+    <tr><td>Name, employee ID, job title</td><td>To identify you on the attendance record.</td></tr>
+    <tr><td>Contact details (email, phone) — if provided</td><td>Account recovery and communication.</td></tr>
+    <tr><td>PIN (stored only as a one-way hash)</td><td>To verify it is you clocking in.</td></tr>
+    <tr><td>Clock-in / clock-out times</td><td>The core attendance record (hours, lateness, overtime).</td></tr>
+    <tr><td>GPS location at clock-in/out</td><td>To confirm you are at the workplace (geofence).</td></tr>
+    <tr><td>Sign-in device (e.g. "Android phone · Chrome")</td><td>Security and support.</td></tr>
+    <tr><td><span class="tag">Special PI</span> Facial recognition template and/or fingerprint key</td><td>Optional identity verification (see §3).</td></tr>
+  </table>
+
+  <h2>3. Biometric data (special personal information)</h2>
+  <p>If you choose to use face or fingerprint clock-in, we store a
+  <strong>mathematical template</strong> of your face (not a photograph) and/or a
+  device-bound security key. We never store an actual fingerprint image.</p>
+  <div class="note">
+    <strong>This is voluntary and consent-based.</strong> Biometric clock-in is
+    optional — you can always use a PIN instead. We only enrol your biometrics
+    after you tick the consent box, and you may <strong>withdraw consent at any
+    time</strong> by asking your administrator, who will delete the biometric data.
+  </div>
+
+  <h2>4. Why we may process your information (lawful basis)</h2>
+  <ul>
+    <li><strong>Performance of your employment</strong> — recording attendance and hours.</li>
+    <li><strong>Consent</strong> — for optional biometric clock-in.</li>
+    <li><strong>Legitimate interests</strong> of the employer — preventing time fraud (e.g. buddy-clocking).</li>
+  </ul>
+
+  <h2>5. How long we keep it</h2>
+  <p>Attendance records are kept while you are an active employee and for any
+  period required by law or your employer's payroll/record-keeping obligations.
+  Biometric data is deleted when you withdraw consent or leave employment.</p>
+
+  <h2>6. How we protect it</h2>
+  <ul>
+    <li>PINs and passwords are <strong>hashed</strong> (never stored in plain text).</li>
+    <li>All data is transmitted over <strong>encrypted (HTTPS)</strong> connections.</li>
+    <li>Database access is restricted by <strong>row-level security and server-side access controls</strong>; the app cannot be used to alter attendance directly.</li>
+    <li>Administrator accounts use session tokens and account lockout protection.</li>
+  </ul>
+
+  <h2>7. Who we share it with</h2>
+  <p>Your information is accessible to your <strong>employer's authorised
+  administrators</strong> and to <strong>Reatlegile Solutions</strong> for support
+  and operation. It is stored with <strong>Supabase</strong> under a data-processing
+  agreement. We do <strong>not</strong> sell your information or use it for
+  advertising. Some processing occurs on servers in the <strong>European Union</strong>,
+  which provides an adequate level of data protection.</p>
+
+  <h2>8. Your rights under POPIA</h2>
+  <ul>
+    <li>Access the personal information we hold about you.</li>
+    <li>Ask us to correct or delete information that is inaccurate or no longer needed.</li>
+    <li>Object to processing, or withdraw biometric consent, at any time.</li>
+    <li>Lodge a complaint with the Information Regulator.</li>
+  </ul>
+  <p>To exercise these rights, contact your administrator or Reatlegile Solutions
+  (details below).</p>
+
+  <h2>9. Contact</h2>
+  <p>
+    <strong>Reatlegile Solutions</strong> (Operator)<br>
+    Email: <a href="mailto:hennie.mohlatswa@outlook.com">hennie.mohlatswa@outlook.com</a><br>
+    [PHYSICAL ADDRESS] · [PHONE] · [REGISTRATION NUMBER]
+  </p>
+  <p>
+    <strong>Information Regulator (South Africa)</strong><br>
+    Complaints: <a href="mailto:POPIAComplaints@inforegulator.org.za">POPIAComplaints@inforegulator.org.za</a><br>
+    Website: <a href="https://inforegulator.org.za">inforegulator.org.za</a>
+  </p>
+
+  <div class="note" style="margin-top:24px">
+    <strong>Note for Reatlegile Solutions:</strong> replace every <code>[BRACKETED]</code>
+    placeholder with real details before publishing, and have this reviewed by a
+    legal professional. This template is a starting point, not legal advice.
+  </div>
+</main>
+
+<footer>Developed by Reatlegile Solutions © 2026 · WorkClock</footer>
+</body>
+</html>

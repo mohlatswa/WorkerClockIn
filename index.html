@@ -1022,7 +1022,23 @@
 <script src="app.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(function(){});
+    var _swRefreshing = false;
+    // When a new service worker takes control, reload once so the phone
+    // immediately runs the new version instead of the cached old one.
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (_swRefreshing) return;
+      _swRefreshing = true;
+      window.location.reload();
+    });
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      reg.update();
+      // Re-check for a new version whenever the app is reopened/foregrounded,
+      // and hourly while open — so updates reach phones without a manual close.
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') reg.update();
+      });
+      setInterval(function () { reg.update(); }, 3600000);
+    }).catch(function () {});
   }
 </script>
 </body>

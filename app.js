@@ -46,7 +46,7 @@ function initSentry() {
     Sentry.init({
       dsn: SENTRY_DSN,
       environment: 'production',
-      release: 'workclock',
+      release: 'workclock@' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'dev'),
       tracesSampleRate: 0,            // errors only — no perf cost / no extra quota
       replaysSessionSampleRate: 0,
       replaysOnErrorSampleRate: 0
@@ -2986,7 +2986,7 @@ function checkIOSInstall() {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────
-var APP_VERSION = 'v20';   // bump alongside the sw.js CACHE version on each deploy
+var APP_VERSION = 'v21';   // bump alongside the sw.js CACHE version on each deploy
 document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Start error tracking (no-op until a Sentry DSN is configured)

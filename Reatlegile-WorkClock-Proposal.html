@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WorkClock for Clothing Retail — Reatlegile Solutions</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --indigo:#4F46E5;--indigo-d:#3730A3;--indigo-l:#EEF2FF;
+  --green:#059669;--green-l:#ECFDF5;--amber:#D97706;
+  --ink:#111827;--text:#1F2937;--muted:#6B7280;--border:#E5E7EB;--bg:#F9FAFB;
+  --r:14px;
+}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--text);line-height:1.55;background:var(--bg)}
+.sheet{max-width:820px;margin:0 auto;background:#fff}
+h1,h2,h3{color:var(--ink);line-height:1.2}
+a{color:var(--indigo)}
+.muted{color:var(--muted)}
+.pill{display:inline-block;background:var(--indigo-l);color:var(--indigo-d);font-size:.72rem;font-weight:700;padding:3px 10px;border-radius:50px;letter-spacing:.4px}
+
+/* HEADER */
+.head{background:linear-gradient(135deg,var(--indigo-d),var(--indigo));color:#fff;padding:34px 40px}
+.brandrow{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:22px}
+.brand{display:flex;align-items:center;gap:11px;font-weight:800;font-size:1.05rem;letter-spacing:.3px}
+.brand .logo{width:38px;height:38px;border-radius:10px;background:#fff;color:var(--indigo);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1.2rem}
+.brand small{display:block;font-size:.68rem;font-weight:600;opacity:.8;letter-spacing:.5px}
+.contact-mini{font-size:.74rem;opacity:.9;text-align:right;line-height:1.7}
+.head h1{color:#fff;font-size:1.95rem;font-weight:900;letter-spacing:-.5px;max-width:560px}
+.head h1 span{color:#A5B4FC}
+.head .lead{opacity:.9;margin-top:10px;max-width:560px;font-size:1.02rem}
+
+/* SECTIONS */
+.sec{padding:34px 40px;border-bottom:1px solid var(--border)}
+.sec h2{font-size:1.25rem;font-weight:800;margin-bottom:4px}
+.sec .sub{color:var(--muted);font-size:.92rem;margin-bottom:20px}
+
+/* PAIN */
+.pain-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pain{background:var(--bg);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:10px;padding:13px 15px}
+.pain b{display:block;color:var(--ink);font-size:.93rem;margin-bottom:2px}
+.pain span{font-size:.83rem;color:var(--muted)}
+
+/* FEATURES */
+.feat-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.feat{display:flex;gap:12px;align-items:flex-start}
+.feat .ic{width:34px;height:34px;border-radius:9px;background:var(--indigo-l);color:var(--indigo);display:flex;align-items:center;justify-content:center;font-size:1.05rem;flex-shrink:0}
+.feat b{display:block;font-size:.92rem;color:var(--ink)}
+.feat span{font-size:.82rem;color:var(--muted)}
+
+/* TRUST */
+.trust-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.trust{background:var(--green-l);border:1px solid #A7F3D0;border-radius:10px;padding:14px;text-align:center}
+.trust .big{font-size:1.4rem;font-weight:900;color:var(--green)}
+.trust span{font-size:.78rem;color:#047857;font-weight:600}
+
+/* ROI */
+.roi{background:var(--indigo-l);border-radius:var(--r);padding:22px 24px}
+.roi table{width:100%;border-collapse:collapse;font-size:.9rem}
+.roi td{padding:7px 0}
+.roi tr:not(:last-child) td{border-bottom:1px solid #C7D2FE}
+.roi .r{text-align:right;font-weight:700;color:var(--ink)}
+.roi .total td{font-weight:900;color:var(--indigo-d);font-size:1.05rem;padding-top:12px}
+
+/* PRICING */
+.price-card{border:2px solid var(--indigo);border-radius:18px;padding:26px;text-align:center;max-width:380px;margin:0 auto}
+.price-card .amt{font-size:2.6rem;font-weight:900;color:var(--indigo-d)}
+.price-card .amt small{font-size:.95rem;font-weight:600;color:var(--muted)}
+.price-card ul{list-style:none;margin:16px 0 0;text-align:left;font-size:.88rem}
+.price-card li{padding:5px 0 5px 24px;position:relative}
+.price-card li::before{content:'✓';position:absolute;left:0;color:var(--green);font-weight:900}
+
+/* CTA */
+.cta{background:linear-gradient(135deg,var(--indigo-d),var(--indigo));color:#fff;padding:30px 40px;text-align:center}
+.cta h2{color:#fff;font-size:1.35rem}
+.cta p{opacity:.9;margin:8px 0 18px}
+.btn{display:inline-block;background:#fff;color:var(--indigo-d);font-weight:800;padding:13px 30px;border-radius:50px;font-size:.95rem}
+.cta .contact{margin-top:20px;font-size:.82rem;opacity:.92;line-height:1.9}
+
+/* FOOTER */
+.foot{padding:18px 40px;font-size:.72rem;color:var(--muted);text-align:center}
+
+@media(max-width:640px){
+  .head,.sec,.cta{padding-left:22px;padding-right:22px}
+  .pain-grid,.feat-grid,.trust-grid{grid-template-columns:1fr}
+  .head h1{font-size:1.55rem}
+}
+@media print{
+  body{background:#fff}
+  .sheet{max-width:none}
+  .sec{break-inside:avoid}
+  .no-print{display:none}
+  @page{margin:12mm}
+}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <!-- HEADER -->
+  <header class="head">
+    <div class="brandrow">
+      <div class="brand">
+        <span class="logo">W</span>
+        <span>WorkClock<small>BY REATLEGILE SOLUTIONS</small></span>
+      </div>
+      <div class="contact-mini">
+        hennie.mohlatswa@outlook.com &nbsp;·&nbsp; 072 787 9085<br>
+        5th Conradie Rd, Klippoortjie, Wadeville, 1428
+      </div>
+    </div>
+    <span class="pill">PROPOSAL · STAFF ATTENDANCE FOR CLOTHING RETAIL</span>
+    <h1 style="margin-top:14px">Stop paying for hours your staff <span>didn't actually work.</span></h1>
+    <p class="lead">WorkClock is a GPS- and biometric-verified staff attendance system built for South African
+      retail. Every clock-in is tamper-proof, location-stamped, and ready as evidence — so your wage bill
+      matches the hours actually worked on the shop floor.</p>
+  </header>
+
+  <!-- PAIN -->
+  <section class="sec">
+    <h2>The problem on the shop floor</h2>
+    <p class="sub">What a paper register or a "sign-in book" actually costs a clothing shop.</p>
+    <div class="pain-grid">
+      <div class="pain"><b>Buddy-punching</b><span>One staff member signs in a friend who arrives late — you pay for hours nobody worked.</span></div>
+      <div class="pain"><b>"I was here on time"</b><span>No proof of who arrived when. Late arrivals become an argument, not a record.</span></div>
+      <div class="pain"><b>Payroll guesswork</b><span>Hours added up by hand at month-end — errors, disputes, and wasted admin time.</span></div>
+      <div class="pain"><b>CCMA / labour disputes</b><span>When a dismissal is challenged, a paper book is worth nothing. You need a dated, signed record.</span></div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="sec">
+    <h2>What WorkClock does</h2>
+    <p class="sub">Everything a multi-store clothing retailer needs — nothing you'll never use.</p>
+    <div class="feat-grid">
+      <div class="feat"><span class="ic">📍</span><div><b>GPS geofence clock-in</b><span>Staff can only clock in when physically at your store — checked on the server, not the phone.</span></div></div>
+      <div class="feat"><span class="ic">🧬</span><div><b>Face & fingerprint</b><span>Biometric verification kills buddy-punching. POPIA consent is captured and logged.</span></div></div>
+      <div class="feat"><span class="ic">🏬</span><div><b>Multiple branches</b><span>Run every store from one login, each with its own staff, location and shift rules.</span></div></div>
+      <div class="feat"><span class="ic">🕒</span><div><b>Shifts, late & overtime</b><span>Set shift times and grace; the system flags late arrivals and calculates OT automatically.</span></div></div>
+      <div class="feat"><span class="ic">📊</span><div><b>Payroll-ready reports</b><span>Per-period hours, late and OT per worker — export to PDF or CSV for your bookkeeper.</span></div></div>
+      <div class="feat"><span class="ic">📱</span><div><b>Works offline</b><span>Clock-ins still record when the network drops, then sync automatically. No lost shifts.</span></div></div>
+      <div class="feat"><span class="ic">🧾</span><div><b>Full audit log</b><span>Every change is recorded with who, what and when — your evidence trail for disputes.</span></div></div>
+      <div class="feat"><span class="ic">⚙️</span><div><b>No hardware to buy</b><span>Runs on the phone or tablet you already own. Install in minutes, no IT visit.</span></div></div>
+    </div>
+  </section>
+
+  <!-- TRUST -->
+  <section class="sec">
+    <h2>Why you can trust it with your payroll</h2>
+    <p class="sub">Built and supported by Reatlegile Solutions — not a hobby app.</p>
+    <div class="trust-grid">
+      <div class="trust"><div class="big">POPIA</div><span>Compliant — consent captured, privacy notice &amp; data agreement provided</span></div>
+      <div class="trust"><div class="big">Daily</div><span>Automatic backups — your records are never lost</span></div>
+      <div class="trust"><div class="big">Locked</div><span>Bank-style data security — staff PINs &amp; biometrics encrypted, no public access</span></div>
+    </div>
+    <p class="muted" style="font-size:.84rem;margin-top:16px">
+      WorkClock keeps each business's data fully separate, monitors uptime, and is actively maintained with
+      regular updates. You get a named point of contact for support — not a ticket into the void.
+    </p>
+  </section>
+
+  <!-- ROI -->
+  <section class="sec">
+    <h2>What it pays back</h2>
+    <p class="sub">Example: a shop with 6 staff, where time-keeping slippage costs ~15 minutes per person per day.</p>
+    <div class="roi">
+      <table>
+        <tr><td>6 staff × 15 min/day lost</td><td class="r">1.5 hours/day</td></tr>
+        <tr><td>Over a 26-day month</td><td class="r">≈ 39 hours/month</td></tr>
+        <tr><td>At R30/hour average wage</td><td class="r">≈ R1 170 leaking out / month</td></tr>
+        <tr><td>WorkClock for 6 staff (R50 each)</td><td class="r">R300 / month</td></tr>
+        <tr class="total"><td>Net saving every month</td><td class="r">≈ R870+</td></tr>
+      </table>
+    </div>
+    <p class="muted" style="font-size:.82rem;margin-top:12px">Plus the disputes you avoid, the admin hours saved at month-end, and the protection one clean CCMA record can give you.</p>
+  </section>
+
+  <!-- PRICING -->
+  <section class="sec">
+    <h2>Simple, honest pricing</h2>
+    <p class="sub">No setup fees. No contracts. Cancel any time.</p>
+    <div class="price-card">
+      <div class="amt">R50<small> / employee / month</small></div>
+      <p class="muted" style="font-size:.85rem;margin-top:6px">Less than R2 a day per staff member.</p>
+      <ul>
+        <li>All features included — no tiers, no surprises</li>
+        <li>Unlimited branches &amp; clock-ins</li>
+        <li>Payroll-ready PDF &amp; CSV exports</li>
+        <li>POPIA privacy notice &amp; data agreement included</li>
+        <li>Support from a real person</li>
+        <li><b>Free 30-day trial</b> — set up your shop and test it risk-free</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta">
+    <h2>See it on your own shop in 15 minutes</h2>
+    <p>Let me set up a free trial with your staff and branches — you'll see the first real clock-in today.</p>
+    <a class="btn" href="https://mohlatswa.github.io/WorkerClockIn/">Try the live demo →</a>
+    <div class="contact">
+      <strong>Reatlegile Solutions</strong><br>
+      Hennie Mohlatswa &nbsp;·&nbsp; 072 787 9085<br>
+      hennie.mohlatswa@outlook.com<br>
+      5th Conradie Rd, Klippoortjie, Wadeville, 1428
+    </div>
+  </section>
+
+  <footer class="foot">
+    WorkClock is a product of Reatlegile Solutions. Pricing valid as quoted; features subject to ongoing improvement.
+  </footer>
+
+</div>
+</body>
+</html>

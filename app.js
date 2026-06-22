@@ -139,6 +139,7 @@ var ICONS = {
   search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>',
   history:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
   printer:'<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/>',
+  wallet:'<path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v3h-3a2 2 0 0 0 0 4h3a1 1 0 0 1-1 1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5"/><circle cx="16.5" cy="13" r=".6" fill="currentColor"/>',
   eye:'<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
   'eye-off':'<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/>'
 };
@@ -1212,29 +1213,15 @@ async function sendOtp() {
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
   showMsg('fpw-send-msg', '⏳ Sending…', 'ok');
   try {
-    if (typeof emailjs === 'undefined' || EMAILJS_PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
-      showMsg('fpw-send-msg', 'Email service not configured — contact your system administrator to reset your password.', 'err'); return;
-    }
-    // OTP is generated and stored (hashed) entirely server-side; the plain code is
-    // returned only so the browser can email it. The stored hash is never exposed.
-    var r = await withTimeout(db.rpc('request_password_reset', { p_username: username }), 6000);
-    if (r.error) { showMsg('fpw-send-msg', 'Error: ' + r.error.message, 'err'); return; }
-    var row = r.data && r.data[0];
-    if (!row || !row.email) {
-      showMsg('fpw-send-msg', 'No account with an email on file matches that username. Contact your system administrator.', 'err');
-      return;
-    }
-    var timeStr = new Date(Date.now() + 15 * 60 * 1000).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
-    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      to_email: row.email,
-      to_name:  row.full_name || username,
-      passcode: row.otp,
-      time:     timeStr
-    });
+    // The OTP is generated, stored (hashed) and EMAILED entirely server-side by
+    // the request-password-reset Edge Function — the plain code never reaches the
+    // browser. The response is always generic (no account enumeration).
+    var r = await withTimeout(db.functions.invoke('request-password-reset', { body: { username: username } }), 8000);
+    if (r.error) { showMsg('fpw-send-msg', 'Could not send the code — please try again shortly.', 'err'); return; }
     var s1 = document.getElementById('fpw-step1'); if (s1) s1.classList.add('hidden');
     var s2 = document.getElementById('fpw-step2'); if (s2) s2.classList.remove('hidden');
-    showMsg('fpw-reset-msg', '✅ Code sent to ' + esc(row.email) + ' (valid 15 min)', 'ok');
-  } catch(e) { showMsg('fpw-send-msg', 'Error: ' + (e.text || e.message || 'Failed to send'), 'err'); }
+    showMsg('fpw-reset-msg', 'If an account with that username has an email on file, a 6-digit code has been sent to it (valid 15 min). Check your inbox.', 'ok');
+  } catch(e) { showMsg('fpw-send-msg', 'Could not send the code — please try again shortly.', 'err'); }
   finally { if (btn) { btn.disabled = false; btn.textContent = 'Send Code'; } }
 }
 async function resetAdminPassword() {
@@ -1322,7 +1309,8 @@ async function loadDashboard() {
   var tmrw  = new Date(today); tmrw.setDate(tmrw.getDate() + 1);
   try {
     var totR = await withTimeout(db.from('workers').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('company_id', cid), 5000);
-    var wkrR = await withTimeout(db.from('workers').select('id').eq('company_id', cid), 5000);
+    // Only active workers count toward present/absent (matches the `total` denominator).
+    var wkrR = await withTimeout(db.from('workers').select('id').eq('company_id', cid).eq('is_active', true), 5000);
     var ids  = (wkrR.data || []).map(function(w) { return w.id; });
     var recs = [];
     if (ids.length) {
@@ -1334,8 +1322,11 @@ async function loadDashboard() {
       );
       recs = attR.data || [];
     }
-    var present = recs.length;
-    var stillin = recs.filter(function(r) { return r.status === 'active'; }).length;
+    // Count DISTINCT workers, not rows — a worker may clock in/out more than once a day.
+    var presentSet = {}, activeSet = {};
+    recs.forEach(function(r) { presentSet[r.worker_id] = true; if (r.status === 'active') activeSet[r.worker_id] = true; });
+    var present = Object.keys(presentSet).length;
+    var stillin = Object.keys(activeSet).length;
     var total   = totR.count || 0;
     var absentCount = Math.max(0, total - present);
     document.getElementById('s-present').textContent = present;
@@ -1875,6 +1866,105 @@ function printAttSummary() {
     '<tfoot><tr><td colspan="3">Total — ' + list.length + ' workers</td><td class="c">' + tD + '</td><td class="r">' + tH.toFixed(1) + '</td><td class="r">' + tO.toFixed(1) + '</td><td class="c">' + tL + '</td></tr></tfoot></table>' +
     '<div class="pr-foot">Generated ' + new Date().toLocaleString('en-ZA', { timeZone: _tz() }) + ' · WorkClock by Reatlegile Solutions</div>';
   window.print();
+}
+
+// ── Payroll ───────────────────────────────────────────────
+// Rates are stored on this device (per company) — no DB change.
+var _payroll = null;
+function fmtR(n) { n = isFinite(n) ? n : 0; return 'R' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+function payrollRateKey(cid) { return 'wc_rates_' + cid; }
+function payrollMultKey(cid) { return 'wc_ot_mult_' + cid; }
+function payrollGetRates(cid) { try { return JSON.parse(localStorage.getItem(payrollRateKey(cid)) || '{}'); } catch (e) { return {}; } }
+// Aggregate the current report's rows into one line per worker.
+function payrollAgg() {
+  var byW = {};
+  _attData.rows.forEach(function(rec) {
+    var key = rec.worker_id || (rec.w && rec.w.employee_id) || 'unknown';
+    if (!byW[key]) byW[key] = { key: key, name: rec.w ? rec.w.name : 'Unknown', emp: (rec.w && rec.w.employee_id) || '', job: (rec.w && rec.w.job_title) || '', days: 0, hours: 0, ot: 0 };
+    var sc = shiftCalc(rec), w = byW[key];
+    w.days += 1; w.hours += sc.hours; w.ot += sc.ot;
+  });
+  return Object.keys(byW).map(function(k) { var w = byW[k]; w.reg = Math.max(0, w.hours - w.ot); return w; })
+    .sort(function(a, b) { return a.name.localeCompare(b.name); });
+}
+function openPayroll() {
+  if (!_attData || !_attData.rows.length) { showMsg('csv-msg', 'Run a report first, then open Payroll.', 'err'); return; }
+  var cid = requireAdminCid(); if (!cid) return;
+  var rates = payrollGetRates(cid);
+  _payroll = { cid: cid, list: payrollAgg(), from: _attData.from, to: _attData.to };
+  var mult = parseFloat(localStorage.getItem(payrollMultKey(cid))) || 1.5;
+  document.getElementById('payroll-mult').value = mult;
+  document.getElementById('payroll-period').textContent = 'Pay period: ' + _attData.from + ' to ' + _attData.to + ' · ' + _payroll.list.length + ' worker(s)';
+  document.getElementById('payroll-rows').innerHTML = _payroll.list.map(function(w) {
+    return '<tr data-key="' + escQ(w.key) + '">' +
+      '<td>' + esc(w.name) + (w.emp ? '<br><small>' + esc(w.emp) + '</small>' : '') + '</td>' +
+      '<td class="r">' + w.reg.toFixed(1) + '</td>' +
+      '<td class="r">' + w.ot.toFixed(1) + '</td>' +
+      '<td><input class="input pay-rate" type="number" min="0" step="0.01" inputmode="decimal" ' +
+        'value="' + (rates[w.key] != null ? rates[w.key] : '') + '" oninput="payrollRecalc()"></td>' +
+      '<td class="r pay-gross">R0.00</td></tr>';
+  }).join('');
+  payrollRecalc();
+  document.getElementById('modal-payroll').classList.remove('hidden');
+}
+// Read rate inputs, compute pay live, persist rates + multiplier. Returns the computed rows.
+function payrollRecalc() {
+  if (!_payroll) return [];
+  var mult = parseFloat(document.getElementById('payroll-mult').value) || 1.5;
+  var rates = {}, total = 0, computed = [];
+  var rows = document.querySelectorAll('#payroll-rows tr');
+  rows.forEach(function(tr, i) {
+    var w = _payroll.list[i]; if (!w) return;
+    var rate = parseFloat(tr.querySelector('.pay-rate').value) || 0;
+    if (rate > 0) rates[w.key] = rate;
+    var regPay = w.reg * rate, otPay = w.ot * rate * mult, gross = regPay + otPay;
+    total += gross;
+    tr.querySelector('.pay-gross').textContent = fmtR(gross);
+    computed.push({ w: w, rate: rate, regPay: regPay, otPay: otPay, gross: gross });
+  });
+  document.getElementById('payroll-total').textContent = fmtR(total);
+  localStorage.setItem(payrollRateKey(_payroll.cid), JSON.stringify(rates));
+  localStorage.setItem(payrollMultKey(_payroll.cid), String(mult));
+  _payroll.mult = mult; _payroll.computed = computed; _payroll.total = total;
+  return computed;
+}
+function payrollPDF() {
+  var rows = payrollRecalc(); if (!rows) return;
+  if (!rows.some(function(r) { return r.rate > 0; })) { showMsg('payroll-msg', 'Enter at least one hourly rate first.', 'err'); return; }
+  var body = rows.map(function(r) {
+    return '<tr><td>' + esc(r.w.name) + '</td><td>' + esc(r.w.emp || '') + '</td>' +
+      '<td class="r">' + r.w.reg.toFixed(1) + '</td><td class="r">' + r.w.ot.toFixed(1) + '</td>' +
+      '<td class="r">' + fmtR(r.rate) + '</td><td class="r">' + fmtR(r.regPay) + '</td>' +
+      '<td class="r">' + fmtR(r.otPay) + '</td><td class="r">' + fmtR(r.gross) + '</td></tr>';
+  }).join('');
+  var tReg = 0, tOt = 0, tRP = 0, tOP = 0;
+  rows.forEach(function(r) { tReg += r.w.reg; tOt += r.w.ot; tRP += r.regPay; tOP += r.otPay; });
+  var sh = curShift();
+  document.getElementById('print-area').innerHTML =
+    '<div class="pr-head"><h1>' + esc((S.admin && S.admin.co_name) || 'WorkClock') + '</h1>' +
+    '<div class="pr-title">Payroll Summary</div>' +
+    '<div class="pr-sub">' + esc(_payroll.from) + ' to ' + esc(_payroll.to) + ' &middot; OT paid at ' + _payroll.mult + '× &middot; Shift ' + sh.shift_start + '–' + sh.shift_end + '</div></div>' +
+    '<table class="pr-table"><thead><tr><th>Worker</th><th>Emp ID</th><th class="r">Reg h</th><th class="r">OT h</th><th class="r">Rate</th><th class="r">Reg Pay</th><th class="r">OT Pay</th><th class="r">Gross</th></tr></thead>' +
+    '<tbody>' + body + '</tbody>' +
+    '<tfoot><tr><td colspan="2">Total — ' + rows.length + ' workers</td><td class="r">' + tReg.toFixed(1) + '</td><td class="r">' + tOt.toFixed(1) + '</td><td></td><td class="r">' + fmtR(tRP) + '</td><td class="r">' + fmtR(tOP) + '</td><td class="r">' + fmtR(_payroll.total) + '</td></tr></tfoot></table>' +
+    '<div class="pr-foot">Generated ' + new Date().toLocaleString('en-ZA', { timeZone: _tz() }) + ' · Rates entered by employer · WorkClock by Reatlegile Solutions</div>';
+  window.print();
+}
+function payrollCSV() {
+  var rows = payrollRecalc(); if (!rows || !rows.length) return;
+  var hdr = ['Worker Name', 'Employee ID', 'Job Title', 'Days', 'Regular Hours', 'Overtime Hours', 'Rate (R/h)', 'OT Multiplier', 'Regular Pay (R)', 'Overtime Pay (R)', 'Gross Pay (R)'];
+  var lines = rows.map(function(r) {
+    return [r.w.name, r.w.emp, r.w.job, r.w.days, r.w.reg.toFixed(2), r.w.ot.toFixed(2),
+      r.rate.toFixed(2), _payroll.mult, r.regPay.toFixed(2), r.otPay.toFixed(2), r.gross.toFixed(2)]
+      .map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
+  });
+  var csv  = '﻿' + [hdr.join(',')].concat(lines).join('\r\n');
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href = url; a.download = 'payroll_' + _payroll.from + '_to_' + _payroll.to + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  showMsg('payroll-msg', '✅ Payroll CSV downloaded', 'ok');
 }
 
 // ── Company Admins ────────────────────────────────────────
@@ -3024,7 +3114,7 @@ function checkIOSInstall() {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────
-var APP_VERSION = 'v23';   // bump alongside the sw.js CACHE version on each deploy
+var APP_VERSION = 'v25';   // bump alongside the sw.js CACHE version on each deploy
 document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Start error tracking (no-op until a Sentry DSN is configured)

@@ -398,6 +398,15 @@ body{
   border-radius:var(--rfull);font-size:.88rem;font-weight:500;z-index:9000;max-width:90%;text-align:center;box-shadow:var(--sh-lg);animation:toastIn .25s ease}
 @keyframes toastIn{from{transform:translate(-50%,12px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
 
+/* ─── Payroll modal table ───────────────────────────────────── */
+.pay-tbl{width:100%;border-collapse:collapse;font-size:.86rem}
+.pay-tbl th{text-align:left;font-size:.72rem;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--border)}
+.pay-tbl td{padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:middle}
+.pay-tbl .r{text-align:right}
+.pay-tbl tfoot td{font-weight:800;border-top:2px solid var(--blue);border-bottom:none;padding-top:10px}
+.pay-tbl input.pay-rate{width:96px;padding:6px 8px}
+.pay-tbl small{color:var(--muted)}
+
 /* ─── PRINT / PDF report ────────────────────────────────────── */
 #print-area{display:none}
 @media print{

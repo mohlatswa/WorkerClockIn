@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WorkClock — How to Access the System</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --indigo:#4F46E5;--indigo-d:#3730A3;--indigo-l:#EEF2FF;
+  --green:#059669;--green-l:#ECFDF5;--amber:#D97706;
+  --ink:#111827;--text:#1F2937;--muted:#6B7280;--border:#E5E7EB;--bg:#0B1020;
+}
+html,body{height:100%}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:radial-gradient(1200px 700px at 50% -10%,#1E2452 0%,var(--bg) 60%);color:#fff;
+  min-height:100%;display:flex;align-items:center;justify-content:center;padding:18px}
+.wrap{display:flex;align-items:center;gap:40px;max-width:920px}
+.side{display:flex;flex-direction:column;gap:18px;max-width:340px}
+
+/* Title */
+.topbar{text-align:left}
+.topbar .pill{display:inline-block;background:rgba(99,102,241,.2);border:1px solid rgba(129,140,248,.4);
+  color:#C7D2FE;font-size:.72rem;font-weight:700;letter-spacing:.5px;padding:4px 12px;border-radius:50px}
+.topbar h1{font-size:1.5rem;font-weight:800;margin-top:12px}
+.topbar h1 span{color:#A5B4FC}
+.topbar .who{font-size:.88rem;color:#94A3B8;margin-top:4px}
+
+/* Phone frame */
+.stage{display:flex;flex-direction:column;align-items:center;gap:14px}
+.phone{width:300px;height:600px;flex:none;background:#0F172A;border-radius:42px;padding:11px;
+  box-shadow:0 30px 70px rgba(0,0,0,.55),0 0 0 2px rgba(255,255,255,.06);position:relative}
+.notch{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:130px;height:26px;background:#0F172A;border-radius:0 0 16px 16px;z-index:6}
+.screen{width:100%;height:100%;background:#F8FAFC;border-radius:32px;overflow:hidden;position:relative;color:var(--text)}
+
+/* status bar */
+.sb{height:34px;display:flex;align-items:center;justify-content:space-between;padding:0 20px 0 24px;
+  font-size:.72rem;font-weight:700;color:var(--ink);background:#fff}
+.sb .dots{letter-spacing:1px}
+
+/* app header */
+.apph{background:linear-gradient(135deg,var(--indigo-d),var(--indigo));color:#fff;padding:14px 18px}
+.apph .brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:.95rem}
+.apph .logo{width:30px;height:30px;border-radius:8px;background:#fff;color:var(--indigo);display:flex;align-items:center;justify-content:center;font-weight:900}
+.apph .co{font-size:.72rem;opacity:.8;margin-top:6px}
+
+.body{padding:18px 18px 16px}
+.h{font-size:1.05rem;font-weight:800;color:var(--ink);margin-bottom:3px}
+.sub{font-size:.78rem;color:var(--muted);margin-bottom:14px}
+
+/* fields */
+.field{margin-bottom:12px}
+.label{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:5px;display:block}
+.input{width:100%;border:1.5px solid var(--border);border-radius:11px;padding:12px 13px;font-size:.92rem;background:#fff;color:var(--ink);min-height:44px;display:flex;align-items:center}
+.input.focus{border-color:var(--indigo);box-shadow:0 0 0 3px rgba(79,70,229,.15)}
+.input .cur{display:inline-block;width:2px;height:16px;background:var(--indigo);margin-left:2px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* buttons */
+.btn{width:100%;border:none;border-radius:12px;padding:14px;font-size:.95rem;font-weight:800;cursor:default;text-align:center}
+.btn-primary{background:var(--indigo);color:#fff}
+.btn-ghost{background:var(--indigo-l);color:var(--indigo-d)}
+.btn-line{background:#fff;border:1.5px solid var(--border);color:var(--ink);font-weight:700}
+.mt{margin-top:10px}
+
+/* PIN dots + keypad */
+.pin-dots{display:flex;gap:14px;justify-content:center;margin:18px 0 16px}
+.pin-dots i{width:15px;height:15px;border-radius:50%;border:2px solid var(--indigo);display:block}
+.pin-dots i.on{background:var(--indigo)}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:220px;margin:0 auto}
+.key{height:54px;border-radius:12px;background:#fff;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.25rem;font-weight:700;color:var(--ink)}
+.key.hit{background:var(--indigo);color:#fff;border-color:var(--indigo)}
+
+/* biometric */
+.bio{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:8px}
+.bio .ring{width:104px;height:104px;border-radius:50%;background:var(--indigo-l);display:flex;align-items:center;justify-content:center;font-size:3rem;border:2px solid #C7D2FE}
+.bio.scan .ring{animation:pulse 1.1s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(79,70,229,.4)}50%{box-shadow:0 0 0 14px rgba(79,70,229,0)}}
+
+/* clock button */
+.clock-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:14px 0}
+.clock-btn{width:170px;height:170px;border-radius:50%;background:linear-gradient(135deg,var(--indigo),var(--indigo-d));color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;box-shadow:0 16px 40px rgba(79,70,229,.4)}
+.clock-btn .ic{font-size:2.6rem}
+.clock-btn .lb{font-size:.95rem;font-weight:800;letter-spacing:.5px}
+.clock-btn.tap{animation:press .4s ease}
+@keyframes press{50%{transform:scale(.93)}}
+
+/* success */
+.success{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:40px 20px;text-align:center;height:100%}
+.success .tick{width:96px;height:96px;border-radius:50%;background:var(--green-l);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:3rem;border:2px solid #A7F3D0;animation:pop .4s ease}
+@keyframes pop{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.1)}100%{transform:scale(1)}}
+.success h2{font-size:1.2rem;font-weight:800;color:var(--ink)}
+.chip{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--border);border-radius:50px;padding:6px 12px;font-size:.78rem;color:var(--muted);font-weight:600;margin:3px}
+
+/* admin dashboard */
+.tabbar{display:flex;gap:6px;padding:10px 14px;background:#fff;border-bottom:1px solid var(--border);overflow:hidden}
+.tab{font-size:.72rem;font-weight:700;padding:6px 10px;border-radius:8px;color:var(--muted);white-space:nowrap}
+.tab.on{background:var(--indigo-l);color:var(--indigo-d)}
+.stat-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.stat{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px}
+.stat .n{font-size:1.4rem;font-weight:900;color:var(--indigo-d)}
+.stat .l{font-size:.72rem;color:var(--muted);font-weight:600}
+.lrow{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--border);border-radius:11px;padding:10px 12px;margin-bottom:8px}
+.av{width:34px;height:34px;border-radius:50%;background:var(--indigo);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.82rem;flex:none}
+.lrow .nm{font-size:.85rem;font-weight:700;color:var(--ink)}
+.lrow .mt2{font-size:.72rem;color:var(--muted)}
+.lrow .badge{margin-left:auto;font-size:.68rem;font-weight:700;padding:3px 8px;border-radius:50px}
+.badge.in{background:var(--green-l);color:var(--green)}
+.badge.late{background:#FEF3C7;color:var(--amber)}
+
+/* tap cursor */
+.cursor{position:absolute;width:30px;height:30px;border-radius:50%;background:rgba(79,70,229,.25);border:2px solid var(--indigo);z-index:5;opacity:0;transform:translate(-50%,-50%);transition:left .5s ease,top .5s ease,opacity .25s}
+.cursor.show{opacity:1}
+.cursor.click{animation:clk .4s ease}
+@keyframes clk{50%{transform:translate(-50%,-50%) scale(.6);background:rgba(79,70,229,.5)}}
+
+/* caption + controls */
+.caption{text-align:left;min-height:90px}
+.caption .step{font-size:.72rem;font-weight:800;letter-spacing:.5px;color:#A5B4FC}
+.caption .txt{font-size:1.1rem;font-weight:600;margin-top:5px;line-height:1.45}
+.progress{width:100%;height:6px;background:rgba(255,255,255,.12);border-radius:50px;overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,#818CF8,#4F46E5);transition:width .3s linear}
+.controls{display:flex;gap:10px;align-items:center}
+.ctl{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:50px;padding:9px 18px;font-size:.85rem;font-weight:700;cursor:pointer}
+.ctl:hover{background:rgba(255,255,255,.18)}
+.ctl.primary{background:#fff;color:var(--indigo-d)}
+
+/* start overlay */
+.overlay{position:fixed;inset:0;background:rgba(11,16,32,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;z-index:50;text-align:center;padding:20px}
+.overlay h2{font-size:1.5rem}
+.overlay p{color:#94A3B8;max-width:380px}
+.overlay.hidden{display:none}
+.big-play{width:84px;height:84px;border-radius:50%;background:#fff;color:var(--indigo-d);display:flex;align-items:center;justify-content:center;font-size:2.2rem;cursor:pointer;box-shadow:0 14px 40px rgba(79,70,229,.5)}
+
+/* Fit smaller screens: stack, then scale the phone down if the window is short */
+@media(max-width:780px){
+  .wrap{flex-direction:column;gap:18px}
+  .side{max-width:300px;align-items:center}
+  .topbar,.caption{text-align:center}
+  .topbar h1{font-size:1.25rem}
+}
+@media(max-height:680px){ .phone{transform:scale(.82);transform-origin:center;margin:-54px 0} }
+@media(max-height:560px){ .phone{transform:scale(.66);margin:-102px 0} }
+</style>
+</head>
+<body>
+
+  <div class="wrap">
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen" id="screen"></div>
+      <div class="cursor" id="cursor"></div>
+    </div>
+    <div class="side">
+      <div class="topbar">
+        <span class="pill" id="track-pill">WORKCLOCK GUIDE</span>
+        <h1>How to access <span>WorkClock</span></h1>
+        <div class="who" id="who">Staff clock-in &amp; manager login — step by step</div>
+      </div>
+      <div class="caption">
+        <div class="step" id="cap-step"></div>
+        <div class="txt" id="cap-txt"></div>
+      </div>
+      <div class="progress"><i id="bar"></i></div>
+      <div class="controls">
+        <button class="ctl" id="btn-restart">↺ Restart</button>
+        <button class="ctl primary" id="btn-play">⏸ Pause</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <span class="pill">WORKCLOCK · REATLEGILE SOLUTIONS</span>
+    <h2>How to access the system</h2>
+    <p>A quick walkthrough of how your <b>staff clock in</b> and how <b>managers log in</b>. Press play, then screen-record this window if you want it as a video.</p>
+    <div class="big-play" id="big-play">▶</div>
+    <p style="font-size:.8rem">~75 seconds</p>
+  </div>
+
+<script>
+var SB = '<div class="sb"><span>9:41</span><span class="dots">●●● ⚡ 100%</span></div>';
+
+function screenWorkerHome(idVal){
+  return SB +
+  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock</div><div class="co">Style &amp; Co Boutique — Main Store</div></div>'+
+  '<div class="body">'+
+    '<div class="h">Clock In / Out</div><div class="sub">Enter your Employee ID to start</div>'+
+    '<div class="field"><span class="label">Employee ID</span><div class="input '+(idVal!==null?'focus':'')+'" id="t-id">'+(idVal||'<span style="color:#9CA3AF">e.g. EMP014</span>')+(idVal!==null?'<span class="cur"></span>':'')+'</div></div>'+
+    '<button class="btn btn-primary" id="t-continue">Continue</button>'+
+    '<button class="btn btn-ghost mt" id="t-bio">Use Face / Fingerprint</button>'+
+  '</div>';
+}
+function screenPin(n){
+  var dots='';for(var i=0;i<4;i++)dots+='<i class="'+(i<n?'on':'')+'"></i>';
+  var keys=[1,2,3,4,5,6,7,8,9,'',0,'⌫'];
+  var kp=keys.map(function(k){return '<div class="key" data-k="'+k+'">'+k+'</div>';}).join('');
+  return SB+
+  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock</div><div class="co">Welcome back, Thabo M.</div></div>'+
+  '<div class="body"><div class="h">Enter your PIN</div><div class="sub">4-digit code — kept private &amp; encrypted</div>'+
+  '<div class="pin-dots">'+dots+'</div><div class="keypad">'+kp+'</div></div>';
+}
+function screenBio(scan){
+  return SB+
+  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock</div><div class="co">Welcome back, Thabo M.</div></div>'+
+  '<div class="body"><div class="h" style="text-align:center">Verify it’s you</div><div class="sub" style="text-align:center">Look at the camera or touch the sensor</div>'+
+  '<div class="bio '+(scan?'scan':'')+'"><div class="ring">'+(scan?'😊':'👤')+'</div><div style="font-size:.8rem;color:var(--muted);font-weight:600">'+(scan?'Scanning…':'Tap to scan')+'</div></div></div>';
+}
+function screenClock(tap){
+  return SB+
+  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock</div><div class="co">Thabo Mokoena · EMP014</div></div>'+
+  '<div class="clock-wrap"><div style="font-size:.8rem;color:var(--muted);font-weight:600">Tuesday, 18 June · 08:02</div>'+
+  '<div class="clock-btn '+(tap?'tap':'')+'" id="t-clock"><span class="ic">▶</span><span class="lb">CLOCK IN</span></div>'+
+  '<div style="font-size:.78rem;color:var(--muted);text-align:center;max-width:230px">We confirm your location and device automatically — no buddy-clocking.</div></div>';
+}
+function screenWorkerDone(){
+  return SB+'<div class="success"><div class="tick">✓</div><h2>You’re clocked in!</h2>'+
+  '<div style="font-size:.85rem;color:var(--muted)">Tuesday, 18 June · 08:02</div>'+
+  '<div><span class="chip">📍 At Main Store</span><span class="chip">📱 Android · Chrome</span></div>'+
+  '<div style="font-size:.8rem;color:var(--muted);max-width:230px">Tap the same button at the end of your shift to clock out.</div></div>';
+}
+function screenAdminLogin(typed){
+  return SB+
+  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock</div><div class="co">Manager / Admin sign-in</div></div>'+
+  '<div class="body"><div class="h">Admin Login</div><div class="sub">For owners &amp; managers only</div>'+
+  '<div class="field"><span class="label">Username</span><div class="input '+(typed>=1?'focus':'')+'" id="t-user">'+(typed>=1?'styleco_admin':'<span style="color:#9CA3AF">username</span>')+'</div></div>'+
+  '<div class="field"><span class="label">Password</span><div class="input '+(typed>=2?'focus':'')+'" id="t-pass">'+(typed>=2?'••••••••':'<span style="color:#9CA3AF">password</span>')+'</div></div>'+
+  '<button class="btn btn-primary" id="t-login">Login</button></div>';
+}
+function adminTabs(active){
+  var tabs=['Dashboard','Workers','Attendance','Reports','Setup'];
+  return '<div class="tabbar">'+tabs.map(function(t){return '<span class="tab '+(t===active?'on':'')+'">'+t+'</span>';}).join('')+'</div>';
+}
+function screenAdminDash(){
+  return SB+
+  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock</div><div class="co">Style &amp; Co Boutique</div></div>'+
+  adminTabs('Dashboard')+
+  '<div class="body"><div class="stat-row">'+
+    '<div class="stat"><div class="n">6</div><div class="l">On the floor now</div></div>'+
+    '<div class="stat"><div class="n">1</div><div class="l">Late today</div></div></div>'+
+  '<div class="lrow"><div class="av">TM</div><div><div class="nm">Thabo Mokoena</div><div class="mt2">In 08:02 · Main Store</div></div><span class="badge in">IN</span></div>'+
+  '<div class="lrow"><div class="av" style="background:#0EA5E9">NP</div><div><div class="nm">Naledi Phiri</div><div class="mt2">In 08:31 · Main Store</div></div><span class="badge late">LATE</span></div>'+
+  '<div class="lrow"><div class="av" style="background:#DB2777">SM</div><div><div class="nm">Sipho Mahlangu</div><div class="mt2">In 07:58 · Mall Branch</div></div><span class="badge in">IN</span></div></div>';
+}
+function screenAdminReports(){
+  return SB+
+  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock</div><div class="co">Style &amp; Co Boutique</div></div>'+
+  adminTabs('Attendance')+
+  '<div class="body"><div class="h" style="font-size:.95rem">Attendance &amp; Payroll</div><div class="sub">June 1 – June 18 · 3 stores</div>'+
+  '<div class="lrow"><div><div class="nm">Thabo Mokoena</div><div class="mt2">142.0 h · OT 6.0 h · 0 late</div></div><span class="badge in">R4 380</span></div>'+
+  '<div class="lrow"><div><div class="nm">Naledi Phiri</div><div class="mt2">138.5 h · OT 2.0 h · 3 late</div></div><span class="badge in">R4 155</span></div>'+
+  '<button class="btn btn-line mt">⬇ Export CSV</button>'+
+  '<button class="btn btn-primary mt">💰 Payroll PDF</button></div>';
+}
+
+// ── Scene timeline ──
+var scenes=[
+  // WORKER
+  {track:'FOR STAFF',who:'Part 1 — How your staff clock in',step:'STEP 1',txt:'Your staff open the WorkClock link you share — no app store, no install.',ms:3600,render:function(){return screenWorkerHome(null);}},
+  {step:'STEP 2',txt:'They type their Employee ID.',ms:3400,render:function(){return screenWorkerHome('EMP014');},cursor:{sel:'#t-id',click:true,delay:600}},
+  {step:'STEP 3',txt:'Then a private 4-digit PIN…',ms:3200,render:function(){return screenPin(4);},cursor:{sel:'.keypad',click:true,delay:500}},
+  {step:'OR',txt:'…or just their face or fingerprint — which stops buddy-clocking.',ms:3600,render:function(){return screenBio(true);}},
+  {step:'STEP 4',txt:'One big button: tap to Clock In.',ms:3200,render:function(){return screenClock(true);},cursor:{sel:'#t-clock',click:true,delay:700}},
+  {step:'DONE',txt:'Recorded with the time, location and device. They clock out the same way.',ms:4200,render:screenWorkerDone},
+  // ADMIN
+  {track:'FOR MANAGERS',who:'Part 2 — How you (the manager) log in',step:'STEP 1',txt:'You open the same app and choose Admin Login.',ms:3400,render:function(){return screenAdminLogin(0);}},
+  {step:'STEP 2',txt:'Enter your username and password.',ms:3600,render:function(){return screenAdminLogin(2);},cursor:{sel:'#t-login',click:true,delay:1400}},
+  {step:'DASHBOARD',txt:'You instantly see who is on the floor, across every store.',ms:4200,render:screenAdminDash},
+  {step:'REPORTS',txt:'Open Attendance for hours, overtime and late arrivals…',ms:3800,render:screenAdminReports},
+  {step:'PAYROLL',txt:'…then export a payroll-ready PDF or CSV for your bookkeeper.',ms:4200,render:screenAdminReports,cursor:{sel:'.btn-primary',click:true,delay:900}},
+  {step:'THAT’S IT',txt:'Staff clock in on their phone. You manage everything from yours. WorkClock by Reatlegile Solutions.',ms:5000,render:screenAdminDash}
+];
+
+var i=0,playing=true,timer=null,total=scenes.reduce(function(s,x){return s+x.ms;},0),elapsed=0;
+var screen=document.getElementById('screen'),cursor=document.getElementById('cursor');
+var capStep=document.getElementById('cap-step'),capTxt=document.getElementById('cap-txt');
+var bar=document.getElementById('bar'),pill=document.getElementById('track-pill'),who=document.getElementById('who');
+
+function placeCursor(c){
+  var el=screen.querySelector(c.sel);if(!el){cursor.classList.remove('show');return;}
+  var sr=screen.getBoundingClientRect(),er=el.getBoundingClientRect();
+  cursor.style.left=(er.left-sr.left+er.width/2)+'px';
+  cursor.style.top=(er.top-sr.top+er.height/2)+'px';
+  setTimeout(function(){cursor.classList.add('show');
+    if(c.click)setTimeout(function(){cursor.classList.add('click');setTimeout(function(){cursor.classList.remove('click');},400);},420);
+  },c.delay||300);
+}
+function show(n){
+  var s=scenes[n];
+  if(s.track)pill.textContent=s.track;
+  if(s.who)who.textContent=s.who;
+  screen.innerHTML=s.render();
+  capStep.textContent=s.step||'';
+  capTxt.textContent=s.txt||'';
+  cursor.classList.remove('show','click');
+  if(s.cursor)placeCursor(s.cursor);
+}
+function tick(){
+  clearTimeout(timer);
+  show(i);
+  var elapsedBefore=scenes.slice(0,i).reduce(function(a,x){return a+x.ms;},0);
+  var start=Date.now();
+  (function step(){
+    if(!playing)return;
+    var e=elapsedBefore+(Date.now()-start);
+    bar.style.width=Math.min(100,e/total*100)+'%';
+    if(Date.now()-start>=scenes[i].ms){
+      i++;
+      if(i>=scenes.length){playing=false;document.getElementById('btn-play').textContent='↺ Replay';bar.style.width='100%';return;}
+      tick();return;
+    }
+    requestAnimationFrame(step);
+  })();
+}
+document.getElementById('btn-play').addEventListener('click',function(){
+  if(i>=scenes.length){i=0;playing=true;this.textContent='⏸ Pause';tick();return;}
+  playing=!playing;this.textContent=playing?'⏸ Pause':'▶ Play';if(playing)tick();
+});
+document.getElementById('btn-restart').addEventListener('click',function(){
+  i=0;playing=true;document.getElementById('btn-play').textContent='⏸ Pause';tick();
+});
+document.getElementById('big-play').addEventListener('click',startNow);
+document.getElementById('overlay').addEventListener('click',function(e){if(e.target===this)startNow();});
+function startNow(){document.getElementById('overlay').classList.add('hidden');i=0;playing=true;tick();}
+// show first frame behind overlay
+show(0);
+</script>
+</body>
+</html>

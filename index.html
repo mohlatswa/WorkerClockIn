@@ -444,6 +444,7 @@
           <button class="btn btn-primary" onclick="loadAttendance()"><span class="ico" data-icon="search" data-size="17"></span> View Report</button>
           <button class="btn btn-outline" onclick="downloadCSV()"><span class="ico" data-icon="download" data-size="17"></span> Export CSV</button>
           <button class="btn btn-outline" onclick="printAttSummary()"><span class="ico" data-icon="printer" data-size="17"></span> Print / PDF</button>
+          <button class="btn btn-primary" onclick="openPayroll()"><span class="ico" data-icon="wallet" data-size="17"></span> Payroll</button>
         </div>
         <p class="msg hidden" id="att-summary" style="margin-top:8px"></p>
         <p class="msg hidden" id="csv-msg"></p>
@@ -836,6 +837,35 @@
       <div class="btn-row" style="margin-top:16px">
         <button id="consent-agree-btn" class="btn btn-primary" onclick="consentResolve(true)" disabled>Agree &amp; Continue</button>
         <button class="btn btn-outline" onclick="consentResolve(false)">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Payroll -->
+<div id="modal-payroll" class="modal-bd hidden" onclick="if(event.target===this)closeModal('modal-payroll')">
+  <div class="modal-box" style="max-width:640px">
+    <div class="modal-hd"><h3><span class="ico" data-icon="wallet" data-size="18"></span> Payroll</h3><button class="modal-close" onclick="closeModal('modal-payroll')">✕</button></div>
+    <div style="padding:16px 18px;max-height:74vh;overflow:auto">
+      <p id="payroll-period" style="font-size:.85rem;color:var(--muted);margin-bottom:10px"></p>
+      <div class="field-row" style="align-items:flex-end">
+        <div class="field" style="max-width:200px">
+          <label>Overtime pay multiplier</label>
+          <input id="payroll-mult" type="number" min="1" step="0.05" class="input" oninput="payrollRecalc()">
+        </div>
+        <p style="font-size:.78rem;color:var(--muted);padding-bottom:10px">1.5× is the BCEA default for overtime.</p>
+      </div>
+      <p style="font-size:.8rem;color:var(--muted);margin:2px 0 10px">Enter each worker's hourly rate (in Rand). Rates are saved on this device for next time.</p>
+      <table class="pay-tbl">
+        <thead><tr><th>Worker</th><th class="r">Reg h</th><th class="r">OT h</th><th>Rate / h</th><th class="r">Gross</th></tr></thead>
+        <tbody id="payroll-rows"></tbody>
+        <tfoot><tr><td colspan="4">Total gross pay</td><td class="r" id="payroll-total">R0.00</td></tr></tfoot>
+      </table>
+      <p class="msg hidden" id="payroll-msg" style="margin-top:10px"></p>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn btn-primary" onclick="payrollPDF()"><span class="ico" data-icon="printer" data-size="16"></span> Payroll PDF</button>
+        <button class="btn btn-outline" onclick="payrollCSV()"><span class="ico" data-icon="download" data-size="16"></span> Payroll CSV</button>
+        <button class="btn btn-outline" onclick="closeModal('modal-payroll')">Close</button>
       </div>
     </div>
   </div>

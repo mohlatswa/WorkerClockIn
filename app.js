@@ -67,6 +67,9 @@ function showPg(id) {
 function withTimeout(promise, ms) {
   return Promise.race([promise, new Promise(function(_, r) { setTimeout(function() { r(new Error('timeout')); }, ms); })]);
 }
+// Max acceptable GPS error (metres) for a clock-in. A fix worse than this is
+// treated as untrustworthy (weak signal or faked) and clock-in is held.
+var GEO_MAX_ACCURACY = 150;
 function haversineM(la1, lo1, la2, lo2) {
   var R = 6371000, r = function(d) { return d * Math.PI / 180; };
   var a = Math.pow(Math.sin(r(la2 - la1) / 2), 2) + Math.cos(r(la1)) * Math.cos(r(la2)) * Math.pow(Math.sin(r(lo2 - lo1) / 2), 2);
@@ -598,7 +601,7 @@ async function workerRegBio() {
   try {
     var cred = await navigator.credentials.create({ publicKey: {
       challenge: crypto.getRandomValues(new Uint8Array(32)),
-      rp: { name: 'WorkClock', id: window.location.hostname || 'localhost' },
+      rp: { name: 'WorkClock-In', id: window.location.hostname || 'localhost' },
       user: { id: new TextEncoder().encode(S.worker.id), name: S.worker.employee_id, displayName: S.worker.name },
       pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
       authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'required', requireResidentKey: true },
@@ -786,12 +789,24 @@ function startLocationWatch() {
   S.geoWatcher = navigator.geolocation.watchPosition(
     function(pos) {
       S.userLoc = pos.coords;
+      var acc    = Math.round(pos.coords.accuracy || 0);
       var dist   = Math.round(haversineM(pos.coords.latitude, pos.coords.longitude, wp.latitude, wp.longitude));
       var radius = wp.radius_meters || 100;
+      // GPS hardening: a wildly inaccurate fix (weak signal, or a faked/garbage
+      // location) can't be trusted near a geofence — require a usable fix first.
+      if (acc > GEO_MAX_ACCURACY) {
+        document.getElementById('loc-status').innerHTML =
+          '⚠️ <strong>GPS too weak</strong> (±' + acc + 'm) — step into the open and wait a moment, then it will clock you in';
+        setClockBtn(false);
+        return;
+      }
       var inside = dist <= radius;
+      var edge   = inside && (dist + acc) > radius;   // inside, but within the GPS error margin of the boundary
+      var accNote = ' <span style="color:var(--muted);font-weight:400">(±' + acc + 'm)</span>';
       document.getElementById('loc-status').innerHTML = inside
-        ? '✅ <strong>' + (wp.name || 'Workplace') + '</strong> — ' + dist + 'm away'
-        : '❌ Too far — ' + dist + 'm from <strong>' + (wp.name || 'workplace') + '</strong> (max ' + radius + 'm)';
+        ? '✅ <strong>' + (wp.name || 'Workplace') + '</strong> — ' + dist + 'm away' + accNote
+          + (edge ? ' <span style="color:var(--amber)">· near the edge</span>' : '')
+        : '❌ Too far — ' + dist + 'm from <strong>' + (wp.name || 'workplace') + '</strong> (max ' + radius + 'm)' + accNote;
       setClockBtn(inside);
     },
     function(err) {
@@ -799,8 +814,11 @@ function startLocationWatch() {
         locCard.style.display = 'none'; locBlk.classList.remove('hidden');
         setClockBtn(false);
       } else {
-        document.getElementById('loc-status').textContent = '⚠️ GPS signal unavailable — clocking in without location';
-        setClockBtn(true);
+        // No usable fix yet — keep the watch running and hold clock-in rather
+        // than letting anyone clock in with no location at all (geofence bypass).
+        document.getElementById('loc-status').innerHTML =
+          '⚠️ <strong>Getting GPS…</strong> step into the open — it will enable clock-in once it locates you';
+        setClockBtn(false);
       }
     },
     { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 }
@@ -1125,7 +1143,7 @@ function openWorkerQrBadge(empId, name) {
   if (typeof qrcode === 'undefined') { toast('QR generator not loaded'); return; }
   empId = (empId || '').toUpperCase();
   var coEl = document.getElementById('admin-co-lbl');
-  var coName = (coEl && coEl.textContent) ? coEl.textContent.trim() : 'WorkClock';
+  var coName = (coEl && coEl.textContent) ? coEl.textContent.trim() : 'WorkClock-In';
   var qr = qrcode(0, 'M');
   qr.addData(empId);
   qr.make();
@@ -1136,7 +1154,7 @@ function openWorkerQrBadge(empId, name) {
       '<img src="' + dataUrl + '" alt="QR badge" class="qr-badge-img">' +
       '<div class="qr-badge-name">' + esc(name) + '</div>' +
       '<div class="qr-badge-id">' + esc(empId) + '</div>' +
-      '<div class="qr-badge-foot">Scan to clock in · WorkClock</div>' +
+      '<div class="qr-badge-foot">Scan to clock in · WorkClock-In</div>' +
     '</div>';
   document.getElementById('modal-qr-badge').classList.remove('hidden');
 }
@@ -1145,7 +1163,7 @@ function printQrBadge() {
   if (!node) return;
   var win = window.open('', '_blank', 'width=420,height=640');
   if (!win) { toast('Allow pop-ups to print the badge'); return; }
-  win.document.write('<html><head><title>WorkClock QR Badge</title><style>' +
+  win.document.write('<html><head><title>WorkClock-In QR Badge</title><style>' +
     'body{font-family:Inter,Arial,sans-serif;margin:0;padding:28px;display:flex;justify-content:center}' +
     '.qr-badge{border:2px solid #312E81;border-radius:18px;padding:26px;text-align:center;width:300px}' +
     '.qr-badge-co{font-weight:700;color:#312E81;font-size:16px;margin-bottom:14px;text-transform:uppercase;letter-spacing:.6px}' +
@@ -1803,7 +1821,7 @@ async function adminRegBio(workerId, workerName, ctx) {
   try {
     var cred = await navigator.credentials.create({ publicKey: {
       challenge: crypto.getRandomValues(new Uint8Array(32)),
-      rp: { name: 'WorkClock', id: window.location.hostname || 'localhost' },
+      rp: { name: 'WorkClock-In', id: window.location.hostname || 'localhost' },
       user: { id: new TextEncoder().encode(workerId), name: workerName, displayName: workerName },
       pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
       authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'required', requireResidentKey: true },
@@ -1962,13 +1980,13 @@ function printAttSummary() {
       '<td class="c">' + w.days + '</td><td class="r">' + w.hours.toFixed(1) + '</td><td class="r">' + w.ot.toFixed(1) + '</td><td class="c">' + w.late + '</td></tr>';
   }).join('');
   document.getElementById('print-area').innerHTML =
-    '<div class="pr-head"><h1>' + esc((S.admin && S.admin.co_name) || 'WorkClock') + '</h1>' +
+    '<div class="pr-head"><h1>' + esc((S.admin && S.admin.co_name) || 'WorkClock-In') + '</h1>' +
     '<div class="pr-title">Attendance Summary</div>' +
     '<div class="pr-sub">' + esc(_attData.from) + ' to ' + esc(_attData.to) + ' &middot; Shift ' + sh.shift_start + '–' + sh.shift_end + ' &middot; OT: ' + sh.shift_ot_mode.replace('_', ' ') + '</div></div>' +
     '<table class="pr-table"><thead><tr><th>Worker</th><th>Emp ID</th><th>Job</th><th class="c">Days</th><th class="r">Hours</th><th class="r">OT (h)</th><th class="c">Late</th></tr></thead>' +
     '<tbody>' + body + '</tbody>' +
     '<tfoot><tr><td colspan="3">Total — ' + list.length + ' workers</td><td class="c">' + tD + '</td><td class="r">' + tH.toFixed(1) + '</td><td class="r">' + tO.toFixed(1) + '</td><td class="c">' + tL + '</td></tr></tfoot></table>' +
-    '<div class="pr-foot">Generated ' + new Date().toLocaleString('en-ZA', { timeZone: _tz() }) + ' · WorkClock by Reatlegile Solutions</div>';
+    '<div class="pr-foot">Generated ' + new Date().toLocaleString('en-ZA', { timeZone: _tz() }) + ' · WorkClock-In by Reatlegile Solutions</div>';
   window.print();
 }
 
@@ -2045,13 +2063,13 @@ function payrollPDF() {
   rows.forEach(function(r) { tReg += r.w.reg; tOt += r.w.ot; tRP += r.regPay; tOP += r.otPay; });
   var sh = curShift();
   document.getElementById('print-area').innerHTML =
-    '<div class="pr-head"><h1>' + esc((S.admin && S.admin.co_name) || 'WorkClock') + '</h1>' +
+    '<div class="pr-head"><h1>' + esc((S.admin && S.admin.co_name) || 'WorkClock-In') + '</h1>' +
     '<div class="pr-title">Payroll Summary</div>' +
     '<div class="pr-sub">' + esc(_payroll.from) + ' to ' + esc(_payroll.to) + ' &middot; OT paid at ' + _payroll.mult + '× &middot; Shift ' + sh.shift_start + '–' + sh.shift_end + '</div></div>' +
     '<table class="pr-table"><thead><tr><th>Worker</th><th>Emp ID</th><th class="r">Reg h</th><th class="r">OT h</th><th class="r">Rate</th><th class="r">Reg Pay</th><th class="r">OT Pay</th><th class="r">Gross</th></tr></thead>' +
     '<tbody>' + body + '</tbody>' +
     '<tfoot><tr><td colspan="2">Total — ' + rows.length + ' workers</td><td class="r">' + tReg.toFixed(1) + '</td><td class="r">' + tOt.toFixed(1) + '</td><td></td><td class="r">' + fmtR(tRP) + '</td><td class="r">' + fmtR(tOP) + '</td><td class="r">' + fmtR(_payroll.total) + '</td></tr></tfoot></table>' +
-    '<div class="pr-foot">Generated ' + new Date().toLocaleString('en-ZA', { timeZone: _tz() }) + ' · Rates entered by employer · WorkClock by Reatlegile Solutions</div>';
+    '<div class="pr-foot">Generated ' + new Date().toLocaleString('en-ZA', { timeZone: _tz() }) + ' · Rates entered by employer · WorkClock-In by Reatlegile Solutions</div>';
   window.print();
 }
 function payrollCSV() {
@@ -3202,7 +3220,7 @@ window.addEventListener('beforeinstallprompt', function(e) {
 });
 window.addEventListener('appinstalled', function() {
   var b = document.getElementById('install-banner'); if (b) b.classList.add('hidden');
-  _installPrompt = null; toast('✅ WorkClock installed!');
+  _installPrompt = null; toast('✅ WorkClock-In installed!');
 });
 function installPWA() {
   if (!_installPrompt) return;
@@ -3218,7 +3236,7 @@ function checkIOSInstall() {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────
-var APP_VERSION = 'v26';   // bump alongside the sw.js CACHE version on each deploy
+var APP_VERSION = 'v27';   // bump alongside the sw.js CACHE version on each deploy
 document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Start error tracking (no-op until a Sentry DSN is configured)

@@ -1,6 +1,6 @@
 {
-  "name": "WorkClock — Staff Attendance",
-  "short_name": "WorkClock",
+  "name": "WorkClock-In — Staff Attendance",
+  "short_name": "WorkClock-In",
   "description": "Clock in and out with QR card, NFC, fingerprint or PIN",
   "start_url": "./index.html",
   "scope": "./",

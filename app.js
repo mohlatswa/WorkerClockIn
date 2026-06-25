@@ -664,7 +664,135 @@ async function enterWorkerDashboard() {
   await loadShift(w.company_id);
   await loadTodayRecord();
   await loadAttendanceHistory();
+  loadMyLeave();
   startLocationWatch();
+}
+
+// ── Worker Leave ──────────────────────────────────────────
+function wkTok() { return localStorage.getItem('wc_session_token'); }
+function leaveLabel(t) { return ({ annual: 'Annual', sick: 'Sick', family: 'Family', unpaid: 'Unpaid' })[t] || t; }
+function leaveStatusChip(s) {
+  var m = { pending: ['#FFFBEB', '#92400E', 'Pending'], approved: ['#ECFDF5', '#065F46', 'Approved'],
+            declined: ['#FFF1F3', '#9F1239', 'Declined'], cancelled: ['#F1F5F9', '#475569', 'Cancelled'] };
+  var c = m[s] || m.pending;
+  return '<span style="background:' + c[0] + ';color:' + c[1] + ';font-size:.7rem;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap">' + c[2] + '</span>';
+}
+async function loadMyLeave() {
+  if (!S.worker || !document.getElementById('leave-card')) return;
+  try {
+    var r = await withTimeout(db.rpc('worker_my_leave', { p_worker_id: S.worker.id, p_token: wkTok() }), 6000);
+    var data = (r && r.data) || {};
+    if (data.error) return;
+    var bals = data.balances || [];
+    document.getElementById('leave-balances').innerHTML = bals.length
+      ? bals.map(function(b) { return '<span class="leave-bal"><b>' + (+b.balance_days) + '</b> ' + leaveLabel(b.leave_type) + '</span>'; }).join('')
+      : '<span class="sub" style="font-size:.8rem">No balances set yet — ask your manager.</span>';
+    var reqs = data.requests || [];
+    document.getElementById('my-leave-list').innerHTML = reqs.length
+      ? reqs.map(renderMyLeaveRow).join('')
+      : '<div class="empty" style="padding:12px 0;font-size:.84rem">No leave requests yet.</div>';
+  } catch (e) {}
+}
+function renderMyLeaveRow(r) {
+  return '<div class="lv-row">' +
+    '<div style="flex:1;min-width:0">' +
+      '<div style="font-weight:600;font-size:.86rem">' + leaveLabel(r.leave_type) + ' · ' + (+r.days) + 'd</div>' +
+      '<div class="sub" style="font-size:.77rem">' + fmtDate(r.start_date) + ' → ' + fmtDate(r.end_date) +
+        (r.review_note ? ' · ' + esc(r.review_note) : '') + '</div>' +
+    '</div>' + leaveStatusChip(r.status) +
+    (r.status === 'pending' ? ' <button class="icon-btn ib-danger" title="Cancel" onclick="cancelMyLeave(\'' + r.id + '\')">' + icon('x', 16) + '</button>' : '') +
+  '</div>';
+}
+function openLeaveApply() {
+  document.getElementById('lv-type').value = 'annual';
+  document.getElementById('lv-start').value = '';
+  document.getElementById('lv-end').value = '';
+  document.getElementById('lv-reason').value = '';
+  document.getElementById('lv-msg').classList.add('hidden');
+  document.getElementById('modal-leave').classList.remove('hidden');
+}
+async function submitLeave() {
+  var type = document.getElementById('lv-type').value;
+  var start = document.getElementById('lv-start').value;
+  var end = document.getElementById('lv-end').value;
+  var reason = document.getElementById('lv-reason').value;
+  if (!start || !end) { showMsg('lv-msg', 'Please choose both dates.', 'err'); return; }
+  if (end < start) { showMsg('lv-msg', "End date can't be before the start date.", 'err'); return; }
+  var btn = document.getElementById('lv-submit-btn'); btn.disabled = true;
+  try {
+    var r = await withTimeout(db.rpc('worker_apply_leave', {
+      p_worker_id: S.worker.id, p_token: wkTok(), p_leave_type: type, p_start: start, p_end: end, p_reason: reason || null
+    }), 6000);
+    if (r.data === 'ok') { closeModal('modal-leave'); toast('✅ Leave request sent'); loadMyLeave(); }
+    else if (r.data === 'bad_session') showMsg('lv-msg', 'Session expired — please sign in again.', 'err');
+    else if (r.data === 'bad_dates') showMsg('lv-msg', 'Please check your dates.', 'err');
+    else showMsg('lv-msg', 'Could not submit — please try again.', 'err');
+  } catch (e) { showMsg('lv-msg', 'Connection error — please try again.', 'err'); }
+  btn.disabled = false;
+}
+async function cancelMyLeave(id) {
+  if (!confirm('Cancel this leave request?')) return;
+  try {
+    var r = await withTimeout(db.rpc('worker_cancel_leave', { p_worker_id: S.worker.id, p_token: wkTok(), p_request_id: id }), 5000);
+    if (r.data === 'ok') { toast('Request cancelled'); loadMyLeave(); } else toast('Could not cancel');
+  } catch (e) { toast('Connection error'); }
+}
+
+// ── Admin Leave ───────────────────────────────────────────
+async function loadAdminLeave() {
+  var cid = requireAdminCid(); if (!cid) return;
+  var el = document.getElementById('admin-leave-list'); el.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    var wr = await withTimeout(db.from('workers').select('id,name,employee_id').eq('company_id', cid).eq('is_active', true).order('name'), 5000);
+    var sel = document.getElementById('lvb-worker');
+    if (sel && wr.data) sel.innerHTML = '<option value="">Select worker…</option>' +
+      wr.data.map(function(w) { return '<option value="' + w.id + '">' + esc(w.name) + ' (' + esc(w.employee_id) + ')</option>'; }).join('');
+    var r = await withTimeout(db.rpc('admin_leave_list', { p_actor_id: aId(), p_token: aTok() }), 6000);
+    if (r.error || !r.data || r.data.error) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
+    var rows = r.data;
+    el.innerHTML = rows.length ? rows.map(renderAdminLeaveRow).join('')
+      : '<div class="card"><div class="empty">No leave requests</div></div>';
+  } catch (e) { el.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
+}
+function renderAdminLeaveRow(r) {
+  var pending = r.status === 'pending';
+  return '<div class="card" style="padding:14px 16px;margin-bottom:10px">' +
+    '<div style="display:flex;align-items:center;gap:10px">' +
+      '<div class="av av-sm">' + initials(r.worker_name) + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-weight:700;font-size:.9rem">' + esc(r.worker_name) + ' <span class="sub" style="font-weight:500">· ' + esc(r.employee_id) + '</span></div>' +
+        '<div class="sub" style="font-size:.8rem">' + leaveLabel(r.leave_type) + ' · ' + (+r.days) + 'd · ' + fmtDate(r.start_date) + ' → ' + fmtDate(r.end_date) + '</div>' +
+      '</div>' + leaveStatusChip(r.status) +
+    '</div>' +
+    (r.reason ? '<div class="sub" style="font-size:.8rem;margin-top:8px">“' + esc(r.reason) + '”</div>' : '') +
+    (pending
+      ? '<div class="btn-row" style="margin-top:10px">' +
+          '<button class="btn btn-primary btn-sm" onclick="reviewLeave(\'' + r.id + '\',\'approved\')">' + icon('check', 16) + ' Approve</button>' +
+          '<button class="btn btn-outline btn-sm" onclick="reviewLeave(\'' + r.id + '\',\'declined\')">' + icon('x', 16) + ' Decline</button>' +
+        '</div>'
+      : (r.review_note ? '<div class="sub" style="font-size:.78rem;margin-top:6px">Note: ' + esc(r.review_note) + '</div>' : '')) +
+  '</div>';
+}
+async function reviewLeave(id, decision) {
+  var note = null;
+  if (decision === 'declined') { note = prompt('Reason for declining (optional):'); if (note === null) return; }
+  try {
+    var r = await withTimeout(db.rpc('admin_review_leave', { p_actor_id: aId(), p_token: aTok(), p_request_id: id, p_decision: decision, p_note: note }), 6000);
+    if (r.data === 'ok') { toast(decision === 'approved' ? '✅ Approved' : 'Declined'); loadAdminLeave(); }
+    else toast('Could not update (' + r.data + ')');
+  } catch (e) { toast('Connection error'); }
+}
+async function setLeaveBalance() {
+  var wid = document.getElementById('lvb-worker').value;
+  var type = document.getElementById('lvb-type').value;
+  var days = parseFloat(document.getElementById('lvb-days').value);
+  if (!wid) { showMsg('lvb-msg', 'Pick a worker.', 'err'); return; }
+  if (isNaN(days) || days < 0) { showMsg('lvb-msg', 'Enter a valid number of days.', 'err'); return; }
+  try {
+    var r = await withTimeout(db.rpc('admin_set_leave_balance', { p_actor_id: aId(), p_token: aTok(), p_worker_id: wid, p_leave_type: type, p_days: days }), 6000);
+    if (r.data === 'ok') showMsg('lvb-msg', 'Balance saved.', 'ok');
+    else showMsg('lvb-msg', 'Could not save (' + r.data + ').', 'err');
+  } catch (e) { showMsg('lvb-msg', 'Connection error.', 'err'); }
 }
 
 // ── Today's Record ────────────────────────────────────────
@@ -1376,6 +1504,7 @@ function switchTab(btn, name) {
   if (name === 'a-workers')  loadWorkers();
   if (name === 'a-admins')   loadCoAdmins();
   if (name === 'a-absent')   loadAbsent();
+  if (name === 'a-leave')    loadAdminLeave();
   if (name === 'a-inactive') loadAdminInactive();
   if (name === 'a-audit')    loadAudit();
   if (name === 'a-setup')   loadSetup();
@@ -2581,6 +2710,7 @@ var NAV_TABS = [
   { id: 'a-workers',  icon: 'users',     label: 'Workers',    saOnly: false },
   { id: 'a-att',      icon: 'clipboard', label: 'Attendance', saOnly: false },
   { id: 'a-absent',   icon: 'userx',     label: 'Absent',     saOnly: false },
+  { id: 'a-leave',    icon: 'calendar',  label: 'Leave',      saOnly: false },
   { id: 'a-admins',   icon: 'key',       label: 'Admins',     saOnly: true  },
   { id: 'a-inactive', icon: 'archive',   label: 'Inactive',   saOnly: false },
   { id: 'a-audit',    icon: 'history',   label: 'Activity',   saOnly: false },
@@ -3236,7 +3366,7 @@ function checkIOSInstall() {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────
-var APP_VERSION = 'v27';   // bump alongside the sw.js CACHE version on each deploy
+var APP_VERSION = 'v28';   // bump alongside the sw.js CACHE version on each deploy
 document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Start error tracking (no-op until a Sentry DSN is configured)

@@ -246,6 +246,14 @@
       <p class="msg hidden" id="face-reg-msg"></p>
     </div>
 
+    <!-- Leave -->
+    <div class="card" id="leave-card">
+      <div class="sec-lbl"><span class="ico" data-icon="calendar" data-size="15"></span> Leave</div>
+      <div id="leave-balances" class="leave-bal-row" style="margin:8px 0 4px"></div>
+      <button class="btn-bio" style="margin-top:8px" onclick="openLeaveApply()"><span class="ico" data-icon="calendar" data-size="20"></span> Apply for Leave</button>
+      <div id="my-leave-list" style="margin-top:12px"></div>
+    </div>
+
     <!-- Change PIN -->
     <div class="card" id="change-pin-card">
       <div class="sec-lbl"><span class="ico" data-icon="key" data-size="15"></span> Change PIN</div>
@@ -334,6 +342,9 @@
     </button>
     <button class="bnav-item" data-tab="a-absent" onclick="switchTab(this,'a-absent')">
       <span class="bnav-icon" data-icon="userx" data-size="21"></span><span class="bnav-lbl">Absent</span>
+    </button>
+    <button class="bnav-item bnav-overflow" data-tab="a-leave" onclick="switchTab(this,'a-leave')">
+      <span class="bnav-icon" data-icon="calendar" data-size="21"></span><span class="bnav-lbl">Leave</span>
     </button>
     <button class="bnav-item bnav-overflow hidden" id="tab-admins-btn" data-tab="a-admins" onclick="switchTab(this,'a-admins')">
       <span class="bnav-icon" data-icon="key" data-size="21"></span><span class="bnav-lbl">Admins</span>
@@ -483,6 +494,31 @@
         <button class="btn btn-outline btn-sm" onclick="loadAbsent()"><span class="ico" data-icon="refresh" data-size="16"></span> Refresh</button>
       </div>
       <div id="absent-list"><div class="empty">Loading…</div></div>
+    </div>
+
+    <!-- Leave Tab -->
+    <div id="a-leave" class="tab-pane">
+      <div class="card" id="leave-bal-setter" style="margin-bottom:12px">
+        <div class="sec-lbl" style="margin-bottom:8px"><span class="ico" data-icon="calendar" data-size="15"></span> Set a leave balance</div>
+        <div class="field"><label>Worker</label><select id="lvb-worker" class="input"><option value="">Select worker…</option></select></div>
+        <div class="field-row">
+          <div class="field"><label>Type</label>
+            <select id="lvb-type" class="input">
+              <option value="annual">Annual</option>
+              <option value="sick">Sick</option>
+              <option value="family">Family responsibility</option>
+            </select>
+          </div>
+          <div class="field"><label>Days</label><input id="lvb-days" type="number" step="0.5" min="0" class="input" placeholder="e.g. 15"></div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="setLeaveBalance()">Save Balance</button>
+        <p class="msg hidden" id="lvb-msg" style="margin-top:8px"></p>
+      </div>
+      <div class="tab-bar">
+        <span class="sec-lbl"><span class="ico" data-icon="calendar" data-size="15"></span> Leave Requests</span>
+        <button class="btn btn-outline btn-sm" onclick="loadAdminLeave()"><span class="ico" data-icon="refresh" data-size="16"></span> Refresh</button>
+      </div>
+      <div id="admin-leave-list"><div class="empty">Loading…</div></div>
     </div>
 
     <!-- Admins Tab (super_admin only) -->
@@ -1073,6 +1109,30 @@
       <div id="qr-badge-print"></div>
       <p class="sub" style="margin:12px 0 0;font-size:.8rem">The worker scans this on the sign-in screen — they still confirm with their PIN or fingerprint, and the workplace geofence still applies.</p>
       <button class="btn btn-primary btn-full" style="margin-top:14px" onclick="printQrBadge()"><span class="ico" data-icon="printer" data-size="17"></span> Print Badge</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Apply for Leave -->
+<div id="modal-leave" class="modal-bd hidden" onclick="if(event.target===this)closeModal('modal-leave')">
+  <div class="modal-box" style="max-width:380px">
+    <div class="modal-hd"><h3><span class="ico" data-icon="calendar" data-size="18"></span> Apply for Leave</h3><button class="modal-close" onclick="closeModal('modal-leave')">✕</button></div>
+    <div style="padding:18px">
+      <div class="field"><label>Leave type</label>
+        <select id="lv-type" class="input">
+          <option value="annual">Annual leave</option>
+          <option value="sick">Sick leave</option>
+          <option value="family">Family responsibility</option>
+          <option value="unpaid">Unpaid leave</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>From</label><input id="lv-start" type="date" class="input"></div>
+        <div class="field"><label>To</label><input id="lv-end" type="date" class="input"></div>
+      </div>
+      <div class="field"><label>Reason (optional)</label><input id="lv-reason" type="text" class="input" placeholder="e.g. family event"></div>
+      <p class="msg hidden" id="lv-msg"></p>
+      <button id="lv-submit-btn" class="btn btn-primary btn-full" style="margin-top:6px" onclick="submitLeave()">Submit Request</button>
     </div>
   </div>
 </div>

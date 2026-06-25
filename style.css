@@ -351,6 +351,13 @@ body{
 .qr-badge-name{font-weight:800;font-size:18px;margin-top:10px;color:var(--ink)}
 .qr-badge-id{font-size:13px;color:var(--muted);margin-top:2px;letter-spacing:1.5px}
 .qr-badge-foot{font-size:11px;color:var(--faint);margin-top:12px}
+
+/* ─── Leave ─────────────────────────────────────────────────── */
+.leave-bal-row{display:flex;flex-wrap:wrap;gap:8px}
+.leave-bal{background:var(--brand-l);color:var(--brand-d);border-radius:10px;padding:6px 11px;font-size:.78rem;font-weight:600}
+.leave-bal b{font-size:1rem;font-weight:800;margin-right:3px}
+.lv-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--border)}
+.lv-row:first-child{border-top:none}
 /* Colour the small header + status glyphs */
 .sec-lbl .ico{color:var(--brand)}
 .row-meta .ico-svg{color:var(--faint)}

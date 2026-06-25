@@ -339,6 +339,18 @@ body{
 .icon-btn.ib-teal:hover{background:#CFFAFE}
 .icon-btn.ib-violet{background:#F3F0FF;color:#7C3AED}
 .icon-btn.ib-violet:hover{background:#E9E2FF}
+.icon-btn.ib-indigo{background:#E0E7FF;color:var(--brand-d)}
+.icon-btn.ib-indigo:hover{background:#C7D2FE}
+
+/* ─── QR badge scan + print ─────────────────────────────────── */
+.qr-frame{width:240px;height:240px;border:3px solid rgba(255,255,255,.6);border-radius:24px;box-shadow:0 0 0 2000px rgba(0,0,0,.5);transition:border-color .3s,box-shadow .3s}
+.qr-frame.found{border-color:var(--green);box-shadow:0 0 0 2000px rgba(0,0,0,.5),0 0 28px rgba(5,150,105,.8)}
+.qr-badge{border:2px solid var(--brand-dd);border-radius:16px;padding:20px;text-align:center}
+.qr-badge-co{font-weight:700;color:var(--brand-dd);font-size:15px;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px}
+.qr-badge-img{width:200px;height:200px;display:block;margin:0 auto;image-rendering:pixelated}
+.qr-badge-name{font-weight:800;font-size:18px;margin-top:10px;color:var(--ink)}
+.qr-badge-id{font-size:13px;color:var(--muted);margin-top:2px;letter-spacing:1.5px}
+.qr-badge-foot{font-size:11px;color:var(--faint);margin-top:12px}
 /* Colour the small header + status glyphs */
 .sec-lbl .ico{color:var(--brand)}
 .row-meta .ico-svg{color:var(--faint)}

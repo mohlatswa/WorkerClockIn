@@ -77,8 +77,29 @@
                onkeydown="if(event.key==='Enter')findWorker()">
       </div>
       <button class="btn btn-primary btn-full" onclick="findWorker()">Continue →</button>
+      <div class="or-div">or</div>
+      <button class="btn btn-outline btn-full" onclick="startQrScan()"><span class="ico" data-icon="qr" data-size="18"></span> Scan QR Badge</button>
       <p class="err hidden" id="err-empid" style="margin-top:8px"></p>
     </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- PAGE 2b: QR BADGE SCAN (full-page video)               -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="pg-qr-scan" class="pg">
+  <video id="qr-video" playsinline muted style="position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0"></video>
+  <canvas id="qr-canvas" style="display:none"></canvas>
+  <div style="position:fixed;inset:0;z-index:1;display:flex;flex-direction:column">
+    <div class="scan-bar">
+      <button class="scan-back" onclick="stopQrScan()"><span class="ico" data-icon="back" data-size="18"></span> Back</button>
+      <span>Scan QR Badge</span>
+      <span style="width:70px"></span>
+    </div>
+    <div style="flex:1;display:flex;align-items:center;justify-content:center">
+      <div class="qr-frame" id="qr-frame"></div>
+    </div>
+    <div id="qr-status" style="text-align:center;color:#fff;padding:16px 20px 40px;font-size:.9rem;text-shadow:0 1px 3px rgba(0,0,0,.5)">Point the camera at your QR badge…</div>
   </div>
 </div>
 
@@ -1044,11 +1065,25 @@
 <!-- PRINT AREA (populated by printAttSummary, only visible when printing) -->
 <div id="print-area"></div>
 
+<!-- MODAL: QR Clock-In Badge (admin print) -->
+<div id="modal-qr-badge" class="modal-bd hidden" onclick="if(event.target===this)closeModal('modal-qr-badge')">
+  <div class="modal-box" style="max-width:380px">
+    <div class="modal-hd"><h3><span class="ico" data-icon="qr" data-size="18"></span> QR Clock-In Badge</h3><button class="modal-close" onclick="closeModal('modal-qr-badge')">✕</button></div>
+    <div style="padding:18px">
+      <div id="qr-badge-print"></div>
+      <p class="sub" style="margin:12px 0 0;font-size:.8rem">The worker scans this on the sign-in screen — they still confirm with their PIN or fingerprint, and the workplace geofence still applies.</p>
+      <button class="btn btn-primary btn-full" style="margin-top:14px" onclick="printQrBadge()"><span class="ico" data-icon="printer" data-size="17"></span> Print Badge</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div id="toast" class="toast hidden"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="supabase.min.js"></script>
+<script src="jsQR.js"></script>
+<script src="qrcode.min.js"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
 <script>

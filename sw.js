@@ -1,7 +1,8 @@
-var CACHE = 'wc-v25';
+var CACHE = 'wc-v26';
 var ASSETS = [
   './', './index.html', './app.js', './config.js',
   './style.css', './supabase.min.js', './manifest.json',
+  './jsQR.js', './qrcode.min.js',
   './icon-192.png', './icon-512.png', './promo.html', './privacy.html'
 ];
 

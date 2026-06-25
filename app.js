@@ -140,6 +140,7 @@ var ICONS = {
   history:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
   printer:'<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/>',
   wallet:'<path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v3h-3a2 2 0 0 0 0 4h3a1 1 0 0 1-1 1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5"/><circle cx="16.5" cy="13" r=".6" fill="currentColor"/>',
+  qr:'<rect width="6" height="6" x="3" y="3" rx="1"/><rect width="6" height="6" x="15" y="3" rx="1"/><rect width="6" height="6" x="3" y="15" rx="1"/><path d="M15 15h2v2h-2zM19 15h2v2M15 19h2v2h-2M19 19h2v2"/>',
   eye:'<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
   'eye-off':'<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/>'
 };
@@ -1055,6 +1056,108 @@ function stopFaceRecog() {
   showPg('home');
 }
 
+// ── QR Badge Clock-In ─────────────────────────────────────
+// A worker's printable QR badge encodes their Employee ID. Scanning it just
+// fills in the Employee ID and hands off to the SAME PIN / biometric flow and
+// the SAME server-side geofence — no shortcut, no new DB writes.
+var _qrStream = null, _qrRunning = false;
+async function startQrScan() {
+  if (typeof jsQR === 'undefined') { toast('QR scanner not available on this device'); return; }
+  showPg('qr-scan');
+  var statusEl = document.getElementById('qr-status');
+  statusEl.textContent = 'Opening camera…';
+  try {
+    _qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    var video = document.getElementById('qr-video');
+    video.srcObject = _qrStream; await video.play();
+    statusEl.textContent = 'Point the camera at your QR badge…';
+    _qrRunning = true; requestAnimationFrame(qrFrame);
+  } catch (e) {
+    statusEl.textContent = e.name === 'NotAllowedError' ? '❌ Camera access denied — allow camera or use Employee ID' : '❌ ' + e.message;
+  }
+}
+function qrFrame() {
+  if (!_qrRunning) return;
+  var video = document.getElementById('qr-video');
+  if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) { requestAnimationFrame(qrFrame); return; }
+  var w = video.videoWidth, h = video.videoHeight;
+  if (!w || !h) { requestAnimationFrame(qrFrame); return; }
+  var canvas = document.getElementById('qr-canvas');
+  canvas.width = w; canvas.height = h;
+  var cx = canvas.getContext('2d');
+  cx.drawImage(video, 0, 0, w, h);
+  var img;
+  try { img = cx.getImageData(0, 0, w, h); } catch (e) { requestAnimationFrame(qrFrame); return; }
+  var code = jsQR(img.data, w, h, { inversionAttempts: 'dontInvert' });
+  if (code && code.data) {
+    var empId = parseQrPayload(code.data);
+    if (empId) {
+      _qrRunning = false;
+      var frame = document.getElementById('qr-frame'); if (frame) frame.classList.add('found');
+      vibrate([50, 30, 100]);
+      stopQrStream();
+      document.getElementById('qr-status').textContent = '✅ Badge read — ' + empId;
+      document.getElementById('inp-empid').value = empId;
+      setTimeout(function() { showPg('wlogin'); findWorker(); }, 700);
+      return;
+    }
+  }
+  requestAnimationFrame(qrFrame);
+}
+function parseQrPayload(raw) {
+  if (!raw) return '';
+  raw = String(raw).trim();
+  var m = raw.match(/[?&#]emp(?:loyee)?(?:[_-]?id)?=([^&\s]+)/i);
+  if (m) return decodeURIComponent(m[1]).trim().toUpperCase();
+  if (raw.charAt(0) === '{') {
+    try { var o = JSON.parse(raw); if (o && (o.emp || o.employee_id)) return String(o.emp || o.employee_id).trim().toUpperCase(); } catch (e) {}
+  }
+  if (/^[A-Za-z0-9._-]{1,32}$/.test(raw)) return raw.toUpperCase();
+  return '';
+}
+function stopQrStream() {
+  if (_qrStream) { _qrStream.getTracks().forEach(function(t) { t.stop(); }); _qrStream = null; }
+}
+function stopQrScan() { _qrRunning = false; stopQrStream(); showPg('wlogin'); }
+
+// Admin: build & print a worker's QR clock-in badge (QR encodes the Employee ID).
+function openWorkerQrBadge(empId, name) {
+  if (typeof qrcode === 'undefined') { toast('QR generator not loaded'); return; }
+  empId = (empId || '').toUpperCase();
+  var coEl = document.getElementById('admin-co-lbl');
+  var coName = (coEl && coEl.textContent) ? coEl.textContent.trim() : 'WorkClock';
+  var qr = qrcode(0, 'M');
+  qr.addData(empId);
+  qr.make();
+  var dataUrl = qr.createDataURL(8, 8);
+  document.getElementById('qr-badge-print').innerHTML =
+    '<div class="qr-badge">' +
+      '<div class="qr-badge-co">' + esc(coName) + '</div>' +
+      '<img src="' + dataUrl + '" alt="QR badge" class="qr-badge-img">' +
+      '<div class="qr-badge-name">' + esc(name) + '</div>' +
+      '<div class="qr-badge-id">' + esc(empId) + '</div>' +
+      '<div class="qr-badge-foot">Scan to clock in · WorkClock</div>' +
+    '</div>';
+  document.getElementById('modal-qr-badge').classList.remove('hidden');
+}
+function printQrBadge() {
+  var node = document.getElementById('qr-badge-print');
+  if (!node) return;
+  var win = window.open('', '_blank', 'width=420,height=640');
+  if (!win) { toast('Allow pop-ups to print the badge'); return; }
+  win.document.write('<html><head><title>WorkClock QR Badge</title><style>' +
+    'body{font-family:Inter,Arial,sans-serif;margin:0;padding:28px;display:flex;justify-content:center}' +
+    '.qr-badge{border:2px solid #312E81;border-radius:18px;padding:26px;text-align:center;width:300px}' +
+    '.qr-badge-co{font-weight:700;color:#312E81;font-size:16px;margin-bottom:14px;text-transform:uppercase;letter-spacing:.6px}' +
+    '.qr-badge-img{width:230px;height:230px;display:block;margin:0 auto;image-rendering:pixelated}' +
+    '.qr-badge-name{font-weight:800;font-size:20px;margin-top:14px;color:#0F172A}' +
+    '.qr-badge-id{font-size:14px;color:#64748B;margin-top:3px;letter-spacing:1.5px}' +
+    '.qr-badge-foot{font-size:11px;color:#94A3B8;margin-top:16px}' +
+    '</style></head><body>' + node.innerHTML + '</body></html>');
+  win.document.close();
+  setTimeout(function() { try { win.focus(); win.print(); } catch (e) {} }, 350);
+}
+
 // ── Face Enrolment ────────────────────────────────────────
 var _enrollStream = null, _enrollTarget = null;
 async function adminEnrollFace(workerId, workerName, ctx) {
@@ -1581,6 +1684,7 @@ async function loadWorkers() {
           '<div class="row-meta">' + meta + '</div></div></div>' +
           '<div class="row-btns">' +
           '<button class="icon-btn" title="Edit" onclick="openEditWorker(\'' + w.id + '\')">' + icon('pencil', 18) + '</button>' +
+          '<button class="icon-btn ib-indigo" title="QR clock-in badge" onclick="openWorkerQrBadge(\'' + escQ(w.employee_id) + '\',\'' + escQ(w.name) + '\')">' + icon('qr', 18) + '</button>' +
           '<button class="icon-btn ib-teal" title="Enrol face" onclick="adminEnrollFace(\'' + w.id + '\',\'' + escQ(w.name) + '\',\'admin\')">' + icon('camera', 18) + '</button>' +
           '<button class="icon-btn ib-violet" title="Register biometric" onclick="adminRegBio(\'' + w.id + '\',\'' + escQ(w.name) + '\')">' + icon('fingerprint', 18) + '</button>' +
           ((w.biometric_enabled || w.face_descriptor) ? '<button class="icon-btn ib-danger" title="Delete biometric data &amp; withdraw consent" onclick="clearWorkerBiometric(\'' + w.id + '\',\'' + escQ(w.name) + '\')">' + icon('ban', 18) + '</button>' : '') +
@@ -3114,7 +3218,7 @@ function checkIOSInstall() {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────
-var APP_VERSION = 'v25';   // bump alongside the sw.js CACHE version on each deploy
+var APP_VERSION = 'v26';   // bump alongside the sw.js CACHE version on each deploy
 document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Start error tracking (no-op until a Sentry DSN is configured)

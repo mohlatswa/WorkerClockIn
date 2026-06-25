@@ -246,6 +246,12 @@
       <p class="msg hidden" id="face-reg-msg"></p>
     </div>
 
+    <!-- My Payslips -->
+    <div class="card" id="payslips-card">
+      <div class="sec-lbl"><span class="ico" data-icon="wallet" data-size="15"></span> My Payslips</div>
+      <div id="my-payslips-list" style="margin-top:8px"></div>
+    </div>
+
     <!-- Leave -->
     <div class="card" id="leave-card">
       <div class="sec-lbl"><span class="ico" data-icon="calendar" data-size="15"></span> Leave</div>
@@ -920,7 +926,9 @@
       </table>
       <p class="msg hidden" id="payroll-msg" style="margin-top:10px"></p>
       <div class="btn-row" style="margin-top:14px">
-        <button class="btn btn-primary" onclick="payrollPDF()"><span class="ico" data-icon="printer" data-size="16"></span> Payroll PDF</button>
+        <button class="btn btn-primary" onclick="publishPayslips()"><span class="ico" data-icon="wallet" data-size="16"></span> Publish payslips to staff</button>
+        <button class="btn btn-outline" onclick="openUploadPayslip()"><span class="ico" data-icon="download" data-size="16"></span> Upload PDF payslip</button>
+        <button class="btn btn-outline" onclick="payrollPDF()"><span class="ico" data-icon="printer" data-size="16"></span> Payroll PDF</button>
         <button class="btn btn-outline" onclick="payrollCSV()"><span class="ico" data-icon="download" data-size="16"></span> Payroll CSV</button>
         <button class="btn btn-outline" onclick="closeModal('modal-payroll')">Close</button>
       </div>
@@ -1109,6 +1117,24 @@
       <div id="qr-badge-print"></div>
       <p class="sub" style="margin:12px 0 0;font-size:.8rem">The worker scans this on the sign-in screen — they still confirm with their PIN or fingerprint, and the workplace geofence still applies.</p>
       <button class="btn btn-primary btn-full" style="margin-top:14px" onclick="printQrBadge()"><span class="ico" data-icon="printer" data-size="17"></span> Print Badge</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Upload Payslip (admin) -->
+<div id="modal-upload-payslip" class="modal-bd hidden" onclick="if(event.target===this)closeModal('modal-upload-payslip')">
+  <div class="modal-box" style="max-width:380px">
+    <div class="modal-hd"><h3><span class="ico" data-icon="wallet" data-size="18"></span> Upload Payslip</h3><button class="modal-close" onclick="closeModal('modal-upload-payslip')">✕</button></div>
+    <div style="padding:18px">
+      <div class="field"><label>Worker</label><select id="ups-worker" class="input"><option value="">Select worker…</option></select></div>
+      <div class="field"><label>Period label</label><input id="ups-period" type="text" class="input" placeholder="e.g. June 2026"></div>
+      <div class="field-row">
+        <div class="field"><label>From</label><input id="ups-start" type="date" class="input"></div>
+        <div class="field"><label>To</label><input id="ups-end" type="date" class="input"></div>
+      </div>
+      <div class="field"><label>Payslip PDF</label><input id="ups-file" type="file" accept="application/pdf" class="input"></div>
+      <p class="msg hidden" id="ups-msg"></p>
+      <button id="ups-btn" class="btn btn-primary btn-full" style="margin-top:4px" onclick="uploadPayslip()">Upload Payslip</button>
     </div>
   </div>
 </div>

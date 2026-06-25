@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>WorkClock — How to Access the System</title>
+<title>WorkClock-In — How to Access the System</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -154,7 +154,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans
     <div class="side">
       <div class="topbar">
         <span class="pill" id="track-pill">WORKCLOCK GUIDE</span>
-        <h1>How to access <span>WorkClock</span></h1>
+        <h1>How to access <span>WorkClock-In</span></h1>
         <div class="who" id="who">Staff clock-in &amp; manager login — step by step</div>
       </div>
       <div class="caption">
@@ -182,7 +182,7 @@ var SB = '<div class="sb"><span>9:41</span><span class="dots">●●● ⚡ 100%
 
 function screenWorkerHome(idVal){
   return SB +
-  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock</div><div class="co">Style &amp; Co Boutique — Main Store</div></div>'+
+  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock-In</div><div class="co">Style &amp; Co Boutique — Main Store</div></div>'+
   '<div class="body">'+
     '<div class="h">Clock In / Out</div><div class="sub">Enter your Employee ID to start</div>'+
     '<div class="field"><span class="label">Employee ID</span><div class="input '+(idVal!==null?'focus':'')+'" id="t-id">'+(idVal||'<span style="color:#9CA3AF">e.g. EMP014</span>')+(idVal!==null?'<span class="cur"></span>':'')+'</div></div>'+
@@ -195,19 +195,19 @@ function screenPin(n){
   var keys=[1,2,3,4,5,6,7,8,9,'',0,'⌫'];
   var kp=keys.map(function(k){return '<div class="key" data-k="'+k+'">'+k+'</div>';}).join('');
   return SB+
-  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock</div><div class="co">Welcome back, Thabo M.</div></div>'+
+  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock-In</div><div class="co">Welcome back, Thabo M.</div></div>'+
   '<div class="body"><div class="h">Enter your PIN</div><div class="sub">4-digit code — kept private &amp; encrypted</div>'+
   '<div class="pin-dots">'+dots+'</div><div class="keypad">'+kp+'</div></div>';
 }
 function screenBio(scan){
   return SB+
-  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock</div><div class="co">Welcome back, Thabo M.</div></div>'+
+  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock-In</div><div class="co">Welcome back, Thabo M.</div></div>'+
   '<div class="body"><div class="h" style="text-align:center">Verify it’s you</div><div class="sub" style="text-align:center">Look at the camera or touch the sensor</div>'+
   '<div class="bio '+(scan?'scan':'')+'"><div class="ring">'+(scan?'😊':'👤')+'</div><div style="font-size:.8rem;color:var(--muted);font-weight:600">'+(scan?'Scanning…':'Tap to scan')+'</div></div></div>';
 }
 function screenClock(tap){
   return SB+
-  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock</div><div class="co">Thabo Mokoena · EMP014</div></div>'+
+  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock-In</div><div class="co">Thabo Mokoena · EMP014</div></div>'+
   '<div class="clock-wrap"><div style="font-size:.8rem;color:var(--muted);font-weight:600">Tuesday, 18 June · 08:02</div>'+
   '<div class="clock-btn '+(tap?'tap':'')+'" id="t-clock"><span class="ic">▶</span><span class="lb">CLOCK IN</span></div>'+
   '<div style="font-size:.78rem;color:var(--muted);text-align:center;max-width:230px">We confirm your location and device automatically — no buddy-clocking.</div></div>';
@@ -220,7 +220,7 @@ function screenWorkerDone(){
 }
 function screenAdminLogin(typed){
   return SB+
-  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock</div><div class="co">Manager / Admin sign-in</div></div>'+
+  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock-In</div><div class="co">Manager / Admin sign-in</div></div>'+
   '<div class="body"><div class="h">Admin Login</div><div class="sub">For owners &amp; managers only</div>'+
   '<div class="field"><span class="label">Username</span><div class="input '+(typed>=1?'focus':'')+'" id="t-user">'+(typed>=1?'styleco_admin':'<span style="color:#9CA3AF">username</span>')+'</div></div>'+
   '<div class="field"><span class="label">Password</span><div class="input '+(typed>=2?'focus':'')+'" id="t-pass">'+(typed>=2?'••••••••':'<span style="color:#9CA3AF">password</span>')+'</div></div>'+
@@ -232,7 +232,7 @@ function adminTabs(active){
 }
 function screenAdminDash(){
   return SB+
-  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock</div><div class="co">Style &amp; Co Boutique</div></div>'+
+  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock-In</div><div class="co">Style &amp; Co Boutique</div></div>'+
   adminTabs('Dashboard')+
   '<div class="body"><div class="stat-row">'+
     '<div class="stat"><div class="n">6</div><div class="l">On the floor now</div></div>'+
@@ -243,7 +243,7 @@ function screenAdminDash(){
 }
 function screenAdminReports(){
   return SB+
-  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock</div><div class="co">Style &amp; Co Boutique</div></div>'+
+  '<div class="apph"><div class="brand"><span class="logo">W</span>WorkClock-In</div><div class="co">Style &amp; Co Boutique</div></div>'+
   adminTabs('Attendance')+
   '<div class="body"><div class="h" style="font-size:.95rem">Attendance &amp; Payroll</div><div class="sub">June 1 – June 18 · 3 stores</div>'+
   '<div class="lrow"><div><div class="nm">Thabo Mokoena</div><div class="mt2">142.0 h · OT 6.0 h · 0 late</div></div><span class="badge in">R4 380</span></div>'+
@@ -255,7 +255,7 @@ function screenAdminReports(){
 // ── Scene timeline ──
 var scenes=[
   // WORKER
-  {track:'FOR STAFF',who:'Part 1 — How your staff clock in',step:'STEP 1',txt:'Your staff open the WorkClock link you share — no app store, no install.',ms:3600,render:function(){return screenWorkerHome(null);}},
+  {track:'FOR STAFF',who:'Part 1 — How your staff clock in',step:'STEP 1',txt:'Your staff open the WorkClock-In link you share — no app store, no install.',ms:3600,render:function(){return screenWorkerHome(null);}},
   {step:'STEP 2',txt:'They type their Employee ID.',ms:3400,render:function(){return screenWorkerHome('EMP014');},cursor:{sel:'#t-id',click:true,delay:600}},
   {step:'STEP 3',txt:'Then a private 4-digit PIN…',ms:3200,render:function(){return screenPin(4);},cursor:{sel:'.keypad',click:true,delay:500}},
   {step:'OR',txt:'…or just their face or fingerprint — which stops buddy-clocking.',ms:3600,render:function(){return screenBio(true);}},
@@ -267,7 +267,7 @@ var scenes=[
   {step:'DASHBOARD',txt:'You instantly see who is on the floor, across every store.',ms:4200,render:screenAdminDash},
   {step:'REPORTS',txt:'Open Attendance for hours, overtime and late arrivals…',ms:3800,render:screenAdminReports},
   {step:'PAYROLL',txt:'…then export a payroll-ready PDF or CSV for your bookkeeper.',ms:4200,render:screenAdminReports,cursor:{sel:'.btn-primary',click:true,delay:900}},
-  {step:'THAT’S IT',txt:'Staff clock in on their phone. You manage everything from yours. WorkClock by Reatlegile Solutions.',ms:5000,render:screenAdminDash}
+  {step:'THAT’S IT',txt:'Staff clock in on their phone. You manage everything from yours. WorkClock-In by Reatlegile Solutions.',ms:5000,render:screenAdminDash}
 ];
 
 var i=0,playing=true,timer=null,total=scenes.reduce(function(s,x){return s+x.ms;},0),elapsed=0;

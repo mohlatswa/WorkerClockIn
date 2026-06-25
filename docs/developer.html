@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Developer Reference — WorkClock</title>
+  <title>Developer Reference — WorkClock-In</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -248,7 +248,7 @@
 <body>
 
 <div class="topbar">
-  <span class="topbar-title">WorkClock &mdash; Developer Reference</span>
+  <span class="topbar-title">WorkClock-In &mdash; Developer Reference</span>
   <a href="index.html">&larr; Docs Home</a>
   <span class="topbar-badge">v1.1</span>
 </div>
@@ -305,8 +305,8 @@
 
     <div class="page-header">
       <div class="tag">Developer Reference</div>
-      <h1>WorkClock — Technical Documentation</h1>
-      <p>Architecture, database schema, authentication flows, security model, and function reference for the WorkClock Staff Attendance PWA.</p>
+      <h1>WorkClock-In — Technical Documentation</h1>
+      <p>Architecture, database schema, authentication flows, security model, and function reference for the WorkClock-In Staff Attendance PWA.</p>
     </div>
 
     <div class="content">
@@ -314,7 +314,7 @@
       <!-- ── Overview ── -->
       <section id="overview">
         <h2>System Overview &amp; Architecture</h2>
-        <p>WorkClock is a <strong>Progressive Web App</strong> that enables staff to clock in and out using GPS-verified location, with three supported authentication methods: PIN, WebAuthn biometrics (fingerprint / Face ID), and server-side facial recognition via face-api.js.</p>
+        <p>WorkClock-In is a <strong>Progressive Web App</strong> that enables staff to clock in and out using GPS-verified location, with three supported authentication methods: PIN, WebAuthn biometrics (fingerprint / Face ID), and server-side facial recognition via face-api.js.</p>
         <p>The application is entirely <strong>front-end</strong>: a single HTML page (<code>index.html</code>) with no build step, no bundler, and no server-side runtime. All data is persisted in a <strong>Supabase (PostgreSQL)</strong> hosted database via the Supabase JavaScript SDK (anon key, client-side).</p>
         <p>Multi-tenancy is achieved through a <strong>companies</strong> table. Each company receives a short URL code; workers open the portal via <code>?c=COMPANYCODE</code>. Admins are scoped to a single company (except for the <code>developer</code> super-role which spans all companies).</p>
 
@@ -709,7 +709,7 @@ SELECT cron.schedule(
 
       <section id="pwa">
         <h2>PWA Details</h2>
-        <p>WorkClock is installable as a Progressive Web App via the browser's "Add to Home Screen" prompt. The manifest declares:</p>
+        <p>WorkClock-In is installable as a Progressive Web App via the browser's "Add to Home Screen" prompt. The manifest declares:</p>
         <ul>
           <li><code>display: "standalone"</code> — no browser chrome when launched from home screen</li>
           <li><code>orientation: "portrait-primary"</code> — locked to portrait</li>
@@ -951,7 +951,7 @@ CREATE POLICY worker_self_access ON workers
     </div><!-- /content -->
 
     <footer>
-      <strong>Developed by Reatlegile Solutions</strong> &copy; 2026 &nbsp;&middot;&nbsp; WorkClock Staff Attendance System &nbsp;&middot;&nbsp; <a href="index.html" style="color:#94A3B8">Docs Home</a>
+      <strong>Developed by Reatlegile Solutions</strong> &copy; 2026 &nbsp;&middot;&nbsp; WorkClock-In Staff Attendance System &nbsp;&middot;&nbsp; <a href="index.html" style="color:#94A3B8">Docs Home</a>
     </footer>
 
   </div><!-- /right column -->

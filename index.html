@@ -352,6 +352,9 @@
     <button class="bnav-item bnav-overflow" data-tab="a-leave" onclick="switchTab(this,'a-leave')">
       <span class="bnav-icon" data-icon="calendar" data-size="21"></span><span class="bnav-lbl">Leave</span>
     </button>
+    <button class="bnav-item bnav-overflow" data-tab="a-payslips" onclick="switchTab(this,'a-payslips')">
+      <span class="bnav-icon" data-icon="wallet" data-size="21"></span><span class="bnav-lbl">Payslips</span>
+    </button>
     <button class="bnav-item bnav-overflow hidden" id="tab-admins-btn" data-tab="a-admins" onclick="switchTab(this,'a-admins')">
       <span class="bnav-icon" data-icon="key" data-size="21"></span><span class="bnav-lbl">Admins</span>
     </button>
@@ -525,6 +528,23 @@
         <button class="btn btn-outline btn-sm" onclick="loadAdminLeave()"><span class="ico" data-icon="refresh" data-size="16"></span> Refresh</button>
       </div>
       <div id="admin-leave-list"><div class="empty">Loading…</div></div>
+    </div>
+
+    <!-- Payslips Tab -->
+    <div id="a-payslips" class="tab-pane">
+      <div class="aps-stats">
+        <div class="aps-stat"><div class="aps-stat-n" id="aps-count">0</div><div class="aps-stat-l">Payslips</div></div>
+        <div class="aps-stat"><div class="aps-stat-n" id="aps-gross">R0.00</div><div class="aps-stat-l">Total gross</div></div>
+      </div>
+      <div class="tab-bar">
+        <span class="sec-lbl"><span class="ico" data-icon="wallet" data-size="15"></span> Published Payslips</span>
+        <div class="btn-row">
+          <button class="btn btn-outline btn-sm" onclick="openUploadPayslip()"><span class="ico" data-icon="download" data-size="16"></span> Upload PDF</button>
+          <button class="btn btn-outline btn-sm" onclick="loadAdminPayslips()"><span class="ico" data-icon="refresh" data-size="16"></span> Refresh</button>
+        </div>
+      </div>
+      <p class="sub" style="font-size:.8rem;margin:-2px 0 12px">Auto payslips are published from <b>Attendance → Payroll</b>. Tap 🗑 to remove one a worker should no longer see.</p>
+      <div id="admin-payslips-list"><div class="empty">Loading…</div></div>
     </div>
 
     <!-- Admins Tab (super_admin only) -->

@@ -143,6 +143,7 @@ var ICONS = {
   history:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
   printer:'<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/>',
   wallet:'<path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v3h-3a2 2 0 0 0 0 4h3a1 1 0 0 1-1 1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5"/><circle cx="16.5" cy="13" r=".6" fill="currentColor"/>',
+  trash:'<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
   qr:'<rect width="6" height="6" x="3" y="3" rx="1"/><rect width="6" height="6" x="15" y="3" rx="1"/><rect width="6" height="6" x="3" y="15" rx="1"/><path d="M15 15h2v2h-2zM19 15h2v2M15 19h2v2h-2M19 19h2v2"/>',
   eye:'<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
   'eye-off':'<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/>'
@@ -1060,10 +1061,67 @@ async function uploadPayslip() {
       p_actor_id: aId(), p_token: aTok(), p_worker_id: wid, p_period_label: period,
       p_start: start, p_end: end, p_pdf_data: b64, p_file_name: file.name, p_gross: null
     }), 15000);
-    if (res.data === 'ok') { showMsg('ups-msg', 'Payslip uploaded — the worker can now download it.', 'ok'); setTimeout(function() { closeModal('modal-upload-payslip'); }, 1200); }
+    if (res.data === 'ok') { showMsg('ups-msg', 'Payslip uploaded — the worker can now download it.', 'ok'); if (document.getElementById('a-payslips') && document.getElementById('a-payslips').classList.contains('active')) loadAdminPayslips(); setTimeout(function() { closeModal('modal-upload-payslip'); }, 1200); }
+    else if (res.data === 'too_large') showMsg('ups-msg', 'That PDF is too large (max ~4 MB).', 'err');
     else showMsg('ups-msg', 'Could not upload (' + res.data + ').', 'err');
   } catch (e) { showMsg('ups-msg', 'Upload failed — please try again.', 'err'); }
   btn.disabled = false;
+}
+// ── Admin Payslips tab (review & remove published payslips) ──
+async function loadAdminPayslips() {
+  var cid = requireAdminCid(); if (!cid) return;
+  var el = document.getElementById('admin-payslips-list');
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    var r = await withTimeout(db.rpc('admin_list_payslips', { p_actor_id: aId(), p_token: aTok() }), 6000);
+    if (r.error || !r.data || r.data.error) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
+    var rows = r.data;
+    var totalGross = rows.reduce(function (s, x) { return s + (+x.gross || 0); }, 0);
+    document.getElementById('aps-count').textContent = rows.length;
+    document.getElementById('aps-gross').textContent = fmtR(totalGross);
+    if (!rows.length) {
+      el.innerHTML = '<div class="card"><div class="empty">No payslips published yet.<br>Use <b>Attendance → Payroll → Publish payslips</b>, or upload a PDF above.</div></div>';
+      return;
+    }
+    // Group by pay period (rows arrive newest-first from the RPC).
+    var groups = [], idx = {};
+    rows.forEach(function (x) {
+      var k = x.period_label || '—';
+      if (!(k in idx)) { idx[k] = groups.length; groups.push({ label: k, items: [] }); }
+      groups[idx[k]].items.push(x);
+    });
+    el.innerHTML = groups.map(renderPayslipGroup).join('');
+  } catch (e) { el.innerHTML = '<div class="empty">Error: ' + esc(e.message) + '</div>'; }
+}
+function renderPayslipGroup(g) {
+  var sub = g.items.reduce(function (s, x) { return s + (+x.gross || 0); }, 0);
+  return '<div class="aps-group">' +
+    '<div class="aps-group-hd"><span>' + esc(g.label) + '</span><span class="aps-group-sub">' + g.items.length + ' · ' + fmtR(sub) + '</span></div>' +
+    g.items.map(renderAdminPayslipRow).join('') +
+    '</div>';
+}
+function renderAdminPayslipRow(p) {
+  var chip = p.source === 'upload'
+    ? '<span class="aps-chip aps-pdf">PDF</span>'
+    : '<span class="aps-chip aps-auto">Auto</span>';
+  return '<div class="aps-row">' +
+    '<div class="av av-sm">' + initials(p.worker_name) + '</div>' +
+    '<div style="flex:1;min-width:0">' +
+      '<div class="aps-name">' + esc(p.worker_name) + ' <span class="sub" style="font-weight:500">· ' + esc(p.employee_id || '') + '</span></div>' +
+      '<div class="sub" style="font-size:.77rem;margin-top:1px">' + chip + ' · ' + fmtDate(p.created_at) + '</div>' +
+    '</div>' +
+    '<div class="aps-amt">' + (p.gross != null ? fmtR(+p.gross) : '—') + '</div>' +
+    '<button class="icon-btn ib-danger" title="Delete payslip" onclick="adminDeletePayslip(\'' + p.id + '\',this)">' + icon('trash', 16) + '</button>' +
+    '</div>';
+}
+async function adminDeletePayslip(id, btn) {
+  if (!confirm('Delete this payslip?\nThe worker will no longer be able to view it. This cannot be undone.')) return;
+  if (btn) btn.disabled = true;
+  try {
+    var r = await withTimeout(db.rpc('admin_delete_payslip', { p_actor_id: aId(), p_token: aTok(), p_payslip_id: id }), 6000);
+    if (r.data === 'ok') { toast('Payslip deleted'); loadAdminPayslips(); }
+    else { toast('Could not delete (' + r.data + ')'); if (btn) btn.disabled = false; }
+  } catch (e) { toast('Connection error'); if (btn) btn.disabled = false; }
 }
 function fileToBase64(file) {
   return new Promise(function(resolve, reject) {
@@ -1800,6 +1858,7 @@ function switchTab(btn, name) {
   if (name === 'a-admins')   loadCoAdmins();
   if (name === 'a-absent')   loadAbsent();
   if (name === 'a-leave')    loadAdminLeave();
+  if (name === 'a-payslips') loadAdminPayslips();
   if (name === 'a-inactive') loadAdminInactive();
   if (name === 'a-audit')    loadAudit();
   if (name === 'a-setup')   loadSetup();
@@ -3006,6 +3065,7 @@ var NAV_TABS = [
   { id: 'a-att',      icon: 'clipboard', label: 'Attendance', saOnly: false },
   { id: 'a-absent',   icon: 'userx',     label: 'Absent',     saOnly: false },
   { id: 'a-leave',    icon: 'calendar',  label: 'Leave',      saOnly: false },
+  { id: 'a-payslips', icon: 'wallet',    label: 'Payslips',   saOnly: false },
   { id: 'a-admins',   icon: 'key',       label: 'Admins',     saOnly: true  },
   { id: 'a-inactive', icon: 'archive',   label: 'Inactive',   saOnly: false },
   { id: 'a-audit',    icon: 'history',   label: 'Activity',   saOnly: false },
@@ -3661,7 +3721,7 @@ function checkIOSInstall() {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────
-var APP_VERSION = 'v31';   // bump alongside the sw.js CACHE version on each deploy
+var APP_VERSION = 'v32';   // bump alongside the sw.js CACHE version on each deploy
 document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Start error tracking (no-op until a Sentry DSN is configured)

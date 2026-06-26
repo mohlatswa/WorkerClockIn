@@ -1036,12 +1036,14 @@ async function publishPayslips() {
     try {
       // promote the rate into the DB, then store the payslip
       await db.rpc('admin_set_worker_rate', { p_actor_id: aId(), p_token: aTok(), p_worker_id: r.w.key, p_rate: r.rate, p_ot_mult: _payroll.mult });
-      var res = await db.rpc('admin_auto_payslip', {
+      var base = {
         p_actor_id: aId(), p_token: aTok(), p_worker_id: r.w.key, p_period_label: label,
         p_start: _payroll.from, p_end: _payroll.to,
-        p_reg: +r.w.reg.toFixed(2), p_ot: +r.w.ot.toFixed(2), p_rate: r.rate, p_ot_mult: _payroll.mult, p_gross: +r.gross.toFixed(2),
-        p_paye: r.paye, p_uif: r.uif, p_nett: r.nett, p_tax_year: TAX_YEAR
-      });
+        p_reg: +r.w.reg.toFixed(2), p_ot: +r.w.ot.toFixed(2), p_rate: r.rate, p_ot_mult: _payroll.mult, p_gross: +r.gross.toFixed(2)
+      };
+      var res = await db.rpc('admin_auto_payslip', Object.assign({}, base, { p_paye: r.paye, p_uif: r.uif, p_nett: r.nett, p_tax_year: TAX_YEAR }));
+      // Fall back to the pre-deductions signature if the new SQL isn't applied yet.
+      if (res.error) res = await db.rpc('admin_auto_payslip', base);
       if (res.data === 'ok') ok++; else fail++;
     } catch (e) { fail++; }
   }

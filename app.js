@@ -1790,6 +1790,13 @@ async function verifyWorkerBiometric() {
 var _verifyStream = null, _verifyRunning = false, _verifyResolve = null;
 // Euclidean distance between two 128-d face descriptors (lower = more similar).
 function _faceDist(a, b) { var s = 0, n = Math.min(a.length, b.length); for (var i = 0; i < n; i++) { var d = a[i] - b[i]; s += d * d; } return Math.sqrt(s); }
+// Stage 3 liveness — eye-aspect-ratio from the 68 landmarks (low = eyes closed).
+function _eyeDist(a, b) { var dx = a.x - b.x, dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); }
+function _ear(eye) { return (_eyeDist(eye[1], eye[5]) + _eyeDist(eye[2], eye[4])) / (2 * (_eyeDist(eye[0], eye[3]) || 1)); }
+function _eyeAspect(landmarks) {
+  try { return (_ear(landmarks.getLeftEye()) + _ear(landmarks.getRightEye())) / 2; }
+  catch (e) { return 0.3; } // no landmarks → treat as open (don't false-pass liveness)
+}
 function verifyFaceMatch() {
   return new Promise(function(resolve) {
     _verifyResolve = resolve;
@@ -1804,21 +1811,25 @@ function verifyFaceMatch() {
       video.srcObject = stream; return video.play();
     }).then(function() {
       var target = new Float32Array(JSON.parse(S.worker.face_descriptor));
-      statusEl.textContent = 'Look at the camera…';
+      statusEl.textContent = 'Look at the camera and blink…';
       _verifyRunning = true;
-      var started = Date.now();
+      var started = Date.now(), matched = false, blinked = false, eyeClosed = false;
       (function loop() {
         if (!_verifyRunning) return;
         var video = document.getElementById('verify-video');
         faceapi.detectSingleFace(video, faceDetectOpts()).withFaceLandmarks(true).withFaceDescriptor().then(function(det) {
           if (!_verifyRunning) return;
           if (det) {
-            var dist = _faceDist(det.descriptor, target);
-            if (dist < 0.5) { statusEl.textContent = '✅ Verified'; vibrate([40, 20, 80]); finishVerify(true); return; }
-            statusEl.textContent = 'Move closer / improve lighting…';
+            if (!matched && _faceDist(det.descriptor, target) < 0.5) matched = true;
+            // liveness: a blink = eyes seen closed (low EAR) then open again
+            var ear = _eyeAspect(det.landmarks);
+            if (ear < 0.21) eyeClosed = true;
+            else if (ear > 0.27 && eyeClosed) blinked = true;
+            if (matched && blinked) { statusEl.textContent = '✅ Verified'; vibrate([40, 20, 80]); finishVerify(true); return; }
+            statusEl.textContent = !matched ? 'Position your face in view…' : '👁️ Now blink to confirm you’re live…';
           } else { statusEl.textContent = 'Position your face in view…'; }
-          if (Date.now() - started > 15000) { statusEl.textContent = '❌ Could not verify — please try again.'; setTimeout(function() { finishVerify(false); }, 900); return; }
-          setTimeout(loop, 150);
+          if (Date.now() - started > 20000) { statusEl.textContent = '❌ Could not verify — please try again.'; setTimeout(function() { finishVerify(false); }, 900); return; }
+          setTimeout(loop, 120);
         }).catch(function() { if (_verifyRunning) setTimeout(loop, 200); });
       })();
     }).catch(function(e) {
@@ -3902,7 +3913,7 @@ function checkIOSInstall() {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────
-var APP_VERSION = 'v35';   // bump alongside the sw.js CACHE version on each deploy
+var APP_VERSION = 'v36';   // bump alongside the sw.js CACHE version on each deploy
 document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Start error tracking (no-op until a Sentry DSN is configured)

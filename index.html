@@ -896,6 +896,18 @@
   </div>
 </div>
 
+<!-- MODAL: Verify Face at clock-in/out (Stage 2 anti-buddy-clocking) -->
+<div id="modal-face-verify" class="modal-bd hidden" onclick="if(event.target===this)cancelVerify()">
+  <div class="modal-box">
+    <div class="modal-hd"><h3>Confirm it's you</h3><button class="modal-close" onclick="cancelVerify()">✕</button></div>
+    <video id="verify-video" playsinline muted style="width:100%;display:block;max-height:260px;object-fit:cover;background:#0F172A"></video>
+    <div style="padding:14px 18px">
+      <p id="verify-status" class="sub" style="text-align:center;margin-bottom:12px">Loading…</p>
+      <button class="btn btn-outline btn-full" onclick="cancelVerify()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Biometric consent (POPIA) -->
 <div id="modal-consent" class="modal-bd hidden">
   <div class="modal-box">

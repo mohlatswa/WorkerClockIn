@@ -1366,13 +1366,18 @@ async function clockAction() {
   var btn = document.getElementById('clk-btn');
   btn.disabled = true;
   var action = S.clockStatus === 'in' ? 'out' : 'in';
+  // Stage 2 anti-buddy-clocking: a fresh face/fingerprint check on EVERY punch.
+  var verified = await verifyWorkerBiometric();
+  if (verified === null) { btn.disabled = false; setClockBtn(true); return; } // attempted & failed/cancelled
+  if (verified === 'none') toast('💡 Tip: enrol Face or Fingerprint so only you can clock in/out.');
+  var authM = (verified === 'biometric' || verified === 'face') ? verified : (S.authMethod || 'pin');
   var item = {
     worker_id:    S.worker.id,
     token:        localStorage.getItem('wc_session_token'),
     action:       action,
     lat:          S.userLoc ? S.userLoc.latitude  : null,
     lng:          S.userLoc ? S.userLoc.longitude : null,
-    auth_method:  S.authMethod || 'pin',
+    auth_method:  authM,
     device_label: deviceLabel(),
     at:           new Date().toISOString()
   };
@@ -1757,6 +1762,80 @@ function closeFaceEnroll() {
   if (_enrollStream) { _enrollStream.getTracks().forEach(function(t) { t.stop(); }); _enrollStream = null; }
   document.getElementById('modal-face-enroll').classList.add('hidden');
 }
+
+// ── Stage 2 anti-buddy-clocking: prove the logged-in worker is present ──
+// Returns 'biometric' | 'face' on success, 'none' if nothing is enrolled,
+// or null if a check ran but failed / was cancelled.
+async function verifyWorkerBiometric() {
+  var w = S.worker || {};
+  // 1) Platform fingerprint / Face ID — strongest, and works offline.
+  if (w.biometric_enabled && w.biometric_credential_id && window.PublicKeyCredential) {
+    try {
+      var cred = await navigator.credentials.get({ publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        allowCredentials: [{ id: unb64(w.biometric_credential_id), type: 'public-key' }],
+        userVerification: 'required', timeout: 60000
+      }});
+      return cred ? 'biometric' : null;
+    } catch (e) {
+      toast(e.name === 'NotAllowedError' ? '🔒 Fingerprint / Face ID cancelled' : 'Biometric error: ' + e.message);
+      return null;
+    }
+  }
+  // 2) Face match (needs the camera; models need internet the first time).
+  if (w.face_descriptor) return (await verifyFaceMatch()) ? 'face' : null;
+  // 3) Nothing enrolled.
+  return 'none';
+}
+var _verifyStream = null, _verifyRunning = false, _verifyResolve = null;
+// Euclidean distance between two 128-d face descriptors (lower = more similar).
+function _faceDist(a, b) { var s = 0, n = Math.min(a.length, b.length); for (var i = 0; i < n; i++) { var d = a[i] - b[i]; s += d * d; } return Math.sqrt(s); }
+function verifyFaceMatch() {
+  return new Promise(function(resolve) {
+    _verifyResolve = resolve;
+    var statusEl = document.getElementById('verify-status');
+    document.getElementById('modal-face-verify').classList.remove('hidden');
+    statusEl.textContent = '⏳ Loading…';
+    withTimeout(loadFaceModels(), 30000).then(function() {
+      return navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } });
+    }).then(function(stream) {
+      _verifyStream = stream;
+      var video = document.getElementById('verify-video');
+      video.srcObject = stream; return video.play();
+    }).then(function() {
+      var target = new Float32Array(JSON.parse(S.worker.face_descriptor));
+      statusEl.textContent = 'Look at the camera…';
+      _verifyRunning = true;
+      var started = Date.now();
+      (function loop() {
+        if (!_verifyRunning) return;
+        var video = document.getElementById('verify-video');
+        faceapi.detectSingleFace(video, faceDetectOpts()).withFaceLandmarks(true).withFaceDescriptor().then(function(det) {
+          if (!_verifyRunning) return;
+          if (det) {
+            var dist = _faceDist(det.descriptor, target);
+            if (dist < 0.5) { statusEl.textContent = '✅ Verified'; vibrate([40, 20, 80]); finishVerify(true); return; }
+            statusEl.textContent = 'Move closer / improve lighting…';
+          } else { statusEl.textContent = 'Position your face in view…'; }
+          if (Date.now() - started > 15000) { statusEl.textContent = '❌ Could not verify — please try again.'; setTimeout(function() { finishVerify(false); }, 900); return; }
+          setTimeout(loop, 150);
+        }).catch(function() { if (_verifyRunning) setTimeout(loop, 200); });
+      })();
+    }).catch(function(e) {
+      statusEl.textContent = e && e.name === 'NotAllowedError' ? '❌ Camera access denied'
+        : '❌ Face check needs internet the first time — connect and retry.';
+      setTimeout(function() { finishVerify(false); }, 1600);
+    });
+  });
+}
+function finishVerify(ok) {
+  _verifyRunning = false;
+  if (_verifyStream) { _verifyStream.getTracks().forEach(function(t) { t.stop(); }); _verifyStream = null; }
+  document.getElementById('modal-face-verify').classList.add('hidden');
+  var r = _verifyResolve; _verifyResolve = null;
+  if (r) setTimeout(function() { r(ok); }, ok ? 450 : 0);
+}
+function cancelVerify() { finishVerify(false); }
 
 // ── Admin session helpers ─────────────────────────────────
 function aId()  { return S.admin && S.admin.id; }
@@ -3823,7 +3902,7 @@ function checkIOSInstall() {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────
-var APP_VERSION = 'v34';   // bump alongside the sw.js CACHE version on each deploy
+var APP_VERSION = 'v35';   // bump alongside the sw.js CACHE version on each deploy
 document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Start error tracking (no-op until a Sentry DSN is configured)

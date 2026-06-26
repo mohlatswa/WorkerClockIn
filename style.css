@@ -372,7 +372,8 @@ body{
 .aps-row{display:flex;align-items:center;gap:11px;padding:11px 4px;border-bottom:1px solid var(--border)}
 .aps-row:last-child{border-bottom:none}
 .aps-name{font-weight:600;font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.aps-amt{font-weight:800;font-size:.92rem;color:#312E81;white-space:nowrap}
+.aps-amt{font-weight:800;font-size:.92rem;color:#312E81;white-space:nowrap;text-align:right}
+.aps-nett{font-size:.66rem;color:var(--muted);font-weight:600;margin-top:1px}
 .aps-chip{display:inline-block;font-size:.64rem;font-weight:800;letter-spacing:.04em;padding:1px 7px;border-radius:999px;vertical-align:middle}
 .aps-pdf{background:#FEF3C7;color:#92400E}
 .aps-auto{background:#E0E7FF;color:#3730A3}

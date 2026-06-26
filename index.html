@@ -940,10 +940,11 @@
       </div>
       <p style="font-size:.8rem;color:var(--muted);margin:2px 0 10px">Enter each worker's hourly rate (in Rand). Rates are saved on this device for next time.</p>
       <table class="pay-tbl">
-        <thead><tr><th>Worker</th><th class="r">Reg h</th><th class="r">OT h</th><th>Rate / h</th><th class="r">Gross</th></tr></thead>
+        <thead><tr><th>Worker</th><th class="r">Reg h</th><th class="r">OT h</th><th>Rate / h</th><th class="r">Gross</th><th class="r">Nett</th></tr></thead>
         <tbody id="payroll-rows"></tbody>
-        <tfoot><tr><td colspan="4">Total gross pay</td><td class="r" id="payroll-total">R0.00</td></tr></tfoot>
+        <tfoot><tr><td colspan="4">Totals</td><td class="r" id="payroll-total">R0.00</td><td class="r" id="payroll-total-nett">R0.00</td></tr></tfoot>
       </table>
+      <p style="font-size:.76rem;color:var(--muted);margin:8px 0 0">Nett = Gross − PAYE − UIF (itemised on each payslip & in the CSV/PDF). PAYE uses SARS <b id="payroll-taxyear">2025/26</b> tables, primary rebate (under 65). Verify against your tax tables.</p>
       <p class="msg hidden" id="payroll-msg" style="margin-top:10px"></p>
       <div class="btn-row" style="margin-top:14px">
         <button class="btn btn-primary" onclick="publishPayslips()"><span class="ico" data-icon="wallet" data-size="16"></span> Publish payslips to staff</button>

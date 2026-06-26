@@ -621,6 +621,8 @@ async function workerRegBio() {
 async function enterWorkerDashboard() {
   var w = S.worker;
   localStorage.setItem('wc_worker_id', w.id);
+  // Cache the worker row so a returning device can restore this dashboard offline.
+  try { localStorage.setItem('wc_worker_cache', JSON.stringify(w)); } catch (e) {}
 
   // Populate header
   document.getElementById('wk-av').textContent    = initials(w.name);
@@ -647,6 +649,13 @@ async function enterWorkerDashboard() {
         }
       } catch (e) {}
     }
+  }
+  // Offline / fetch failed → fall back to the company cached on this device.
+  if (!coName) {
+    try {
+      var cc = JSON.parse(localStorage.getItem('wc_company') || 'null');
+      if (cc && cc.id === w.company_id) { coName = cc.name; S.companyId = cc.id; S.companyName = cc.name; S.companyCode = cc.code; }
+    } catch (e) {}
   }
   document.getElementById('wk-co-name').textContent = coName;
 
@@ -797,16 +806,76 @@ async function setLeaveBalance() {
 }
 
 // ── Worker Payslips ───────────────────────────────────────
+// Offline cache: the payslip LIST lives in localStorage (small, metadata only);
+// the full payslip incl. its PDF bytes lives in IndexedDB, written the first time
+// a worker opens it online so it can be re-opened with no connection afterwards.
+var _PS_DB = 'wc_payslips', _PS_STORE = 'slips';
+function _psIdb() {
+  return new Promise(function (resolve, reject) {
+    var req = indexedDB.open(_PS_DB, 1);
+    req.onupgradeneeded = function () { req.result.createObjectStore(_PS_STORE, { keyPath: 'id' }); };
+    req.onsuccess = function () { resolve(req.result); };
+    req.onerror   = function () { reject(req.error); };
+  });
+}
+function _psPut(rec) {
+  if (!rec || !rec.id) return Promise.resolve(false);
+  return _psIdb().then(function (db) {
+    return new Promise(function (resolve) {
+      try {
+        var tx = db.transaction(_PS_STORE, 'readwrite');
+        tx.objectStore(_PS_STORE).put(rec);
+        tx.oncomplete = function () { db.close(); resolve(true); };
+        tx.onerror    = function () { db.close(); resolve(false); };
+      } catch (e) { try { db.close(); } catch (_) {} resolve(false); }
+    });
+  }).catch(function () { return false; });
+}
+function _psGet(id) {
+  return _psIdb().then(function (db) {
+    return new Promise(function (resolve) {
+      try {
+        var rq = db.transaction(_PS_STORE, 'readonly').objectStore(_PS_STORE).get(id);
+        rq.onsuccess = function () { db.close(); resolve(rq.result || null); };
+        rq.onerror   = function () { db.close(); resolve(null); };
+      } catch (e) { try { db.close(); } catch (_) {} resolve(null); }
+    });
+  }).catch(function () { return null; });
+}
+function _psClearCache() {
+  try {
+    for (var i = localStorage.length - 1; i >= 0; i--) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf('wc_payslips_meta_') === 0) localStorage.removeItem(k);
+    }
+  } catch (e) {}
+  _psIdb().then(function (db) {
+    try { var tx = db.transaction(_PS_STORE, 'readwrite'); tx.objectStore(_PS_STORE).clear(); tx.oncomplete = function () { db.close(); }; }
+    catch (e) { try { db.close(); } catch (_) {} }
+  }).catch(function () {});
+}
 async function loadMyPayslips() {
   if (!S.worker || !document.getElementById('payslips-card')) return;
+  var metaKey = 'wc_payslips_meta_' + S.worker.id;
   try {
     var r = await withTimeout(db.rpc('worker_my_payslips', { p_worker_id: S.worker.id, p_token: wkTok() }), 6000);
     var list = (r && r.data) || [];
-    if (list.error) return;
-    document.getElementById('my-payslips-list').innerHTML = list.length
-      ? list.map(renderPayslipRow).join('')
-      : '<div class="empty" style="padding:12px 0;font-size:.84rem">No payslips yet.</div>';
-  } catch (e) {}
+    if (r.error || list.error) throw new Error('offline');
+    try { localStorage.setItem(metaKey, JSON.stringify(list)); } catch (e) {}
+    _renderPayslipList(list, false);
+  } catch (e) {
+    var cached = [];
+    try { cached = JSON.parse(localStorage.getItem(metaKey) || '[]'); } catch (_) {}
+    _renderPayslipList(cached, true);
+  }
+}
+function _renderPayslipList(list, offline) {
+  var el = document.getElementById('my-payslips-list');
+  if (!el) return;
+  var banner = offline ? '<div class="ps-offline">📶 Offline — showing your saved payslips. Any you opened before are still downloadable.</div>' : '';
+  el.innerHTML = banner + (list.length
+    ? list.map(renderPayslipRow).join('')
+    : '<div class="empty" style="padding:12px 0;font-size:.84rem">' + (offline ? 'No payslips saved on this device yet.' : 'No payslips yet.') + '</div>');
 }
 function renderPayslipRow(p) {
   return '<div class="lv-row">' +
@@ -819,14 +888,23 @@ function renderPayslipRow(p) {
   '</div>';
 }
 async function openMyPayslip(id) {
+  toast('Opening…');
   try {
-    toast('Opening…');
     var r = await withTimeout(db.rpc('worker_get_payslip', { p_worker_id: S.worker.id, p_token: wkTok(), p_payslip_id: id }), 9000);
     var p = r && r.data;
-    if (!p || p.error) { toast('Could not open payslip'); return; }
-    if (p.source === 'upload' && p.pdf_data) downloadBase64(p.pdf_data, p.file_name || ('payslip-' + p.period_label + '.pdf'), 'application/pdf');
-    else renderAutoPayslip(p);
-  } catch (e) { toast('Connection error'); }
+    if (r.error || !p || p.error) throw new Error('offline');
+    _psPut(p);          // keep a copy so it opens with no connection next time
+    _deliverPayslip(p);
+  } catch (e) {
+    // offline / failed → serve the saved copy if this payslip was opened before
+    var cached = await _psGet(id);
+    if (cached) { toast('📶 Offline — opening your saved copy'); _deliverPayslip(cached); }
+    else toast('Not saved for offline — open it once while online');
+  }
+}
+function _deliverPayslip(p) {
+  if (p.source === 'upload' && p.pdf_data) downloadBase64(p.pdf_data, p.file_name || ('payslip-' + p.period_label + '.pdf'), 'application/pdf');
+  else renderAutoPayslip(p);
 }
 function downloadBase64(b64, name, mime) {
   try {
@@ -1242,11 +1320,27 @@ async function logoutWorker() {
     try { await withTimeout(db.rpc('worker_logout', { p_worker_id: S.worker.id, p_token: localStorage.getItem('wc_session_token') }), 3000); } catch(e) {}
   }
   S.worker = null; S.userLoc = null; S.clockStatus = 'out'; S.attendanceId = null;
-  localStorage.removeItem('wc_worker_id');
-  localStorage.removeItem('wc_session_token');
+  _clearWorkerSession();
+  _psClearCache();   // shared-device safety: wipe this worker's cached payslips
   var inp = document.getElementById('inp-empid');
   if (inp) inp.value = '';
   showPg('home');
+}
+// Drop the persisted worker session + cached identity from this device.
+function _clearWorkerSession() {
+  localStorage.removeItem('wc_worker_id');
+  localStorage.removeItem('wc_session_token');
+  localStorage.removeItem('wc_worker_cache');
+}
+// Offline boot: rebuild the worker dashboard from the cached worker row without
+// touching the session token (the server was simply unreachable, not rejecting us).
+function _tryOfflineWorkerRestore(savedId) {
+  if (!navigator.onLine) {
+    var cw = null;
+    try { cw = JSON.parse(localStorage.getItem('wc_worker_cache') || 'null'); } catch (e) {}
+    if (cw && cw.id === savedId) { S.worker = cw; enterWorkerDashboard(); return true; }
+  }
+  return false; // online but errored → leave the session intact and retry next launch
 }
 
 // ── Face Recognition ──────────────────────────────────────
@@ -3517,7 +3611,7 @@ function checkIOSInstall() {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────
-var APP_VERSION = 'v29';   // bump alongside the sw.js CACHE version on each deploy
+var APP_VERSION = 'v30';   // bump alongside the sw.js CACHE version on each deploy
 document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Start error tracking (no-op until a Sentry DSN is configured)
@@ -3604,19 +3698,29 @@ document.addEventListener('DOMContentLoaded', function() {
         db.rpc('restore_worker_session', { p_worker_id: savedId, p_session_token: savedToken }),
         5000
       );
-      var row = sR.data && sR.data[0];
-      if (row) {
-        var savedDevice = localStorage.getItem('wc_device_id');
-        if (row.device_id && savedDevice && row.device_id !== savedDevice) {
-          localStorage.removeItem('wc_worker_id'); localStorage.removeItem('wc_session_token'); return;
+      if (sR && !sR.error && sR.data) {
+        var row = sR.data[0];
+        if (row) {
+          var savedDevice = localStorage.getItem('wc_device_id');
+          if (row.device_id && savedDevice && row.device_id !== savedDevice) {
+            _clearWorkerSession(); return;
+          }
+          // Reshape workplace into nested object for rest of app
+          row.workplace = row.wp_id ? { id: row.wp_id, name: row.wp_name, latitude: row.wp_latitude, longitude: row.wp_longitude, radius_meters: row.wp_radius } : null;
+          S.worker = row;
+          enterWorkerDashboard();
+        } else {
+          // Server gave a valid, empty answer → the session is genuinely no longer valid.
+          _clearWorkerSession();
         }
-        // Reshape workplace into nested object for rest of app
-        row.workplace = row.wp_id ? { id: row.wp_id, name: row.wp_name, latitude: row.wp_latitude, longitude: row.wp_longitude, radius_meters: row.wp_radius } : null;
-        S.worker = row;
-        enterWorkerDashboard();
       } else {
-        localStorage.removeItem('wc_worker_id'); localStorage.removeItem('wc_session_token');
+        // Couldn't verify (offline or transient server error) — keep the session and
+        // restore the dashboard from cache if we can, so saved payslips stay viewable.
+        _tryOfflineWorkerRestore(savedId);
       }
-    } catch (e) { localStorage.removeItem('wc_worker_id'); localStorage.removeItem('wc_session_token'); }
+    } catch (e) {
+      // Network failure (offline / timeout) — never destroy a session we couldn't reach the server to check.
+      _tryOfflineWorkerRestore(savedId);
+    }
   })();
 });

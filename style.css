@@ -358,6 +358,7 @@ body{
 .leave-bal b{font-size:1rem;font-weight:800;margin-right:3px}
 .lv-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--border)}
 .lv-row:first-child{border-top:none}
+.ps-offline{background:#FFF7ED;color:#9A3412;border:1px solid #FED7AA;border-radius:10px;padding:8px 11px;font-size:.78rem;font-weight:600;margin-bottom:8px}
 /* Colour the small header + status glyphs */
 .sec-lbl .ico{color:var(--brand)}
 .row-meta .ico-svg{color:var(--faint)}

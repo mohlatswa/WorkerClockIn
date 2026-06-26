@@ -443,6 +443,7 @@ body{
 .pay-tbl .r{text-align:right}
 .pay-tbl tfoot td{font-weight:800;border-top:2px solid var(--blue);border-bottom:none;padding-top:10px}
 .pay-tbl input.pay-rate{width:96px;padding:6px 8px}
+.pay-tbl select.pay-age{width:96px;padding:4px 6px;margin-top:4px;font-size:.74rem;color:var(--muted)}
 .pay-tbl small{color:var(--muted)}
 
 /* ─── PRINT / PDF report ────────────────────────────────────── */

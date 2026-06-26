@@ -82,6 +82,8 @@ BEGIN
   IF a.id IS NULL THEN RETURN 'unauthorized'; END IF;
   IF a.company_id IS NULL THEN RETURN 'bad_company'; END IF;
   IF p_pdf_data IS NULL OR length(p_pdf_data) < 10 THEN RETURN 'bad_file'; END IF;
+  -- Cap stored size (~5.6MB base64 ≈ 4MB binary) so a direct RPC call can't bloat the table.
+  IF length(p_pdf_data) > 5800000 THEN RETURN 'too_large'; END IF;
   IF p_period_label IS NULL OR btrim(p_period_label) = '' THEN RETURN 'bad_period'; END IF;
   SELECT company_id INTO v_company FROM workers WHERE id = p_worker_id;
   IF v_company IS NULL OR v_company <> a.company_id THEN RETURN 'bad_worker'; END IF;

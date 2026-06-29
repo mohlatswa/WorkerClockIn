@@ -1399,6 +1399,11 @@ async function clockAction() {
     }
     if (action === 'in') { S.attendanceId = res.attendance_id; S.clockStatus = 'in'; }
     else                 { S.clockStatus = 'out'; }
+    // Stage 4: attach the clock-in selfie captured during face verification (best-effort).
+    if (action === 'in' && verified === 'face' && _lastSelfie && res.attendance_id) {
+      attachSelfie(res.attendance_id, _lastSelfie);
+    }
+    _lastSelfie = null;
     vibrate([50, 30, 100]);
     showSuccess(action);
     await loadTodayRecord();
@@ -1408,6 +1413,17 @@ async function clockAction() {
     _queueOfflineClock(item, action);
   }
   btn.disabled = false; setClockBtn(true);
+}
+// Upload the clock-in selfie to the private bucket, then record its path on the
+// attendance row via a session-verified RPC. Best-effort — clocking already succeeded.
+async function attachSelfie(attendanceId, dataUrl) {
+  try {
+    var path = S.worker.company_id + '/' + S.worker.id + '/' + attendanceId + '.jpg';
+    var blob = await (await fetch(dataUrl)).blob();
+    var up = await db.storage.from('clock-selfies').upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+    if (up.error) return;
+    await db.rpc('worker_set_selfie', { p_worker_id: S.worker.id, p_token: wkTok(), p_attendance_id: attendanceId, p_path: path });
+  } catch (e) { /* evidence is best-effort; never disrupt clocking */ }
 }
 function _queueOfflineClock(item, action) {
   var q = _clockQueue(); q.push(item); _setClockQueue(q);
@@ -1787,7 +1803,18 @@ async function verifyWorkerBiometric() {
   // 3) Nothing enrolled.
   return 'none';
 }
-var _verifyStream = null, _verifyRunning = false, _verifyResolve = null;
+var _verifyStream = null, _verifyRunning = false, _verifyResolve = null, _lastSelfie = null;
+// Grab a small JPEG of the current video frame (Stage 4 clock-in selfie evidence).
+function _grabSelfie(video) {
+  try {
+    var vw = video.videoWidth || 320, vh = video.videoHeight || 240;
+    var scale = Math.min(1, 480 / vw);
+    var c = document.createElement('canvas');
+    c.width = Math.round(vw * scale); c.height = Math.round(vh * scale);
+    c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.7);
+  } catch (e) { return null; }
+}
 // Euclidean distance between two 128-d face descriptors (lower = more similar).
 function _faceDist(a, b) { var s = 0, n = Math.min(a.length, b.length); for (var i = 0; i < n; i++) { var d = a[i] - b[i]; s += d * d; } return Math.sqrt(s); }
 // Stage 3 liveness — eye-aspect-ratio from the 68 landmarks (low = eyes closed).
@@ -1812,6 +1839,7 @@ function verifyFaceMatch() {
     }).then(function() {
       var target = new Float32Array(JSON.parse(S.worker.face_descriptor));
       statusEl.textContent = 'Look at the camera and blink…';
+      _lastSelfie = null;
       _verifyRunning = true;
       var started = Date.now(), matched = false, blinked = false, eyeClosed = false;
       (function loop() {
@@ -1825,7 +1853,7 @@ function verifyFaceMatch() {
             var ear = _eyeAspect(det.landmarks);
             if (ear < 0.21) eyeClosed = true;
             else if (ear > 0.27 && eyeClosed) blinked = true;
-            if (matched && blinked) { statusEl.textContent = '✅ Verified'; vibrate([40, 20, 80]); finishVerify(true); return; }
+            if (matched && blinked) { _lastSelfie = _grabSelfie(video); statusEl.textContent = '✅ Verified'; vibrate([40, 20, 80]); finishVerify(true); return; }
             statusEl.textContent = !matched ? 'Position your face in view…' : '👁️ Now blink to confirm you’re live…';
           } else { statusEl.textContent = 'Position your face in view…'; }
           if (Date.now() - started > 20000) { statusEl.textContent = '❌ Could not verify — please try again.'; setTimeout(function() { finishVerify(false); }, 900); return; }
@@ -2505,10 +2533,22 @@ async function loadAttendance() {
           (sc.ot >= 0.05 ? '<span class="chip chip-ot">OT ' + fmtHrs(sc.ot) + '</span>' : '') +
           '<span class="chip chip-mth">'   + (rec.auth_method || '') + '</span>' +
           (rec.device_label ? '<span class="chip chip-mth" title="Sign-in device">📱 ' + esc(rec.device_label) + '</span>' : '') +
+          (rec.selfie_path ? '<button class="chip chip-mth" style="cursor:pointer;border:none" title="View clock-in selfie" onclick="viewSelfie(\'' + rec.id + '\')">📷 Selfie</button>' : '') +
           (!rec.clock_out_time ? '<button class="btn btn-sm btn-outline" style="margin-left:6px;color:var(--red);border-color:var(--red);padding:2px 8px;font-size:.72rem" onclick="forceClockOut(\'' + rec.id + '\',\'' + escQ(rec.w ? rec.w.name : 'Worker') + '\')">' + (missed ? 'Set clock-out' : 'Force Out') + '</button>' : '') +
         '</div></div>';
     }).join('') + '</div>';
   } catch (e) { el.innerHTML = '<div class="empty">Error: ' + e.message + '</div>'; }
+}
+// Admin views a clock-in selfie via a service-role Edge Function (returns a
+// short-lived signed URL after checking the admin owns that attendance's company).
+async function viewSelfie(attId) {
+  toast('Opening selfie…');
+  try {
+    var r = await db.functions.invoke('get-selfie-url', { body: { actor_id: aId(), token: aTok(), attendance_id: attId } });
+    var url = r && r.data && r.data.url;
+    if (url) window.open(url, '_blank');
+    else toast('Could not open selfie' + (r && r.data && r.data.error ? ' (' + r.data.error + ')' : ''));
+  } catch (e) { toast('Selfie viewer not set up yet — deploy the get-selfie-url function.'); }
 }
 async function downloadCSV() {
   var from = document.getElementById('att-from').value;
@@ -2770,10 +2810,7 @@ async function loadCoAdmins() {
   el.innerHTML = '<div class="empty">Loading…</div>';
   var cid = requireAdminCid(); if (!cid) return;
   try {
-    var r = await withTimeout(
-      db.from('admin_users').select(ADMIN_COLS).eq('company_id', cid).neq('role', 'developer').order('full_name'),
-      5000
-    );
+    var r = await withTimeout(db.rpc('admin_list_admins', { p_actor_id: aId(), p_token: aTok() }), 5000);
     if (r.error || !r.data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
     if (!r.data.length) { el.innerHTML = '<div class="empty">No admins yet — create one above</div>'; return; }
     el.innerHTML = '<div class="card" style="padding:0 18px">' + r.data.map(function(a) {
@@ -2834,10 +2871,10 @@ async function loadAdminInactive() {
     var queries = [
       withTimeout(db.from('workers').select(WORKER_COLS).eq('company_id', cid).eq('is_active', false).order('name'), 5000)
     ];
-    if (isSA) queries.push(withTimeout(db.from('admin_users').select(ADMIN_COLS).eq('company_id', cid).neq('role', 'developer').eq('is_active', false).order('full_name'), 5000));
+    if (isSA) queries.push(withTimeout(db.rpc('admin_list_admins', { p_actor_id: aId(), p_token: aTok() }), 5000));
     var results = await Promise.all(queries);
     var wks  = results[0].data || [];
-    var accs = isSA ? (results[1].data || []) : [];
+    var accs = isSA ? (results[1].data || []).filter(function(a) { return !a.is_active; }) : [];
 
     if (!wks.length && !accs.length) {
       el.innerHTML =
@@ -3630,10 +3667,9 @@ async function loadDevAccounts() {
     } catch (e) {}
   }
   try {
-    var q   = db.from('admin_users').select(ADMIN_COLS + ', co:companies(name,code)').neq('role', 'developer').order('full_name');
     var fco = filterSel.value;
-    if (fco) q = q.eq('company_id', fco);
-    var r = await withTimeout(q, 5000);
+    var r = await withTimeout(db.rpc('dev_list_admins', { p_actor_id: aId(), p_token: aTok() }), 5000);
+    if (!r.error && r.data && fco) r.data = r.data.filter(function(a) { return a.company_id === fco; });
     if (r.error || !r.data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
     if (!r.data.length) { el.innerHTML = '<div class="empty">No accounts yet</div>'; return; }
 
@@ -3770,12 +3806,12 @@ async function loadDevInactive() {
   try {
     var [cosR, accR, wkR] = await Promise.all([
       withTimeout(db.from('companies').select('*').eq('is_active', false).order('name'), 5000),
-      withTimeout(db.from('admin_users').select(ADMIN_COLS + ', co:companies(name,code)').neq('role', 'developer').eq('is_active', false).order('full_name'), 5000),
+      withTimeout(db.rpc('dev_list_admins', { p_actor_id: aId(), p_token: aTok() }), 5000),
       withTimeout(db.from('workers').select(WORKER_COLS + ', co:companies(name)').eq('is_active', false).order('name'), 5000)
     ]);
 
     var cos  = cosR.data  || [];
-    var accs = accR.data  || [];
+    var accs = (accR.data || []).filter(function(a) { return !a.is_active; });
     var wks  = wkR.data   || [];
 
     if (!cos.length && !accs.length && !wks.length) {
@@ -3913,7 +3949,7 @@ function checkIOSInstall() {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────
-var APP_VERSION = 'v36';   // bump alongside the sw.js CACHE version on each deploy
+var APP_VERSION = 'v38';   // bump alongside the sw.js CACHE version on each deploy
 document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Start error tracking (no-op until a Sentry DSN is configured)

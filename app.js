@@ -13,7 +13,7 @@ setInterval(async function(){
   if(!navigator.onLine) return;
   try {
     await Promise.race([
-      db.from('companies').select('id').limit(1),
+      db.rpc('public_ping'),
       new Promise(function(_,r){ setTimeout(function(){ r(new Error('timeout')); },6000); })
     ]);
     setConnDot(true);
@@ -66,6 +66,20 @@ function showPg(id) {
 // ── Utilities ─────────────────────────────────────────────
 function withTimeout(promise, ms) {
   return Promise.race([promise, new Promise(function(_, r) { setTimeout(function() { r(new Error('timeout')); }, ms); })]);
+}
+// ── C2 read helper ─────────────────────────────────────────
+// Prefer an authorized SECURITY DEFINER RPC for every read that used to hit a
+// table directly with the anon key. RPCs return jsonb in the SAME shape the old
+// .select() produced. Returns undefined on any RPC failure so the caller can run
+// its existing direct-select as a FALLBACK. The fallback stays in place through
+// Stage 0 (tables still anon-readable); it is only removed once Stage 1 REVOKEs
+// are applied and verified live. See c2_read_lockdown.sql.
+async function rpcRead(fn, args, ms) {
+  try {
+    var r = await withTimeout(db.rpc(fn, args), ms || 6000);
+    if (!r.error && r.data !== null && r.data !== undefined) return r.data;
+  } catch (e) {}
+  return undefined;
 }
 // Max acceptable GPS error (metres) for a clock-in. A fix worse than this is
 // treated as untrustworthy (weak signal or faked) and clock-in is held.
@@ -242,7 +256,8 @@ async function loadShift(companyId) {
   if (!companyId) return;
   if (S.shift && S.shift._cid === companyId) return; // cached
   try {
-    var r = await withTimeout(db.from('companies').select('shift_start,shift_end,shift_grace_min,shift_ot_mode,work_days').eq('id', companyId).single(), 4000);
+    var _ci = await rpcRead('company_public_info', { p_company_id: companyId }, 4000);
+    var r = _ci !== undefined ? { data: _ci } : await withTimeout(db.from('companies').select('shift_start,shift_end,shift_grace_min,shift_ot_mode,work_days').eq('id', companyId).single(), 4000);
     if (r.data) {
       S.shift = {
         _cid: companyId,
@@ -292,7 +307,8 @@ async function initCompany() {
   var code   = params.get('c') || params.get('company');
   if (code) {
     try {
-      var r = await withTimeout(
+      var _cc = await rpcRead('public_company_by_code', { p_code: code.toUpperCase() }, 4000);
+      var r = _cc !== undefined ? { data: _cc } : await withTimeout(
         db.from('companies').select('*').eq('code', code.toUpperCase()).eq('is_active', true).maybeSingle(),
         4000
       );
@@ -478,6 +494,13 @@ async function findWorker() {
   showErr('err-empid', '');
   if (!id) { showErr('err-empid', 'Please enter your Employee ID.'); return; }
   try {
+    var _scope = (S.companyId && S.fromUrl) ? S.companyId : null;
+    var _wl = await rpcRead('public_worker_for_login', { p_company_id: _scope, p_employee_id: id }, 5000);
+    if (_wl !== undefined) {
+      if (_wl.length > 1) { showErr('err-empid', 'Multiple accounts found — open your employer\'s link.'); return; }
+      if (!_wl.length)    { showErr('err-empid', 'Employee ID not found. Check with your manager.'); return; }
+      S.worker = _wl[0]; goToAuth(_wl[0]); return;
+    }
     var q = db.from('workers').select(WORKER_COLS + ', workplace:workplaces(*)').eq('employee_id', id).eq('is_active', true);
     if (S.companyId && S.fromUrl) q = q.eq('company_id', S.companyId);
     var r = await withTimeout(q.maybeSingle(), 5000);
@@ -576,7 +599,8 @@ async function homeBiometric() {
     if (!cred) return;
     var workerId = new TextDecoder().decode(cred.response.userHandle);
     if (!workerId) { toast('Biometric not linked to an account. Use Employee ID.'); return; }
-    var r = await withTimeout(
+    var _wb = await rpcRead('public_worker_by_id_for_login', { p_worker_id: workerId }, 5000);
+    var r = _wb !== undefined ? { data: _wb } : await withTimeout(
       db.from('workers').select(WORKER_COLS + ', workplace:workplaces(*)').eq('id', workerId).eq('is_active', true).maybeSingle(),
       5000
     );
@@ -642,7 +666,8 @@ async function enterWorkerDashboard() {
       coName = S.companyName;
     } else {
       try {
-        var coR = await withTimeout(
+        var _ci2 = await rpcRead('company_public_info', { p_company_id: w.company_id }, 3000);
+        var coR = _ci2 !== undefined ? { data: _ci2 } : await withTimeout(
           db.from('companies').select('id,name,code').eq('id', w.company_id).maybeSingle(), 3000
         );
         if (coR.data) {
@@ -758,7 +783,8 @@ async function loadAdminLeave() {
   var cid = requireAdminCid(); if (!cid) return;
   var el = document.getElementById('admin-leave-list'); el.innerHTML = '<div class="empty">Loading…</div>';
   try {
-    var wr = await withTimeout(db.from('workers').select('id,name,employee_id').eq('company_id', cid).eq('is_active', true).order('name'), 5000);
+    var _lw = await rpcRead('admin_list_workers', { p_actor_id: aId(), p_token: aTok(), p_active: true }, 5000);
+    var wr = _lw !== undefined ? { data: _lw } : await withTimeout(db.from('workers').select('id,name,employee_id').eq('company_id', cid).eq('is_active', true).order('name'), 5000);
     var sel = document.getElementById('lvb-worker');
     if (sel && wr.data) sel.innerHTML = '<option value="">Select worker…</option>' +
       wr.data.map(function(w) { return '<option value="' + w.id + '">' + esc(w.name) + ' (' + esc(w.employee_id) + ')</option>'; }).join('');
@@ -1054,7 +1080,8 @@ async function openUploadPayslip() {
   var sel = document.getElementById('ups-worker');
   sel.innerHTML = '<option value="">Loading…</option>';
   try {
-    var wr = await withTimeout(db.from('workers').select('id,name,employee_id').eq('company_id', cid).eq('is_active', true).order('name'), 5000);
+    var _lw = await rpcRead('admin_list_workers', { p_actor_id: aId(), p_token: aTok(), p_active: true }, 5000);
+    var wr = _lw !== undefined ? { data: _lw } : await withTimeout(db.from('workers').select('id,name,employee_id').eq('company_id', cid).eq('is_active', true).order('name'), 5000);
     sel.innerHTML = '<option value="">Select worker…</option>' +
       (wr.data || []).map(function(w) { return '<option value="' + w.id + '">' + esc(w.name) + ' (' + esc(w.employee_id) + ')</option>'; }).join('');
   } catch (e) { sel.innerHTML = '<option value="">Failed to load</option>'; }
@@ -1159,12 +1186,19 @@ function fileToBase64(file) {
 async function loadTodayRecord() {
   var today = new Date(); today.setHours(0, 0, 0, 0);
   try {
-    var r = await withTimeout(
-      db.from('attendance').select('*').eq('worker_id', S.worker.id)
-        .gte('clock_in_time', today.toISOString())
-        .order('clock_in_time', { ascending: false }).limit(1),
-      5000
-    );
+    var _ta = await rpcRead('worker_my_attendance', { p_worker_id: S.worker.id, p_token: wkTok(), p_limit: 200 }, 5000);
+    var r;
+    if (_ta !== undefined) {
+      var _todayRecs = (_ta || []).filter(function(x) { return x.clock_in_time && new Date(x.clock_in_time) >= today; });
+      r = { data: _todayRecs.slice(0, 1) };
+    } else {
+      r = await withTimeout(
+        db.from('attendance').select('*').eq('worker_id', S.worker.id)
+          .gte('clock_in_time', today.toISOString())
+          .order('clock_in_time', { ascending: false }).limit(1),
+        5000
+      );
+    }
     var rec    = r.data && r.data[0];
     var card   = document.getElementById('today-card');
     var badge  = document.getElementById('wk-badge');
@@ -1203,13 +1237,19 @@ async function loadAttendanceHistory() {
   cutoff.setHours(0, 0, 0, 0);
 
   try {
-    var r = await withTimeout(
-      db.from('attendance').select('*').eq('worker_id', S.worker.id)
-        .gte('clock_in_time', cutoff.toISOString())
-        .order('clock_in_time', { ascending: false })
-        .limit(30),
-      6000
-    );
+    var _ha = await rpcRead('worker_my_attendance', { p_worker_id: S.worker.id, p_token: wkTok(), p_limit: 200 }, 6000);
+    var r;
+    if (_ha !== undefined) {
+      r = { data: (_ha || []).filter(function(x) { return x.clock_in_time && new Date(x.clock_in_time) >= cutoff; }).slice(0, 30) };
+    } else {
+      r = await withTimeout(
+        db.from('attendance').select('*').eq('worker_id', S.worker.id)
+          .gte('clock_in_time', cutoff.toISOString())
+          .order('clock_in_time', { ascending: false })
+          .limit(30),
+        6000
+      );
+    }
     var recs = r.data || [];
     if (!recs.length) {
       histCard.style.display = 'none';
@@ -1537,7 +1577,8 @@ async function openFaceRecog() {
   catch (e) { statusEl.textContent = '❌ ' + e.message; return; }
   statusEl.textContent = 'Loading enrolled faces…';
   try {
-    var r = await withTimeout(
+    var _fc = await rpcRead('face_login_candidates', { p_company_id: S.companyId }, 5000);
+    var r = _fc !== undefined ? { data: _fc } : await withTimeout(
       db.from('workers').select('id,name,employee_id,face_descriptor')
         .eq('company_id', S.companyId).eq('is_active', true).not('face_descriptor', 'is', null),
       5000
@@ -1583,7 +1624,8 @@ async function faceFrame() {
     vibrate([50, 30, 100]);
     if (_faceStream) { _faceStream.getTracks().forEach(function(t) { t.stop(); }); _faceStream = null; }
     try {
-      var r = await withTimeout(
+      var _fw = await rpcRead('public_worker_by_id_for_login', { p_worker_id: match.label }, 5000);
+      var r = _fw !== undefined ? { data: _fw } : await withTimeout(
         db.from('workers').select(WORKER_COLS + ', workplace:workplaces(*)').eq('id', match.label).eq('is_active', true).maybeSingle(),
         5000
       );
@@ -2020,7 +2062,8 @@ async function loadDashboard() {
   // ── Subscription banner ────────────────────────────────
   (async function() {
     try {
-      var subR = await withTimeout(db.from('companies').select('subscription_expires_at').eq('id', cid).single(), 5000);
+      var _gsc = await rpcRead('admin_get_company', { p_actor_id: aId(), p_token: aTok() }, 5000);
+      var subR = _gsc !== undefined ? { data: _gsc } : await withTimeout(db.from('companies').select('subscription_expires_at').eq('id', cid).single(), 5000);
       var banner = document.getElementById('sub-banner');
       if (!banner) return;
       var expAt = subR.data && subR.data.subscription_expires_at ? new Date(subR.data.subscription_expires_at) : null;
@@ -2053,13 +2096,19 @@ async function loadDashboard() {
   var today = new Date(); today.setHours(0, 0, 0, 0);
   var tmrw  = new Date(today); tmrw.setDate(tmrw.getDate() + 1);
   try {
-    var totR = await withTimeout(db.from('workers').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('company_id', cid), 5000);
-    // Only active workers count toward present/absent (matches the `total` denominator).
-    var wkrR = await withTimeout(db.from('workers').select('id').eq('company_id', cid).eq('is_active', true), 5000);
+    var _dw = await rpcRead('admin_list_workers', { p_actor_id: aId(), p_token: aTok(), p_active: true }, 5000);
+    var totR, wkrR;
+    if (_dw !== undefined) { totR = { count: _dw.length }; wkrR = { data: _dw }; }
+    else {
+      totR = await withTimeout(db.from('workers').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('company_id', cid), 5000);
+      // Only active workers count toward present/absent (matches the `total` denominator).
+      wkrR = await withTimeout(db.from('workers').select('id').eq('company_id', cid).eq('is_active', true), 5000);
+    }
     var ids  = (wkrR.data || []).map(function(w) { return w.id; });
     var recs = [];
     if (ids.length) {
-      var attR = await withTimeout(
+      var _da = await rpcRead('admin_list_attendance', { p_actor_id: aId(), p_token: aTok(), p_from: today.toISOString(), p_to: tmrw.toISOString() }, 5000);
+      var attR = _da !== undefined ? { data: _da } : await withTimeout(
         db.from('attendance').select('*, w:workers(name,employee_id)').in('worker_id', ids)
           .gte('clock_in_time', today.toISOString()).lt('clock_in_time', tmrw.toISOString())
           .order('clock_in_time', { ascending: false }),
@@ -2164,9 +2213,11 @@ async function loadAudit() {
   var cid = requireAdminCid(); if (!cid) return;
   el.innerHTML = '<div class="empty">Loading…</div>';
   try {
-    var wR = await withTimeout(db.from('workers').select('id,name,employee_id').eq('company_id', cid), 5000);
+    var _aw = await rpcRead('admin_list_workers', { p_actor_id: aId(), p_token: aTok(), p_active: null }, 5000);
+    var wR = _aw !== undefined ? { data: _aw } : await withTimeout(db.from('workers').select('id,name,employee_id').eq('company_id', cid), 5000);
     var wmap = {}; (wR.data || []).forEach(function(w) { wmap[w.id] = { name: w.name, emp: w.employee_id }; });
-    var r = await withTimeout(
+    var _al = await rpcRead('admin_list_audit', { p_actor_id: aId(), p_token: aTok(), p_limit: 150 }, 8000);
+    var r = _al !== undefined ? { data: _al } : await withTimeout(
       db.from('audit_log').select('*').eq('company_id', cid).order('changed_at', { ascending: false }).limit(150),
       8000
     );
@@ -2186,14 +2237,16 @@ async function loadAbsent() {
   var today = new Date(); today.setHours(0, 0, 0, 0);
   var tmrw  = new Date(today); tmrw.setDate(tmrw.getDate() + 1);
   try {
-    var wR = await withTimeout(
+    var _abw = await rpcRead('admin_list_workers', { p_actor_id: aId(), p_token: aTok(), p_active: true }, 5000);
+    var wR = _abw !== undefined ? { data: _abw } : await withTimeout(
       db.from('workers').select('id,name,employee_id,job_title').eq('company_id', cid).eq('is_active', true).order('name'),
       5000
     );
     var all = wR.data || [];
     if (!all.length) { el.innerHTML = '<div class="empty">No active workers</div>'; return; }
     var ids = all.map(function(w) { return w.id; });
-    var aR  = await withTimeout(
+    var _aba = await rpcRead('admin_list_attendance', { p_actor_id: aId(), p_token: aTok(), p_from: today.toISOString(), p_to: tmrw.toISOString() }, 5000);
+    var aR  = _aba !== undefined ? { data: _aba } : await withTimeout(
       db.from('attendance').select('worker_id').in('worker_id', ids)
         .gte('clock_in_time', today.toISOString()).lt('clock_in_time', tmrw.toISOString()),
       5000
@@ -2295,8 +2348,10 @@ async function loadWorkers() {
   var cid = requireAdminCid(); if (!cid) return;
   try {
     // ── Show/hide limit banner ─────────────────────────────
-    var coB  = await withTimeout(db.from('companies').select('worker_limit').eq('id', cid).single(), 5000);
-    var cntB = await withTimeout(
+    var _gwl = await rpcRead('admin_get_company', { p_actor_id: aId(), p_token: aTok() }, 5000);
+    var coB  = _gwl !== undefined ? { data: _gwl } : await withTimeout(db.from('companies').select('worker_limit').eq('id', cid).single(), 5000);
+    var _lw2 = await rpcRead('admin_list_workers', { p_actor_id: aId(), p_token: aTok(), p_active: true }, 5000);
+    var cntB = _lw2 !== undefined ? { count: _lw2.length } : await withTimeout(
       db.from('workers').select('*', { count: 'exact', head: true }).eq('company_id', cid).eq('is_active', true),
       5000
     );
@@ -2306,7 +2361,7 @@ async function loadWorkers() {
       banner.classList.toggle('hidden', !atLimit);
     }
     // ──────────────────────────────────────────────────────
-    var r = await withTimeout(db.from('workers').select(WORKER_COLS).eq('company_id', cid).eq('is_active', true).order('name'), 5000);
+    var r = _lw2 !== undefined ? { data: _lw2 } : await withTimeout(db.from('workers').select(WORKER_COLS).eq('company_id', cid).eq('is_active', true).order('name'), 5000);
     if (r.error || !r.data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
     r.data.forEach(function(w) { _wCache[w.id] = Object.assign({}, w, { _ctx: 'admin' }); });
     if (!r.data.length) {
@@ -2465,7 +2520,8 @@ async function loadWorkerOptions() {
   var sel = document.getElementById('att-worker');
   var cid = requireAdminCid(); if (!cid) return;
   try {
-    var r = await withTimeout(
+    var _ow = await rpcRead('admin_list_workers', { p_actor_id: aId(), p_token: aTok(), p_active: null }, 5000);
+    var r = _ow !== undefined ? { data: _ow } : await withTimeout(
       db.from('workers').select('id,name,employee_id,job_title').eq('company_id', cid).order('name'),
       5000
     );
@@ -2487,14 +2543,24 @@ async function loadAttendance() {
   var start = new Date(from); start.setHours(0, 0, 0, 0);
   var end   = new Date(to);   end.setHours(23, 59, 59, 999);
   try {
-    var cWks = await withTimeout(db.from('workers').select('id').eq('company_id', cid), 5000);
+    var _aw2 = await rpcRead('admin_list_workers', { p_actor_id: aId(), p_token: aTok(), p_active: null }, 5000);
+    var cWks = _aw2 !== undefined ? { data: _aw2 } : await withTimeout(db.from('workers').select('id').eq('company_id', cid), 5000);
     var allowed = wkr ? [wkr] : (cWks.data || []).map(function(w) { return w.id; });
     if (!allowed.length) { el.innerHTML = '<div class="empty">No workers found</div>'; return; }
-    var q = db.from('attendance').select('*, w:workers(name,employee_id,job_title)')
-      .in('worker_id', allowed).gte('clock_in_time', start.toISOString()).lte('clock_in_time', end.toISOString())
-      .order('clock_in_time', { ascending: false });
-    if (mth) q = q.eq('auth_method', mth);
-    var r = await withTimeout(q, 10000);
+    var _at = await rpcRead('admin_list_attendance', { p_actor_id: aId(), p_token: aTok(), p_from: start.toISOString(), p_to: new Date(end.getTime() + 1).toISOString() }, 10000);
+    var r;
+    if (_at !== undefined) {
+      var _rows = _at;
+      if (wkr) _rows = _rows.filter(function(x) { return x.worker_id === wkr; });
+      if (mth) _rows = _rows.filter(function(x) { return x.auth_method === mth; });
+      r = { data: _rows };
+    } else {
+      var q = db.from('attendance').select('*, w:workers(name,employee_id,job_title)')
+        .in('worker_id', allowed).gte('clock_in_time', start.toISOString()).lte('clock_in_time', end.toISOString())
+        .order('clock_in_time', { ascending: false });
+      if (mth) q = q.eq('auth_method', mth);
+      r = await withTimeout(q, 10000);
+    }
     if (r.error) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
     if (!r.data || !r.data.length) { _attData = null; el.innerHTML = '<div class="empty">No records match the filters</div>'; return; }
     _attData = { rows: r.data, from: from, to: to };
@@ -2559,14 +2625,24 @@ async function downloadCSV() {
   var start = new Date(from); start.setHours(0, 0, 0, 0);
   var end   = new Date(to);   end.setHours(23, 59, 59, 999);
   try {
-    var cWks = await withTimeout(db.from('workers').select('id').eq('company_id', cid), 5000);
     var wkr     = document.getElementById('att-worker').value;
     var mth     = document.getElementById('att-method').value;
+    var _cw = await rpcRead('admin_list_workers', { p_actor_id: aId(), p_token: aTok(), p_active: null }, 5000);
+    var cWks = _cw !== undefined ? { data: _cw } : await withTimeout(db.from('workers').select('id').eq('company_id', cid), 5000);
     var allowed = wkr ? [wkr] : (cWks.data || []).map(function(w) { return w.id; });
-    var q = db.from('attendance').select('*, w:workers(name,employee_id,job_title)')
-      .in('worker_id', allowed).gte('clock_in_time', start.toISOString()).lte('clock_in_time', end.toISOString()).order('clock_in_time');
-    if (mth) q = q.eq('auth_method', mth);
-    var r = await withTimeout(q, 10000);
+    var _cat = await rpcRead('admin_list_attendance', { p_actor_id: aId(), p_token: aTok(), p_from: start.toISOString(), p_to: new Date(end.getTime() + 1).toISOString() }, 10000);
+    var r;
+    if (_cat !== undefined) {
+      var _crows = _cat.slice().sort(function(a, b) { return new Date(a.clock_in_time) - new Date(b.clock_in_time); });
+      if (wkr) _crows = _crows.filter(function(x) { return x.worker_id === wkr; });
+      if (mth) _crows = _crows.filter(function(x) { return x.auth_method === mth; });
+      r = { data: _crows };
+    } else {
+      var q = db.from('attendance').select('*, w:workers(name,employee_id,job_title)')
+        .in('worker_id', allowed).gte('clock_in_time', start.toISOString()).lte('clock_in_time', end.toISOString()).order('clock_in_time');
+      if (mth) q = q.eq('auth_method', mth);
+      r = await withTimeout(q, 10000);
+    }
     if (!r.data || !r.data.length) { showMsg('csv-msg', 'No records found.', 'err'); return; }
     await loadShift(cid);
     var hdr  = ['Worker Name', 'Employee ID', 'Job Title', 'Date', 'Clock In', 'Clock Out', 'Hours', 'Late (min)', 'Overtime (h)', 'Auth Method', 'Device', 'Status'];
@@ -2648,6 +2724,17 @@ var SARS_BRACKETS = [ // annual taxable income: cap, base tax at start of band, 
 ];
 var SARS_REBATE = { primary: 17235, secondary: 9444, tertiary: 3145 }; // <65 / +65–74 / +75
 var UIF_RATE = 0.01, UIF_CEILING_MONTHLY = 17712; // employee 1%, capped at this monthly remuneration
+// 2025/26 medical scheme fee tax credit (per beneficiary, per MONTH).
+var SARS_MTC = { first: 364, second: 364, additional: 246 };
+// Retirement-contribution deduction limit: 27.5% of remuneration, capped R350k/yr.
+var RETIRE_DEDUCT_RATE = 0.275, RETIRE_DEDUCT_CAP_ANNUAL = 350000;
+// Monthly medical-aid tax credit for N scheme beneficiaries (member + dependants).
+function saMTC(members) {
+  var n = Math.max(0, Math.floor(members || 0));
+  if (n <= 0) return 0;
+  if (n === 1) return SARS_MTC.first;
+  return SARS_MTC.first + SARS_MTC.second + (n - 2) * SARS_MTC.additional;
+}
 
 function saAnnualTax(annual) {
   for (var i = 0; i < SARS_BRACKETS.length; i++) {
@@ -2672,11 +2759,19 @@ function payPeriodsPerYear(fromStr, toStr) {
     return 12;                // monthly (default)
   } catch (e) { return 12; }
 }
-// PAYE for ONE pay period: annualise, tax, deduct rebate, divide back.
-function saPaye(periodGross, ppy, ageBand) {
+// PAYE for ONE pay period: build taxable income (+ taxable fringe benefits,
+// − capped retirement contribution), annualise, tax, deduct age rebate &
+// medical credits, divide back. opts = { fringe, retire, medMembers } (all optional).
+function saPaye(periodGross, ppy, ageBand, opts) {
   if (!(periodGross > 0) || !(ppy > 0)) return 0;
-  var annualTax = Math.max(0, saAnnualTax(periodGross * ppy) - saRebate(ageBand));
-  return Math.max(0, annualTax / ppy);
+  opts = opts || {};
+  var fringe = opts.fringe > 0 ? opts.fringe : 0;
+  var remuneration = periodGross + fringe;
+  var retire = opts.retire > 0 ? opts.retire : 0;
+  var retireDed = Math.min(retire, RETIRE_DEDUCT_RATE * remuneration, RETIRE_DEDUCT_CAP_ANNUAL / ppy);
+  var taxable = Math.max(0, remuneration - retireDed);
+  var annualTax = saAnnualTax(taxable * ppy) - saRebate(ageBand) - saMTC(opts.medMembers) * 12;
+  return Math.max(0, annualTax) / ppy;
 }
 // Employee UIF for ONE pay period: 1% of monthly remuneration, capped monthly.
 function saUif(periodGross, ppy) {
@@ -2685,9 +2780,10 @@ function saUif(periodGross, ppy) {
   var monthlyUif = Math.min(monthly, UIF_CEILING_MONTHLY) * UIF_RATE;
   return ppy > 0 ? monthlyUif * 12 / ppy : monthlyUif;
 }
-// One call → { paye, uif, nett } for a period's gross.
-function saDeductions(gross, ppy, ageBand) {
-  var paye = saPaye(gross, ppy, ageBand), uif = saUif(gross, ppy);
+// One call → { paye, uif, nett } for a period's gross. opts (optional) =
+// { fringe, retire, medMembers } refine PAYE; nett stays statutory (gross−PAYE−UIF).
+function saDeductions(gross, ppy, ageBand, opts) {
+  var paye = saPaye(gross, ppy, ageBand, opts), uif = saUif(gross, ppy);
   paye = Math.round(paye * 100) / 100; uif = Math.round(uif * 100) / 100;
   return { paye: paye, uif: uif, nett: Math.max(0, Math.round((gross - paye - uif) * 100) / 100) };
 }
@@ -2696,6 +2792,10 @@ function payrollMultKey(cid) { return 'wc_ot_mult_' + cid; }
 function payrollAgeKey(cid) { return 'wc_agebands_' + cid; }
 function payrollGetRates(cid) { try { return JSON.parse(localStorage.getItem(payrollRateKey(cid)) || '{}'); } catch (e) { return {}; } }
 function payrollGetAges(cid)  { try { return JSON.parse(localStorage.getItem(payrollAgeKey(cid)) || '{}'); } catch (e) { return {}; } }
+// Optional per-worker tax inputs: { med, retire, fringe } (medical-aid members, monthly
+// retirement contribution, monthly taxable fringe benefits) — saved on-device like rates.
+function payrollAdjKey(cid)   { return 'wc_payadj_' + cid; }
+function payrollGetAdj(cid)   { try { return JSON.parse(localStorage.getItem(payrollAdjKey(cid)) || '{}'); } catch (e) { return {}; } }
 // Aggregate the current report's rows into one line per worker.
 function payrollAgg() {
   var byW = {};
@@ -2711,7 +2811,7 @@ function payrollAgg() {
 function openPayroll() {
   if (!_attData || !_attData.rows.length) { showMsg('csv-msg', 'Run a report first, then open Payroll.', 'err'); return; }
   var cid = requireAdminCid(); if (!cid) return;
-  var rates = payrollGetRates(cid), ages = payrollGetAges(cid);
+  var rates = payrollGetRates(cid), ages = payrollGetAges(cid), adj = payrollGetAdj(cid);
   _payroll = { cid: cid, list: payrollAgg(), from: _attData.from, to: _attData.to };
   var mult = parseFloat(localStorage.getItem(payrollMultKey(cid))) || 1.5;
   document.getElementById('payroll-mult').value = mult;
@@ -2727,7 +2827,18 @@ function openPayroll() {
           '<option value="u65"' + (ages[w.key] === '65' || ages[w.key] === '75' ? '' : ' selected') + '>Under 65</option>' +
           '<option value="65"' + (ages[w.key] === '65' ? ' selected' : '') + '>65–74</option>' +
           '<option value="75"' + (ages[w.key] === '75' ? ' selected' : '') + '>75+</option>' +
-        '</select></td>' +
+        '</select>' +
+        '<div class="pay-adv">' +
+          '<input class="input pay-med" type="number" min="0" step="1" inputmode="numeric" placeholder="Med members" ' +
+            'title="Medical-aid scheme members (member + dependants) — applies the SARS medical tax credit" ' +
+            'value="' + (adj[w.key] && adj[w.key].med > 0 ? adj[w.key].med : '') + '" oninput="payrollRecalc()">' +
+          '<input class="input pay-retire" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Retire R/mo" ' +
+            'title="Tax-deductible retirement contribution per month (reduces taxable income, capped 27.5%)" ' +
+            'value="' + (adj[w.key] && adj[w.key].retire > 0 ? adj[w.key].retire : '') + '" oninput="payrollRecalc()">' +
+          '<input class="input pay-fringe" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Fringe R/mo" ' +
+            'title="Taxable fringe benefits per month, e.g. employer medical/pension contributions (added to taxable income)" ' +
+            'value="' + (adj[w.key] && adj[w.key].fringe > 0 ? adj[w.key].fringe : '') + '" oninput="payrollRecalc()">' +
+        '</div></td>' +
       '<td class="r pay-gross">R0.00</td>' +
       '<td class="r pay-nett">R0.00</td></tr>';
   }).join('');
@@ -2739,7 +2850,7 @@ function payrollRecalc() {
   if (!_payroll) return [];
   var mult = parseFloat(document.getElementById('payroll-mult').value) || 1.5;
   var ppy = payPeriodsPerYear(_payroll.from, _payroll.to);
-  var rates = {}, ages = {}, total = 0, totalNett = 0, computed = [];
+  var rates = {}, ages = {}, adj = {}, total = 0, totalNett = 0, computed = [];
   var rows = document.querySelectorAll('#payroll-rows tr');
   rows.forEach(function(tr, i) {
     var w = _payroll.list[i]; if (!w) return;
@@ -2747,17 +2858,23 @@ function payrollRecalc() {
     if (rate > 0) rates[w.key] = rate;
     var ageSel = tr.querySelector('.pay-age'); var ageBand = ageSel ? ageSel.value : 'u65';
     if (ageBand !== 'u65') ages[w.key] = ageBand;
+    var medEl = tr.querySelector('.pay-med'), retEl = tr.querySelector('.pay-retire'), frEl = tr.querySelector('.pay-fringe');
+    var med = medEl ? (parseInt(medEl.value, 10) || 0) : 0;
+    var retire = retEl ? (parseFloat(retEl.value) || 0) : 0;
+    var fringe = frEl ? (parseFloat(frEl.value) || 0) : 0;
+    if (med > 0 || retire > 0 || fringe > 0) adj[w.key] = { med: med, retire: retire, fringe: fringe };
     var regPay = w.reg * rate, otPay = w.ot * rate * mult, gross = regPay + otPay;
-    var ded = saDeductions(gross, ppy, ageBand);
+    var ded = saDeductions(gross, ppy, ageBand, { medMembers: med, retire: retire, fringe: fringe });
     total += gross; totalNett += ded.nett;
     tr.querySelector('.pay-gross').textContent = fmtR(gross);
     var nettCell = tr.querySelector('.pay-nett'); if (nettCell) nettCell.textContent = fmtR(ded.nett);
-    computed.push({ w: w, rate: rate, ageBand: ageBand, regPay: regPay, otPay: otPay, gross: gross, paye: ded.paye, uif: ded.uif, nett: ded.nett });
+    computed.push({ w: w, rate: rate, ageBand: ageBand, med: med, retire: retire, fringe: fringe, regPay: regPay, otPay: otPay, gross: gross, paye: ded.paye, uif: ded.uif, nett: ded.nett });
   });
   document.getElementById('payroll-total').textContent = fmtR(total);
   var nt = document.getElementById('payroll-total-nett'); if (nt) nt.textContent = fmtR(totalNett);
   localStorage.setItem(payrollRateKey(_payroll.cid), JSON.stringify(rates));
   localStorage.setItem(payrollAgeKey(_payroll.cid), JSON.stringify(ages));
+  localStorage.setItem(payrollAdjKey(_payroll.cid), JSON.stringify(adj));
   localStorage.setItem(payrollMultKey(_payroll.cid), String(mult));
   _payroll.mult = mult; _payroll.ppy = ppy; _payroll.computed = computed; _payroll.total = total; _payroll.totalNett = totalNett;
   return computed;
@@ -2788,10 +2905,11 @@ function payrollPDF() {
 }
 function payrollCSV() {
   var rows = payrollRecalc(); if (!rows || !rows.length) return;
-  var hdr = ['Worker Name', 'Employee ID', 'Job Title', 'Days', 'Regular Hours', 'Overtime Hours', 'Rate (R/h)', 'OT Multiplier', 'Regular Pay (R)', 'Overtime Pay (R)', 'Gross Pay (R)', 'PAYE (R)', 'UIF (R)', 'Nett Pay (R)', 'Tax Year'];
+  var hdr = ['Worker Name', 'Employee ID', 'Job Title', 'Days', 'Regular Hours', 'Overtime Hours', 'Rate (R/h)', 'OT Multiplier', 'Regular Pay (R)', 'Overtime Pay (R)', 'Gross Pay (R)', 'Med Members', 'Retirement (R)', 'Fringe (R)', 'PAYE (R)', 'UIF (R)', 'Nett Pay (R)', 'Tax Year'];
   var lines = rows.map(function(r) {
     return [r.w.name, r.w.emp, r.w.job, r.w.days, r.w.reg.toFixed(2), r.w.ot.toFixed(2),
       r.rate.toFixed(2), _payroll.mult, r.regPay.toFixed(2), r.otPay.toFixed(2), r.gross.toFixed(2),
+      (r.med || 0), (r.retire || 0).toFixed(2), (r.fringe || 0).toFixed(2),
       (r.paye || 0).toFixed(2), (r.uif || 0).toFixed(2), (r.nett != null ? r.nett : r.gross).toFixed(2), TAX_YEAR]
       .map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
   });
@@ -2868,8 +2986,10 @@ async function loadAdminInactive() {
   el.innerHTML = '<div class="empty">Loading…</div>';
   try {
     var isSA = S.admin && S.admin.role === 'super_admin';
+    var _iw = await rpcRead('admin_list_workers', { p_actor_id: aId(), p_token: aTok(), p_active: false }, 5000);
     var queries = [
-      withTimeout(db.from('workers').select(WORKER_COLS).eq('company_id', cid).eq('is_active', false).order('name'), 5000)
+      _iw !== undefined ? Promise.resolve({ data: _iw })
+                        : withTimeout(db.from('workers').select(WORKER_COLS).eq('company_id', cid).eq('is_active', false).order('name'), 5000)
     ];
     if (isSA) queries.push(withTimeout(db.rpc('admin_list_admins', { p_actor_id: aId(), p_token: aTok() }), 5000));
     var results = await Promise.all(queries);
@@ -2968,7 +3088,8 @@ async function loadAdminInactive() {
 async function exportInactiveWorkers() {
   var cid = requireAdminCid(); if (!cid) return;
   try {
-    var r = await withTimeout(db.from('workers').select(WORKER_COLS).eq('company_id', cid).eq('is_active', false).order('name'), 5000);
+    var _eiw = await rpcRead('admin_list_workers', { p_actor_id: aId(), p_token: aTok(), p_active: false }, 5000);
+    var r = _eiw !== undefined ? { data: _eiw } : await withTimeout(db.from('workers').select(WORKER_COLS).eq('company_id', cid).eq('is_active', false).order('name'), 5000);
     if (!r.data || !r.data.length) { toast('No inactive workers to export.'); return; }
     var hdr = ['Name', 'Employee ID', 'Job Title', 'Biometric', 'Face Recognition', 'Device Bound'];
     var rows = r.data.map(function(w) {
@@ -3010,7 +3131,8 @@ async function resetPw(id, username) {
 async function loadSetup() {
   var cid = requireAdminCid(); if (!cid) return;
   try {
-    var wpR = await withTimeout(db.from('workplaces').select('*').eq('company_id', cid).limit(1), 5000);
+    var _wp = await rpcRead('admin_list_workplaces', { p_actor_id: aId(), p_token: aTok() }, 5000);
+    var wpR = _wp !== undefined ? { data: _wp } : await withTimeout(db.from('workplaces').select('*').eq('company_id', cid).limit(1), 5000);
     if (wpR.data && wpR.data[0]) {
       var w = wpR.data[0];
       document.getElementById('wp-name').value   = w.name      || '';
@@ -3032,7 +3154,8 @@ async function loadSetup() {
 
   // Load current timezone
   try {
-    var tzR = await withTimeout(db.from('companies').select('timezone').eq('id', cid).single(), 5000);
+    var _gtz = await rpcRead('admin_get_company', { p_actor_id: aId(), p_token: aTok() }, 5000);
+    var tzR = _gtz !== undefined ? { data: _gtz } : await withTimeout(db.from('companies').select('timezone').eq('id', cid).single(), 5000);
     var coTz = (tzR.data && tzR.data.timezone) || 'Africa/Johannesburg';
     var tzSel = document.getElementById('co-timezone');
     if (tzSel) tzSel.value = coTz;
@@ -3053,11 +3176,16 @@ async function loadSetup() {
 
   // ── Worker usage display ───────────────────────────────
   try {
-    var coR2    = await withTimeout(db.from('companies').select('worker_limit').eq('id', cid).single(), 5000);
-    var cntR    = await withTimeout(
-      db.from('workers').select('*', { count: 'exact', head: true }).eq('company_id', cid).eq('is_active', true),
-      5000
-    );
+    var _gwu = await rpcRead('admin_get_company', { p_actor_id: aId(), p_token: aTok() }, 5000);
+    var coR2, cntR;
+    if (_gwu !== undefined) { coR2 = { data: _gwu }; cntR = { count: _gwu.active_worker_count }; }
+    else {
+      coR2 = await withTimeout(db.from('companies').select('worker_limit').eq('id', cid).single(), 5000);
+      cntR = await withTimeout(
+        db.from('workers').select('*', { count: 'exact', head: true }).eq('company_id', cid).eq('is_active', true),
+        5000
+      );
+    }
     var used    = cntR.count || 0;
     var limit   = (coR2.data && coR2.data.worker_limit !== null) ? coR2.data.worker_limit : null;
     var usageEl = document.getElementById('worker-usage-bar');
@@ -3078,7 +3206,8 @@ async function loadSetup() {
 
   // ── Subscription expiry display ────────────────────────
   try {
-    var subR = await withTimeout(db.from('companies').select('subscription_expires_at').eq('id', cid).single(), 5000);
+    var _gsub = await rpcRead('admin_get_company', { p_actor_id: aId(), p_token: aTok() }, 5000);
+    var subR = _gsub !== undefined ? { data: _gsub } : await withTimeout(db.from('companies').select('subscription_expires_at').eq('id', cid).single(), 5000);
     var expAt = subR.data && subR.data.subscription_expires_at ? new Date(subR.data.subscription_expires_at) : null;
     var subEl = document.getElementById('sub-expiry-row');
     if (subEl) {
@@ -3105,7 +3234,8 @@ async function saveWorkplace() {
   if (!name || isNaN(lat) || isNaN(lng)) { showMsg('wp-msg', 'Name, Latitude and Longitude are required.', 'err'); return; }
   var cid = requireAdminCid(); if (!cid) return;
   try {
-    var exR  = await withTimeout(db.from('workplaces').select('id').eq('company_id', cid).limit(1), 5000);
+    var _ewp = await rpcRead('admin_list_workplaces', { p_actor_id: aId(), p_token: aTok() }, 5000);
+    var exR  = _ewp !== undefined ? { data: _ewp } : await withTimeout(db.from('workplaces').select('id').eq('company_id', cid).limit(1), 5000);
     var wpId = (exR.data && exR.data.length) ? exR.data[0].id : null;
     // RPC upserts the workplace and backfills unassigned workers' workplace_id.
     var r = await withTimeout(db.rpc('admin_workplace_save', {
@@ -3416,20 +3546,26 @@ async function loadDevCos() {
   var el = document.getElementById('dev-cos-list');
   el.innerHTML = '<div class="empty">Loading…</div>';
   try {
-    var r = await withTimeout(db.from('companies').select('*').order('name'), 5000);
+    var _dc = await rpcRead('dev_list_companies', { p_actor_id: aId(), p_token: aTok() }, 5000);
+    var r = _dc !== undefined ? { data: _dc } : await withTimeout(db.from('companies').select('*').order('name'), 5000);
     if (r.error || !r.data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
     if (!r.data.length) { el.innerHTML = '<div class="empty">No companies yet</div>'; return; }
     r.data.forEach(function(c) { _cCache[c.id] = c; });
 
-    // Fetch active worker counts for all companies in one query
-    var wcR = await withTimeout(
-      db.from('workers').select('company_id', { count: 'exact' }).eq('is_active', true),
-      5000
-    );
+    // Active worker counts per company (bundled into dev_list_companies, or a
+    // grouped fallback query when reading tables directly).
     var workerCounts = {};
-    if (wcR.data) wcR.data.forEach(function(w) {
-      workerCounts[w.company_id] = (workerCounts[w.company_id] || 0) + 1;
-    });
+    if (_dc !== undefined) {
+      r.data.forEach(function(c) { workerCounts[c.id] = c.active_worker_count || 0; });
+    } else {
+      var wcR = await withTimeout(
+        db.from('workers').select('company_id', { count: 'exact' }).eq('is_active', true),
+        5000
+      );
+      if (wcR.data) wcR.data.forEach(function(w) {
+        workerCounts[w.company_id] = (workerCounts[w.company_id] || 0) + 1;
+      });
+    }
 
     var active   = r.data.filter(function(c) { return c.is_active; });
     var inactive = r.data.filter(function(c) { return !c.is_active; });
@@ -3660,7 +3796,8 @@ async function loadDevAccounts() {
   el.innerHTML  = '<div class="empty">Loading…</div>';
   if (filterSel.options.length <= 1) {
     try {
-      var cosR = await withTimeout(db.from('companies').select('id,name,is_active').order('name'), 5000);
+      var _dca = await rpcRead('dev_list_companies', { p_actor_id: aId(), p_token: aTok() }, 5000);
+      var cosR = _dca !== undefined ? { data: _dca } : await withTimeout(db.from('companies').select('id,name,is_active').order('name'), 5000);
       filterSel.innerHTML = '<option value="">All Companies</option>' + (cosR.data || []).map(function(c) {
         return '<option value="' + c.id + '">' + esc(c.name) + (c.is_active ? '' : ' (inactive)') + '</option>';
       }).join('');
@@ -3708,7 +3845,11 @@ async function loadDevAccounts() {
 function toggleAddDevAcct() {
   var p = document.getElementById('add-dev-acct-panel'); p.classList.toggle('hidden');
   if (!p.classList.contains('hidden')) {
-    withTimeout(db.from('companies').select('id,name').eq('is_active', true).order('name'), 5000)
+    Promise.resolve(rpcRead('dev_list_companies', { p_actor_id: aId(), p_token: aTok() }, 5000))
+      .then(function(_d) {
+        return _d !== undefined ? { data: _d.filter(function(c) { return c.is_active; }) }
+                                : withTimeout(db.from('companies').select('id,name').eq('is_active', true).order('name'), 5000);
+      })
       .then(function(r) {
         document.getElementById('da-company').innerHTML = '<option value="">Select Company…</option>' +
           (r.data || []).map(function(c) { return '<option value="' + c.id + '">' + esc(c.name) + '</option>'; }).join('');
@@ -3749,7 +3890,8 @@ async function loadDevWorkers() {
   var sel = document.getElementById('dev-filter-co-wk');
   if (sel.options.length <= 1) {
     try {
-      var cosR = await withTimeout(db.from('companies').select('id,name,is_active').order('name'), 5000);
+      var _dcw = await rpcRead('dev_list_companies', { p_actor_id: aId(), p_token: aTok() }, 5000);
+      var cosR = _dcw !== undefined ? { data: _dcw } : await withTimeout(db.from('companies').select('id,name,is_active').order('name'), 5000);
       sel.innerHTML = '<option value="">Select a company…</option>' + (cosR.data || []).map(function(c) {
         return '<option value="' + c.id + '">' + esc(c.name) + (c.is_active ? '' : ' (inactive)') + '</option>';
       }).join('');
@@ -3759,7 +3901,8 @@ async function loadDevWorkers() {
   if (!cid) { el.innerHTML = '<div class="empty">Select a company above</div>'; return; }
   el.innerHTML = '<div class="empty">Loading…</div>';
   try {
-    var r = await withTimeout(db.from('workers').select(WORKER_COLS).eq('company_id', cid).order('name'), 5000);
+    var _dw2 = await rpcRead('dev_list_workers', { p_actor_id: aId(), p_token: aTok(), p_company_id: cid, p_active: null }, 5000);
+    var r = _dw2 !== undefined ? { data: _dw2 } : await withTimeout(db.from('workers').select(WORKER_COLS).eq('company_id', cid).order('name'), 5000);
     if (r.error || !r.data) { el.innerHTML = '<div class="empty">Failed to load</div>'; return; }
     if (!r.data.length) { el.innerHTML = '<div class="empty">No workers in this company</div>'; return; }
     r.data.forEach(function(w) { _wCache[w.id] = Object.assign({}, w, { _ctx: 'dev' }); });
@@ -3804,10 +3947,14 @@ async function loadDevInactive() {
   var el = document.getElementById('dev-inactive-list');
   el.innerHTML = '<div class="empty">Loading…</div>';
   try {
+    var _dci = await rpcRead('dev_list_companies', { p_actor_id: aId(), p_token: aTok() }, 5000);
+    var _dwi = await rpcRead('dev_list_workers', { p_actor_id: aId(), p_token: aTok(), p_company_id: null, p_active: false }, 5000);
     var [cosR, accR, wkR] = await Promise.all([
-      withTimeout(db.from('companies').select('*').eq('is_active', false).order('name'), 5000),
+      _dci !== undefined ? Promise.resolve({ data: _dci.filter(function(c) { return !c.is_active; }) })
+                         : withTimeout(db.from('companies').select('*').eq('is_active', false).order('name'), 5000),
       withTimeout(db.rpc('dev_list_admins', { p_actor_id: aId(), p_token: aTok() }), 5000),
-      withTimeout(db.from('workers').select(WORKER_COLS + ', co:companies(name)').eq('is_active', false).order('name'), 5000)
+      _dwi !== undefined ? Promise.resolve({ data: _dwi })
+                         : withTimeout(db.from('workers').select(WORKER_COLS + ', co:companies(name)').eq('is_active', false).order('name'), 5000)
     ]);
 
     var cos  = cosR.data  || [];
@@ -3949,7 +4096,7 @@ function checkIOSInstall() {
 }
 
 // ── Bootstrap ─────────────────────────────────────────────
-var APP_VERSION = 'v38';   // bump alongside the sw.js CACHE version on each deploy
+var APP_VERSION = 'v40';   // bump alongside the sw.js CACHE version on each deploy
 document.addEventListener('DOMContentLoaded', function() {
 
   // 0. Start error tracking (no-op until a Sentry DSN is configured)
